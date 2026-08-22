@@ -432,6 +432,18 @@ app.get('/api/inventory/local', (req, res) => {
   }
 });
 
+app.post('/api/inventory/import-csv', (req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const outputStock = execSync('node scripts/import-stock-csv.js', { encoding: 'utf-8' });
+    const outputChina = execSync('node scripts/import-china-csv.js', { encoding: 'utf-8' });
+    db.logActivity('import_csv', 'Importación masiva de Stock Casa e Importaciones China realizada', null);
+    res.json({ success: true, message: `${outputStock}\n${outputChina}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/inventory/local', (req, res) => {
   try {
     const { id, account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location } = req.body;

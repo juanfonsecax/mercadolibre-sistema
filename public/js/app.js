@@ -1193,48 +1193,52 @@ async function loadChinaShipments() {
     const shipments = data.shipments || [];
 
     let totalUnits = 0;
-    let totalUsd = 0;
-    let activeCount = 0;
+    let totalLandedCop = 0;
+    let totalProfitCop = 0;
+    let totalM3 = 0;
 
     let html = '';
     if (shipments.length === 0) {
-      html = '<tr><td colspan="8" class="empty-cell">No hay embarques desde China registrados</td></tr>';
+      html = '<tr><td colspan="12" class="empty-cell">No hay importaciones desde China registradas</td></tr>';
     } else {
       shipments.forEach(s => {
-        totalUnits += s.total_units || 0;
-        totalUsd += s.total_cost_usd || 0;
-        if (s.status !== 'recibido') activeCount++;
+        const qty = s.quantity || s.active_transit_units || 0;
+        const landedTotal = s.total_cost_cop || (s.unit_cost_cop * qty) || 0;
+        const profitTotal = s.total_profit_cop || (s.income_cop * qty) || 0;
+        const m3 = parseFloat(s.cubic_meter || 0);
 
-        const statusBadges = {
-          produccion: '<span class="badge-warning">⚙️ En Producción</span>',
-          transito_maritimo: '<span class="badge-primary">🚢 En Tránsito Marítimo</span>',
-          transito_aereo: '<span class="badge-primary">✈️ En Tránsito Aéreo</span>',
-          aduana: '<span class="badge-warning">🛃 En Aduana ML</span>',
-          recibido: '<span class="badge-success">✅ Recibido en Casa</span>'
-        };
+        totalUnits += qty;
+        totalLandedCop += landedTotal;
+        totalProfitCop += profitTotal;
+        totalM3 += m3;
 
-        const totalCop = (s.total_cost_usd * s.trm_cop).toLocaleString('es-CO');
+        const delStatus = s.delivery_status || s.status || '';
+        let statusBadge = '<span class="badge-primary">🚢 EN CAMINO</span>';
+        if (delStatus.toUpperCase().includes('RETRASADO')) statusBadge = '<span class="badge-critical">⚠️ RETRASADO</span>';
+        else if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') statusBadge = '<span class="badge-success">✅ RECIBIDO</span>';
+        else if (delStatus.toUpperCase().includes('CHINA')) statusBadge = '<span class="badge-warning">⚙️ EN CHINA</span>';
+
+        const margin = parseFloat(s.margin_percent || 0);
+        const marginBadgeClass = margin >= 100 ? 'badge-success' : (margin >= 50 ? 'badge-warning' : 'badge-critical');
 
         html += `
           <tr>
             <td>
-              <strong>${escapeHtml(s.supplier_name)}</strong><br>
-              <small class="text-muted">Tracking: ${escapeHtml(s.tracking_number || 'N/A')}</small>
+              <strong>${escapeHtml(s.product_name || s.supplier_name)}</strong><br>
+              ${s.notion_link ? `<small><a href="${escapeHtml(s.notion_link)}" target="_blank" class="text-accent">📋 Notion</a></small>` : ''}
             </td>
-            <td><span class="badge-secondary">${s.shipment_type === 'aereo' ? '✈️ Aéreo' : '🚢 Marítimo'}</span></td>
-            <td>${statusBadges[s.status] || s.status}</td>
+            <td><strong>${qty.toLocaleString('es-CO')}</strong> unds</td>
+            <td><span class="badge-secondary">${escapeHtml(s.agency || 'Agente')} (${escapeHtml(s.supply || 'Alibaba')})</span></td>
+            <td>${m3 > 0 ? m3.toFixed(3) + ' m³' : 'N/A'}</td>
+            <td>$${Math.round(s.unit_cost_cop || 0).toLocaleString('es-CO')} COP</td>
+            <td>$${Math.round(s.price_ml_cop || 0).toLocaleString('es-CO')} COP</td>
+            <td><strong>$${Math.round(s.income_cop || 0).toLocaleString('es-CO')} COP</strong></td>
+            <td><span class="${marginBadgeClass}">${margin.toFixed(1)}%</span></td>
+            <td><strong>$${Math.round(profitTotal).toLocaleString('es-CO')} COP</strong></td>
+            <td><small>${escapeHtml(s.eta_date || 'Por definir')}</small></td>
+            <td>${statusBadge}</td>
             <td>
-              <small>ETD: ${s.etd_date || 'N/A'}</small><br>
-              <small class="text-muted">ETA: ${s.eta_date || 'N/A'}</small>
-            </td>
-            <td>$${(s.trm_cop || 4000).toLocaleString('es-CO')} COP</td>
-            <td><strong>${(s.total_units || 0).toLocaleString('es-CO')}</strong> unds</td>
-            <td>
-              <strong>$${(s.total_cost_usd || 0).toLocaleString('en-US')} USD</strong><br>
-              <small class="text-muted">~$${totalCop} COP</small>
-            </td>
-            <td>
-              <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})">✏️ Editar</button>
+              <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})">✏️</button>
               <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})">🗑️</button>
             </td>
           </tr>
@@ -1244,10 +1248,11 @@ async function loadChinaShipments() {
 
     document.getElementById('chinaShipmentsTable').innerHTML = html;
     document.getElementById('china-total-units').innerText = `${totalUnits.toLocaleString('es-CO')} unds`;
-    document.getElementById('china-total-usd').innerText = `$${totalUsd.toLocaleString('en-US')} USD`;
-    document.getElementById('china-active-shipments').innerText = activeCount.toString();
+    document.getElementById('china-total-landed').innerText = `$${Math.round(totalLandedCop).toLocaleString('es-CO')} COP`;
+    document.getElementById('china-total-profit').innerText = `$${Math.round(totalProfitCop).toLocaleString('es-CO')} COP`;
+    document.getElementById('china-total-m3').innerText = `${totalM3.toFixed(2)} m³`;
   } catch (error) {
-    showToast('Error cargando embarques China: ' + error.message, 'error');
+    showToast('Error cargando importaciones China: ' + error.message, 'error');
   }
 }
 
@@ -1744,4 +1749,20 @@ async function deletePromotion(id) {
     showToast('Error eliminando oferta: ' + error.message, 'error');
   }
 }
+
+async function triggerImportCsv() {
+  try {
+    showToast('📥 Importando catálogo de productos desde CSV...', 'info');
+    const data = await apiFetch('/api/inventory/import-csv', { method: 'POST' });
+    if (data.success) {
+      showToast('✅ Catálogo de stock importado exitosamente desde CSV', 'success');
+      loadInventoryData();
+    } else {
+      showToast('Error en importación: ' + (data.error || 'Desconocido'), 'error');
+    }
+  } catch (error) {
+    showToast('Error importando CSV: ' + error.message, 'error');
+  }
+}
+
 

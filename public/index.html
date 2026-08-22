@@ -513,6 +513,7 @@
         <h1>Inventario e Importaciones (3 Fases)</h1>
         <div class="header-actions">
           <button class="btn btn-secondary" onclick="loadInventoryData()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="triggerImportCsv()">📥 Importar CSV (Agosto 14)</button>
           <button class="btn btn-primary" onclick="openChinaShipmentModal()">🚢 Nuevo Embarque China</button>
           <button class="btn btn-success" onclick="openLocalItemModal()">🏠 Agregar a Bodega Casa</button>
         </div>
@@ -526,28 +527,35 @@
         <button class="tab-btn" onclick="switchInventoryTab('alerts')" id="tab-btn-alerts">⚠️ Alertas & Reorden</button>
       </div>
 
-      <!-- Sub-Tab Content 1: China Shipments -->
+      <!-- Sub-Tab Content 1: China Shipments 2026 -->
       <div class="inventory-subcontent active" id="subtab-china">
         <div class="inventory-pipeline-summary">
           <div class="pipeline-card">
             <span class="pipeline-icon">📦</span>
             <div>
               <h4 id="china-total-units">0 unds</h4>
-              <p>En Tránsito Internacional</p>
+              <p>Unidades en Tránsito</p>
             </div>
           </div>
           <div class="pipeline-card">
             <span class="pipeline-icon">💵</span>
             <div>
-              <h4 id="china-total-usd">$0 USD</h4>
-              <p>Valor FOB/CIF Total</p>
+              <h4 id="china-total-landed">$0 COP</h4>
+              <p>Inversión Total Landed</p>
             </div>
           </div>
           <div class="pipeline-card">
-            <span class="pipeline-icon">🚢</span>
+            <span class="pipeline-icon">📈</span>
             <div>
-              <h4 id="china-active-shipments">0</h4>
-              <p>Embarques Activos</p>
+              <h4 id="china-total-profit">$0 COP</h4>
+              <p>Utilidad Proyectada Total</p>
+            </div>
+          </div>
+          <div class="pipeline-card">
+            <span class="pipeline-icon">📐</span>
+            <div>
+              <h4 id="china-total-m3">0 m³</h4>
+              <p>Volumen Contenedores</p>
             </div>
           </div>
         </div>
@@ -556,18 +564,22 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Tracking / Proveedor</th>
-                <th>Tipo</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Agente / Origen</th>
+                <th>Volumen m³</th>
+                <th>Costo Unit. Landed</th>
+                <th>Precio Venta ML</th>
+                <th>Ingreso Neto Unit.</th>
+                <th>% Rentabilidad</th>
+                <th>Utilidad Total (COP)</th>
+                <th>Llegada (ETA)</th>
                 <th>Estado</th>
-                <th>Fechas (ETD / ETA)</th>
-                <th>TRM (COP)</th>
-                <th>Unidades</th>
-                <th>Costo Total</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="chinaShipmentsTable">
-              <tr><td colspan="8" class="empty-cell">Cargando embarques...</td></tr>
+              <tr><td colspan="12" class="empty-cell">Cargando importaciones de China...</td></tr>
             </tbody>
           </table>
         </div>
