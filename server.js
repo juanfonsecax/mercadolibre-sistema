@@ -10,6 +10,7 @@ const questionsApi = require('./src/mercadolibre/questions');
 const claimsApi = require('./src/mercadolibre/claims');
 const messagesApi = require('./src/mercadolibre/messages');
 const { createWebhookHandler } = require('./src/mercadolibre/webhooks');
+const inventoryApi = require('./src/mercadolibre/inventory');
 const processor = require('./src/processor');
 const gemini = require('./src/ai/gemini');
 const kb = require('./src/ai/knowledge-base');
@@ -374,6 +375,211 @@ app.post('/api/test-ai', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ══════════════════════════════════════════
+// ── Módulo de Inventario en 3 Fases API ──
+// ══════════════════════════════════════════
+
+// --- Fase 1: Importaciones China ---
+app.get('/api/inventory/china', (req, res) => {
+  try {
+    const shipments = db.getChinaShipments();
+    res.json({ shipments });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/inventory/china', (req, res) => {
+  try {
+    const { id, tracking_number, supplier_name, status, shipment_type, etd_date, eta_date, trm_cop, total_cost_usd, total_units, notes, items } = req.body;
+    if (!supplier_name) return res.status(400).json({ error: 'Nombre de proveedor es requerido' });
+
+    const shipmentId = db.saveChinaShipment({
+      id: id ? parseInt(id) : null,
+      tracking_number, supplier_name, status, shipment_type, etd_date, eta_date,
+      trm_cop: parseFloat(trm_cop || 4000),
+      total_cost_usd: parseFloat(total_cost_usd || 0),
+      total_units: parseInt(total_units || 0),
+      notes
+    }, items || []);
+
+    db.logActivity('china_shipment', `Embarque China "${supplier_name}" guardado`, null);
+    res.json({ success: true, id: shipmentId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/inventory/china/:id', (req, res) => {
+  try {
+    db.deleteChinaShipment(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Fase 2: Stock Casa / Bodega Local ---
+app.get('/api/inventory/local', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : null;
+    const inventory = db.getLocalInventory(accId);
+    res.json({ inventory });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/inventory/local', (req, res) => {
+  try {
+    const { id, account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location } = req.body;
+    if (!sku || !title) return res.status(400).json({ error: 'SKU y Título son requeridos' });
+
+    const itemId = db.saveLocalInventoryItem({
+      id: id ? parseInt(id) : null,
+      account_id: account_id ? parseInt(account_id) : null,
+      sku, title, category,
+      units_house: parseInt(units_house || 0),
+      unit_cost_cop: parseFloat(unit_cost_cop || 0),
+      min_stock_alert: parseInt(min_stock_alert || 10),
+      location
+    });
+
+    db.logActivity('inventory_local', `Producto "${sku} - ${title}" en Bodega Casa actualizado`, null, account_id);
+    res.json({ success: true, id: itemId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/inventory/local/:id', (req, res) => {
+  try {
+    db.deleteLocalInventoryItem(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/inventory/movement', (req, res) => {
+  try {
+    const { account_id, sku, movement_type, units, description } = req.body;
+    if (!sku || !movement_type || !units) {
+      return res.status(400).json({ error: 'SKU, tipo de movimiento y unidades son requeridos' });
+    }
+
+    db.recordInventoryMovement({
+      account_id: account_id ? parseInt(account_id) : null,
+      sku, movement_type,
+      units: parseInt(units),
+      description
+    });
+
+    db.logActivity('inventory_movement', `Movimiento (${movement_type}): ${units} unds de ${sku}`, null, account_id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/inventory/movements', (req, res) => {
+  try {
+    const { sku, limit = 50 } = req.query;
+    const movements = db.getInventoryMovements(sku || null, parseInt(limit));
+    res.json({ movements });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Fase 3: Stock Full Mercado Libre & Alertas ---
+app.get('/api/inventory/full', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : null;
+    const fullInventory = db.getMlFullInventory(accId);
+    res.json({ fullInventory });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/inventory/full/sync', async (req, res) => {
+  try {
+    const { accountId } = req.body;
+    const accId = accountId ? parseInt(accountId) : null;
+    const result = await inventoryApi.syncMlFullInventory(accId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/inventory/alerts', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : null;
+    const alerts = db.getReorderAlerts(accId);
+    res.json({ alerts });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ══════════════════════════════════════════
+// ── Modulo de Ofertas & Margen API ──
+// ══════════════════════════════════════════
+app.get('/api/promotions', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : null;
+    const promotions = db.getProductPromotions(accId);
+    res.json({ promotions });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/promotions', (req, res) => {
+  try {
+    const promo = req.body;
+    if (!promo.account_id || !promo.ml_item_id || !promo.title || !promo.promo_price) {
+      return res.status(400).json({ error: 'Cuenta, Item ID, Título y Precio Oferta son requeridos' });
+    }
+
+    const promoId = db.saveProductPromotion({
+      ...promo,
+      account_id: parseInt(promo.account_id)
+    });
+
+    db.logActivity('promotion', `Oferta creada/actualizada para "${promo.title}" ($${parseFloat(promo.promo_price).toLocaleString('es-CO')} COP)`, null, promo.account_id);
+    res.json({ success: true, id: promoId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/promotions/:id', (req, res) => {
+  try {
+    db.deleteProductPromotion(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/promotions/ai-evaluate', async (req, res) => {
+  try {
+    const { productData, targetMarginPercent } = req.body;
+    const evaluation = await gemini.evaluatePromotionStrategy(productData || {}, parseFloat(targetMarginPercent || 20));
+    res.json({ evaluation });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // ── SPA Fallback ──
 app.get('*', (req, res) => {

@@ -38,6 +38,8 @@ function navigateTo(section) {
     case 'questions': loadQuestions(); break;
     case 'messages': loadMessages(); break;
     case 'claims': loadClaims(); break;
+    case 'inventory': loadInventoryData(); break;
+    case 'promotions': loadPromotions(); break;
     case 'knowledge': loadKnowledge(); break;
     case 'stats': loadStats(); break;
     case 'settings': loadSettings(); break;
@@ -1155,3 +1157,591 @@ refreshOverview();
 refreshInterval = setInterval(() => {
   if (currentSection === 'overview') refreshOverview();
 }, 30000);
+
+// ══════════════════════════════════════════
+// ── Inventario en 3 Fases Logic ──
+// ══════════════════════════════════════════
+
+let currentInventorySubtab = 'china';
+
+function switchInventoryTab(tabName) {
+  currentInventorySubtab = tabName;
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  const btn = document.getElementById(`tab-btn-${tabName}`);
+  if (btn) btn.classList.add('active');
+
+  document.querySelectorAll('.inventory-subcontent').forEach(sub => sub.classList.remove('active'));
+  const sub = document.getElementById(`subtab-${tabName}`);
+  if (sub) sub.classList.add('active');
+
+  switch (tabName) {
+    case 'china': loadChinaShipments(); break;
+    case 'local': loadLocalInventory(); break;
+    case 'full': loadMlFullInventory(); break;
+    case 'alerts': loadReorderAlerts(); break;
+  }
+}
+
+async function loadInventoryData() {
+  switchInventoryTab(currentInventorySubtab);
+}
+
+// --- Subtab 1: China Shipments ---
+async function loadChinaShipments() {
+  try {
+    const data = await apiFetch('/api/inventory/china');
+    const shipments = data.shipments || [];
+
+    let totalUnits = 0;
+    let totalUsd = 0;
+    let activeCount = 0;
+
+    let html = '';
+    if (shipments.length === 0) {
+      html = '<tr><td colspan="8" class="empty-cell">No hay embarques desde China registrados</td></tr>';
+    } else {
+      shipments.forEach(s => {
+        totalUnits += s.total_units || 0;
+        totalUsd += s.total_cost_usd || 0;
+        if (s.status !== 'recibido') activeCount++;
+
+        const statusBadges = {
+          produccion: '<span class="badge-warning">⚙️ En Producción</span>',
+          transito_maritimo: '<span class="badge-primary">🚢 En Tránsito Marítimo</span>',
+          transito_aereo: '<span class="badge-primary">✈️ En Tránsito Aéreo</span>',
+          aduana: '<span class="badge-warning">🛃 En Aduana ML</span>',
+          recibido: '<span class="badge-success">✅ Recibido en Casa</span>'
+        };
+
+        const totalCop = (s.total_cost_usd * s.trm_cop).toLocaleString('es-CO');
+
+        html += `
+          <tr>
+            <td>
+              <strong>${escapeHtml(s.supplier_name)}</strong><br>
+              <small class="text-muted">Tracking: ${escapeHtml(s.tracking_number || 'N/A')}</small>
+            </td>
+            <td><span class="badge-secondary">${s.shipment_type === 'aereo' ? '✈️ Aéreo' : '🚢 Marítimo'}</span></td>
+            <td>${statusBadges[s.status] || s.status}</td>
+            <td>
+              <small>ETD: ${s.etd_date || 'N/A'}</small><br>
+              <small class="text-muted">ETA: ${s.eta_date || 'N/A'}</small>
+            </td>
+            <td>$${(s.trm_cop || 4000).toLocaleString('es-CO')} COP</td>
+            <td><strong>${(s.total_units || 0).toLocaleString('es-CO')}</strong> unds</td>
+            <td>
+              <strong>$${(s.total_cost_usd || 0).toLocaleString('en-US')} USD</strong><br>
+              <small class="text-muted">~$${totalCop} COP</small>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})">✏️ Editar</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})">🗑️</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    document.getElementById('chinaShipmentsTable').innerHTML = html;
+    document.getElementById('china-total-units').innerText = `${totalUnits.toLocaleString('es-CO')} unds`;
+    document.getElementById('china-total-usd').innerText = `$${totalUsd.toLocaleString('en-US')} USD`;
+    document.getElementById('china-active-shipments').innerText = activeCount.toString();
+  } catch (error) {
+    showToast('Error cargando embarques China: ' + error.message, 'error');
+  }
+}
+
+function openChinaShipmentModal(shipment = null) {
+  document.getElementById('chinaShipmentId').value = shipment ? shipment.id : '';
+  document.getElementById('chinaSupplierName').value = shipment ? shipment.supplier_name : '';
+  document.getElementById('chinaTrackingNumber').value = shipment ? shipment.tracking_number : '';
+  document.getElementById('chinaShipmentType').value = shipment ? shipment.shipment_type : 'maritimo';
+  document.getElementById('chinaStatus').value = shipment ? shipment.status : 'produccion';
+  document.getElementById('chinaEtdDate').value = shipment ? shipment.etd_date : '';
+  document.getElementById('chinaEtaDate').value = shipment ? shipment.eta_date : '';
+  document.getElementById('chinaTrmCop').value = shipment ? shipment.trm_cop : 4050;
+  document.getElementById('chinaTotalCostUsd').value = shipment ? shipment.total_cost_usd : '';
+  document.getElementById('chinaTotalUnits').value = shipment ? shipment.total_units : '';
+  document.getElementById('chinaNotes').value = shipment ? shipment.notes : '';
+
+  document.getElementById('chinaModalTitle').innerText = shipment ? 'Editar Embarque China' : 'Registrar Nuevo Embarque desde China';
+  document.getElementById('chinaShipmentModal').style.display = 'flex';
+}
+
+function closeChinaShipmentModal() {
+  document.getElementById('chinaShipmentModal').style.display = 'none';
+}
+
+async function saveChinaShipmentFromModal() {
+  const id = document.getElementById('chinaShipmentId').value;
+  const supplier_name = document.getElementById('chinaSupplierName').value.trim();
+  if (!supplier_name) return showToast('El proveedor es requerido', 'error');
+
+  const payload = {
+    id: id || null,
+    supplier_name,
+    tracking_number: document.getElementById('chinaTrackingNumber').value.trim(),
+    shipment_type: document.getElementById('chinaShipmentType').value,
+    status: document.getElementById('chinaStatus').value,
+    etd_date: document.getElementById('chinaEtdDate').value,
+    eta_date: document.getElementById('chinaEtaDate').value,
+    trm_cop: parseFloat(document.getElementById('chinaTrmCop').value || 4000),
+    total_cost_usd: parseFloat(document.getElementById('chinaTotalCostUsd').value || 0),
+    total_units: parseInt(document.getElementById('chinaTotalUnits').value || 0),
+    notes: document.getElementById('chinaNotes').value.trim(),
+  };
+
+  try {
+    await apiFetch('/api/inventory/china', { method: 'POST', body: JSON.stringify(payload) });
+    showToast('Embarque desde China guardado con éxito', 'success');
+    closeChinaShipmentModal();
+    loadChinaShipments();
+  } catch (error) {
+    showToast('Error guardando embarque: ' + error.message, 'error');
+  }
+}
+
+async function deleteChinaShipment(id) {
+  if (!confirm('¿Eliminar este registro de embarque de China?')) return;
+  try {
+    await apiFetch(`/api/inventory/china/${id}`, { method: 'DELETE' });
+    showToast('Embarque eliminado', 'info');
+    loadChinaShipments();
+  } catch (error) {
+    showToast('Error eliminando embarque: ' + error.message, 'error');
+  }
+}
+
+// --- Subtab 2: Local Stock Casa/Bodega ---
+async function loadLocalInventory() {
+  try {
+    const data = await apiFetch(`/api/inventory/local?accountId=${activeAccountId}`);
+    const items = data.inventory || [];
+
+    let html = '';
+    if (items.length === 0) {
+      html = '<tr><td colspan="10" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
+    } else {
+      items.forEach(i => {
+        const totalValueCop = (i.units_house * i.unit_cost_cop).toLocaleString('es-CO');
+        const isLowStock = i.units_house <= i.min_stock_alert;
+        const stockClass = isLowStock ? (i.units_house === 0 ? 'badge-critical' : 'badge-warning') : 'badge-success';
+
+        html += `
+          <tr>
+            <td><code>${escapeHtml(i.sku)}</code></td>
+            <td><strong>${escapeHtml(i.title)}</strong></td>
+            <td>${escapeHtml(i.category || 'General')}</td>
+            <td><span class="badge-secondary">${escapeHtml(i.account_name || 'Ambas')}</span></td>
+            <td><span class="${stockClass}">${i.units_house} unds</span></td>
+            <td>${i.min_stock_alert} unds</td>
+            <td>$${(i.unit_cost_cop || 0).toLocaleString('es-CO')} COP</td>
+            <td><strong>$${totalValueCop} COP</strong></td>
+            <td><small class="text-muted">${escapeHtml(i.location || 'Bodega Principal')}</small></td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(i.sku)}')">📦 Transferir a Full</button>
+              <button class="btn btn-sm btn-secondary" onclick="editLocalItem(${i.id})">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteLocalItem(${i.id})">🗑️</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    document.getElementById('localInventoryTable').innerHTML = html;
+  } catch (error) {
+    showToast('Error cargando stock local: ' + error.message, 'error');
+  }
+}
+
+async function populateAccountSelects() {
+  try {
+    const data = await apiFetch('/api/accounts');
+    const accounts = data.accounts || [];
+    let options = '<option value="">Todas / Compartido</option>';
+    accounts.forEach(a => {
+      options += `<option value="${a.id}">${escapeHtml(a.name)}</option>`;
+    });
+    const localSel = document.getElementById('localAccountSelect');
+    const promoSel = document.getElementById('promoAccountSelect');
+    if (localSel) localSel.innerHTML = options;
+    if (promoSel) promoSel.innerHTML = options;
+  } catch (e) {}
+}
+
+async function openLocalItemModal(item = null) {
+  await populateAccountSelects();
+  document.getElementById('localItemId').value = item ? item.id : '';
+  document.getElementById('localAccountSelect').value = item ? item.account_id || '' : '';
+  document.getElementById('localSku').value = item ? item.sku : '';
+  document.getElementById('localCategory').value = item ? item.category : 'Suplementos';
+  document.getElementById('localTitle').value = item ? item.title : '';
+  document.getElementById('localUnitsHouse').value = item ? item.units_house : 50;
+  document.getElementById('localUnitCostCop').value = item ? item.unit_cost_cop : 25000;
+  document.getElementById('localMinStock').value = item ? item.min_stock_alert : 15;
+  document.getElementById('localLocation').value = item ? item.location : 'Bodega Principal';
+
+  document.getElementById('localItemModalTitle').innerText = item ? 'Editar Producto en Bodega' : 'Agregar Producto a Bodega Casa';
+  document.getElementById('localItemModal').style.display = 'flex';
+}
+
+function closeLocalItemModal() {
+  document.getElementById('localItemModal').style.display = 'none';
+}
+
+async function saveLocalItemFromModal() {
+  const id = document.getElementById('localItemId').value;
+  const sku = document.getElementById('localSku').value.trim();
+  const title = document.getElementById('localTitle').value.trim();
+  if (!sku || !title) return showToast('SKU y Título son requeridos', 'error');
+
+  const payload = {
+    id: id || null,
+    account_id: document.getElementById('localAccountSelect').value || null,
+    sku,
+    title,
+    category: document.getElementById('localCategory').value.trim(),
+    units_house: parseInt(document.getElementById('localUnitsHouse').value || 0),
+    unit_cost_cop: parseFloat(document.getElementById('localUnitCostCop').value || 0),
+    min_stock_alert: parseInt(document.getElementById('localMinStock').value || 10),
+    location: document.getElementById('localLocation').value.trim()
+  };
+
+  try {
+    await apiFetch('/api/inventory/local', { method: 'POST', body: JSON.stringify(payload) });
+    showToast('Producto en Bodega guardado', 'success');
+    closeLocalItemModal();
+    loadLocalInventory();
+  } catch (error) {
+    showToast('Error guardando producto: ' + error.message, 'error');
+  }
+}
+
+async function deleteLocalItem(id) {
+  if (!confirm('¿Eliminar este producto de la Bodega Casa?')) return;
+  try {
+    await apiFetch(`/api/inventory/local/${id}`, { method: 'DELETE' });
+    showToast('Producto eliminado de Bodega', 'info');
+    loadLocalInventory();
+  } catch (error) {
+    showToast('Error eliminando producto: ' + error.message, 'error');
+  }
+}
+
+// --- Subtab 3: Stock Full Mercado Libre ---
+async function loadMlFullInventory() {
+  try {
+    const data = await apiFetch(`/api/inventory/full?accountId=${activeAccountId}`);
+    const items = data.fullInventory || [];
+
+    let html = '';
+    if (items.length === 0) {
+      html = '<tr><td colspan="9" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
+    } else {
+      items.forEach(f => {
+        const cov = parseFloat(f.coverage_days || 0);
+        let covStatus = '<span class="badge-success">🟢 Cobertura Óptima</span>';
+        if (cov < 5) covStatus = '<span class="badge-critical">🔴 Reabastecer Urgente</span>';
+        else if (cov < 10) covStatus = '<span class="badge-warning">🟠 Alerta Stock Bajo</span>';
+
+        html += `
+          <tr>
+            <td>
+              <code>${escapeHtml(f.ml_item_id)}</code><br>
+              <small class="text-muted">SKU: ${escapeHtml(f.sku || 'N/A')}</small>
+            </td>
+            <td><strong>${escapeHtml(f.title)}</strong></td>
+            <td><span class="badge-secondary">${escapeHtml(f.account_name || 'Tienda')}</span></td>
+            <td><strong>${f.units_full}</strong> unds</td>
+            <td>${f.stock_casa !== undefined ? f.stock_casa : 'N/A'} unds</td>
+            <td>${f.sales_last_30d || 0} unds</td>
+            <td><strong>${cov.toFixed(1)} días</strong></td>
+            <td>${covStatus}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}')">📦 Transferir desde Casa</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    document.getElementById('mlFullInventoryTable').innerHTML = html;
+  } catch (error) {
+    showToast('Error cargando stock Full Mercado Libre: ' + error.message, 'error');
+  }
+}
+
+async function syncMlFullInventory() {
+  try {
+    showToast('📡 Sincronizando inventarios de Mercado Libre...', 'info');
+    const data = await apiFetch('/api/inventory/full/sync', { method: 'POST', body: JSON.stringify({ accountId: activeAccountId }) });
+    if (data.success) {
+      showToast(`✅ ${data.syncedCount || 0} publicaciones sincronizadas exitosamente`, 'success');
+      loadMlFullInventory();
+    } else {
+      showToast('Error sincronizando Full: ' + (data.error || 'Desconocido'), 'error');
+    }
+  } catch (error) {
+    showToast('Error de sincronización: ' + error.message, 'error');
+  }
+}
+
+// Transfer Casa -> Full Modal
+function openTransferFullModal(sku) {
+  document.getElementById('transferSku').value = sku;
+  document.getElementById('transferUnits').value = 20;
+  document.getElementById('transferNotes').value = `Transferencia hacia Mercado Libre Full — ${sku}`;
+  document.getElementById('transferFullModal').style.display = 'flex';
+}
+
+function closeTransferFullModal() {
+  document.getElementById('transferFullModal').style.display = 'none';
+}
+
+async function submitTransferToFull() {
+  const sku = document.getElementById('transferSku').value;
+  const units = parseInt(document.getElementById('transferUnits').value || 0);
+  const notes = document.getElementById('transferNotes').value;
+
+  if (!units || units <= 0) return showToast('Ingresa unidades válidas', 'error');
+
+  try {
+    await apiFetch('/api/inventory/movement', {
+      method: 'POST',
+      body: JSON.stringify({
+        account_id: activeAccountId || null,
+        sku,
+        movement_type: 'transferencia_full',
+        units,
+        description: notes
+      })
+    });
+
+    showToast(`✅ ${units} unidades transferidas de Casa a ML Full (${sku})`, 'success');
+    closeTransferFullModal();
+    loadInventoryData();
+  } catch (error) {
+    showToast('Error registrando transferencia: ' + error.message, 'error');
+  }
+}
+
+// --- Subtab 4: Alertas & Reorden ---
+async function loadReorderAlerts() {
+  try {
+    const data = await apiFetch(`/api/inventory/alerts?accountId=${activeAccountId}`);
+    const alerts = data.alerts || [];
+
+    let html = '';
+    if (alerts.length === 0) {
+      html = '<div class="empty-state">🎉 ¡Excelente! No hay alertas de reabastecimiento ni quiebre de stock en este momento.</div>';
+    } else {
+      alerts.forEach(a => {
+        const isCrit = a.severity === 'critical';
+        html += `
+          <div class="alert-card ${isCrit ? 'critical' : ''}">
+            <div>
+              <strong>${isCrit ? '🚨 CRÍTICO' : '⚠️ ALERTA'}: ${escapeHtml(a.title)}</strong> (SKU: <code>${escapeHtml(a.sku)}</code>)<br>
+              <span class="text-secondary">${escapeHtml(a.message)}</span>
+            </div>
+            <div>
+              <button class="btn btn-sm ${isCrit ? 'btn-primary' : 'btn-secondary'}" onclick="handleAlertAction('${a.type}', '${escapeAttr(a.sku)}')">
+                ${a.type === 'reorder_china' ? '🚢 Pedir a China' : '📦 Transferir a Full'}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    document.getElementById('reorderAlertsGrid').innerHTML = html;
+  } catch (error) {
+    showToast('Error cargando alertas: ' + error.message, 'error');
+  }
+}
+
+function handleAlertAction(type, sku) {
+  if (type === 'reorder_china') {
+    openChinaShipmentModal({ supplier_name: 'Proveedor China', notes: `Reorden urgente para SKU: ${sku}` });
+  } else {
+    openTransferFullModal(sku);
+  }
+}
+
+// ══════════════════════════════════════════
+// ── Modulo de Ofertas & Márgenes Logic ──
+// ══════════════════════════════════════════
+
+function calculateLiveMargin() {
+  const original = parseFloat(document.getElementById('calcOriginalPrice').value || 0);
+  const promo = parseFloat(document.getElementById('calcPromoPrice').value || 0);
+  const commissionPercent = parseFloat(document.getElementById('calcCommissionPercent').value || 13);
+  const shipping = parseFloat(document.getElementById('calcShippingCost').value || 0);
+  const productCost = parseFloat(document.getElementById('calcProductCost').value || 0);
+
+  const discountPercent = original > 0 ? ((original - promo) / original) * 100 : 0;
+  const commissionCop = promo * (commissionPercent / 100);
+  const netCop = promo - commissionCop - shipping - productCost;
+  const netPercent = promo > 0 ? (netCop / promo) * 100 : 0;
+
+  document.getElementById('calcResDiscount').innerText = `${discountPercent.toFixed(1)}%`;
+  document.getElementById('calcResCommission').innerText = `$${Math.round(commissionCop).toLocaleString('es-CO')} COP`;
+  document.getElementById('calcResShipping').innerText = `$${Math.round(shipping).toLocaleString('es-CO')} COP`;
+  document.getElementById('calcResCost').innerText = `$${Math.round(productCost).toLocaleString('es-CO')} COP`;
+
+  const netCopEl = document.getElementById('calcResNetCop');
+  const netPctEl = document.getElementById('calcResNetPercent');
+
+  netCopEl.innerText = `$${Math.round(netCop).toLocaleString('es-CO')} COP`;
+  netPctEl.innerText = `${netPercent.toFixed(1)}%`;
+
+  if (netPercent >= 20) {
+    netPctEl.className = 'badge-success';
+  } else if (netPercent >= 10) {
+    netPctEl.className = 'badge-warning';
+  } else {
+    netPctEl.className = 'badge-critical';
+  }
+}
+
+async function runAiMarginEvaluation() {
+  const box = document.getElementById('aiMarginEvaluation');
+  box.innerHTML = '<p class="text-muted">🤖 Analizando rentabilidad con Gemini 3.6 Flash...</p>';
+
+  const original = parseFloat(document.getElementById('calcOriginalPrice').value || 0);
+  const promo = parseFloat(document.getElementById('calcPromoPrice').value || 0);
+  const commissionPercent = parseFloat(document.getElementById('calcCommissionPercent').value || 13);
+  const shipping = parseFloat(document.getElementById('calcShippingCost').value || 0);
+  const productCost = parseFloat(document.getElementById('calcProductCost').value || 0);
+
+  const discountPercent = original > 0 ? ((original - promo) / original) * 100 : 0;
+  const commissionCop = promo * (commissionPercent / 100);
+  const netCop = promo - commissionCop - shipping - productCost;
+  const netPercent = promo > 0 ? (netCop / promo) * 100 : 0;
+
+  const productData = {
+    title: 'Producto de prueba Mercado Libre',
+    original_price: original,
+    promo_price: promo,
+    discount_percent: discountPercent,
+    ml_commission_percent: commissionPercent,
+    shipping_cost_cop: shipping,
+    product_cost_cop: productCost,
+    net_margin_cop: netCop,
+    net_margin_percent: netPercent
+  };
+
+  try {
+    const res = await apiFetch('/api/promotions/ai-evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ productData, targetMarginPercent: 20 })
+    });
+
+    box.innerHTML = `
+      <div class="card p-3 accent-purple">
+        <strong>🤖 Evaluación de Gemini IA:</strong>
+        <p class="mt-1" style="font-size:0.85rem">${escapeHtml(res.evaluation)}</p>
+        <button class="btn btn-sm btn-secondary mt-2" onclick="runAiMarginEvaluation()">🔄 Re-evaluar</button>
+      </div>
+    `;
+  } catch (error) {
+    box.innerHTML = `<p class="text-danger">Error: ${error.message}</p>`;
+  }
+}
+
+async function loadPromotions() {
+  calculateLiveMargin();
+  try {
+    const data = await apiFetch(`/api/promotions?accountId=${activeAccountId}`);
+    const promos = data.promotions || [];
+
+    let html = '';
+    if (promos.length === 0) {
+      html = '<tr><td colspan="9" class="empty-cell">No hay ofertas registradas</td></tr>';
+    } else {
+      promos.forEach(p => {
+        const marginClass = p.net_margin_percent >= 20 ? 'badge-success' : (p.net_margin_percent >= 10 ? 'badge-warning' : 'badge-critical');
+
+        html += `
+          <tr>
+            <td><span class="badge-secondary">${escapeHtml(p.account_name || 'Tienda')}</span></td>
+            <td>
+              <code>${escapeHtml(p.ml_item_id)}</code><br>
+              <strong>${escapeHtml(p.title)}</strong>
+            </td>
+            <td>$${(p.original_price || 0).toLocaleString('es-CO')}</td>
+            <td><strong>$${(p.promo_price || 0).toLocaleString('es-CO')}</strong></td>
+            <td><span class="badge-primary">-${(p.discount_percent || 0).toFixed(0)}%</span></td>
+            <td>
+              <span class="${marginClass}">${(p.net_margin_percent || 0).toFixed(1)}%</span><br>
+              <small class="text-muted">($${Math.round(p.net_margin_cop || 0).toLocaleString('es-CO')} COP)</small>
+            </td>
+            <td><span class="badge-success">${p.status || 'activa'}</span></td>
+            <td><small class="text-muted">${escapeHtml((p.ai_evaluation || '').substring(0, 70))}...</small></td>
+            <td>
+              <button class="btn btn-sm btn-danger" onclick="deletePromotion(${p.id})">🗑️</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    document.getElementById('promotionsTable').innerHTML = html;
+  } catch (error) {
+    showToast('Error cargando promociones: ' + error.message, 'error');
+  }
+}
+
+async function openPromotionModal() {
+  await populateAccountSelects();
+  document.getElementById('promoModalTitle').innerText = 'Crear Nueva Oferta';
+  document.getElementById('promoId').value = '';
+  document.getElementById('promotionModal').style.display = 'flex';
+}
+
+function closePromotionModal() {
+  document.getElementById('promotionModal').style.display = 'none';
+}
+
+async function savePromotionFromModal() {
+  const account_id = document.getElementById('promoAccountSelect').value;
+  const ml_item_id = document.getElementById('promoMlItemId').value.trim();
+  const title = document.getElementById('promoTitle').value.trim();
+  const promo_price = parseFloat(document.getElementById('promoPromoPrice').value || 0);
+
+  if (!account_id || !ml_item_id || !title || !promo_price) {
+    return showToast('Cuenta, Item ID, Título y Precio Oferta son requeridos', 'error');
+  }
+
+  const payload = {
+    account_id,
+    ml_item_id,
+    title,
+    original_price: parseFloat(document.getElementById('promoOriginalPrice').value || promo_price),
+    promo_price,
+    ml_commission_percent: parseFloat(document.getElementById('promoMlCommission').value || 13),
+    shipping_cost_cop: parseFloat(document.getElementById('promoShippingCost').value || 0),
+    product_cost_cop: parseFloat(document.getElementById('promoProductCost').value || 0),
+    status: 'activa'
+  };
+
+  try {
+    await apiFetch('/api/promotions', { method: 'POST', body: JSON.stringify(payload) });
+    showToast('Oferta registrada con éxito', 'success');
+    closePromotionModal();
+    loadPromotions();
+  } catch (error) {
+    showToast('Error guardando oferta: ' + error.message, 'error');
+  }
+}
+
+async function deletePromotion(id) {
+  if (!confirm('¿Eliminar esta oferta del registro?')) return;
+  try {
+    await apiFetch(`/api/promotions/${id}`, { method: 'DELETE' });
+    showToast('Oferta eliminada', 'info');
+    loadPromotions();
+  } catch (error) {
+    showToast('Error eliminando oferta: ' + error.message, 'error');
+  }
+}
+

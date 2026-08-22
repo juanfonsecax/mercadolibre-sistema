@@ -49,6 +49,15 @@
         <span class="nav-label">Novedades</span>
         <span class="nav-badge" id="badge-claims" style="display:none">0</span>
       </a>
+      <a href="#" class="nav-item" data-section="inventory" id="nav-inventory">
+        <span class="nav-icon">📦</span>
+        <span class="nav-label">Inventarios (3 Fases)</span>
+        <span class="nav-badge" id="badge-inventory" style="display:none">!</span>
+      </a>
+      <a href="#" class="nav-item" data-section="promotions" id="nav-promotions">
+        <span class="nav-icon">🏷️</span>
+        <span class="nav-label">Ofertas & Márgenes</span>
+      </a>
       <a href="#" class="nav-item" data-section="knowledge" id="nav-knowledge">
         <span class="nav-icon">📚</span>
         <span class="nav-label">Conocimiento</span>
@@ -495,7 +504,462 @@
         </div>
       </div>
     </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Módulo de Inventario en 3 Fases -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-inventory">
+      <div class="section-header">
+        <h1>Inventario e Importaciones (3 Fases)</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="loadInventoryData()">🔄 Actualizar</button>
+          <button class="btn btn-primary" onclick="openChinaShipmentModal()">🚢 Nuevo Embarque China</button>
+          <button class="btn btn-success" onclick="openLocalItemModal()">🏠 Agregar a Bodega Casa</button>
+        </div>
+      </div>
+
+      <!-- Sub-Tabs Navigation for Inventory Fases -->
+      <div class="inventory-tabs">
+        <button class="tab-btn active" onclick="switchInventoryTab('china')" id="tab-btn-china">🚢 Fase 1: Tránsito China</button>
+        <button class="tab-btn" onclick="switchInventoryTab('local')" id="tab-btn-local">🏠 Fase 2: Stock Casa/Bodega</button>
+        <button class="tab-btn" onclick="switchInventoryTab('full')" id="tab-btn-full">📦 Fase 3: Stock Full ML</button>
+        <button class="tab-btn" onclick="switchInventoryTab('alerts')" id="tab-btn-alerts">⚠️ Alertas & Reorden</button>
+      </div>
+
+      <!-- Sub-Tab Content 1: China Shipments -->
+      <div class="inventory-subcontent active" id="subtab-china">
+        <div class="inventory-pipeline-summary">
+          <div class="pipeline-card">
+            <span class="pipeline-icon">📦</span>
+            <div>
+              <h4 id="china-total-units">0 unds</h4>
+              <p>En Tránsito Internacional</p>
+            </div>
+          </div>
+          <div class="pipeline-card">
+            <span class="pipeline-icon">💵</span>
+            <div>
+              <h4 id="china-total-usd">$0 USD</h4>
+              <p>Valor FOB/CIF Total</p>
+            </div>
+          </div>
+          <div class="pipeline-card">
+            <span class="pipeline-icon">🚢</span>
+            <div>
+              <h4 id="china-active-shipments">0</h4>
+              <p>Embarques Activos</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tracking / Proveedor</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+                <th>Fechas (ETD / ETA)</th>
+                <th>TRM (COP)</th>
+                <th>Unidades</th>
+                <th>Costo Total</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="chinaShipmentsTable">
+              <tr><td colspan="8" class="empty-cell">Cargando embarques...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sub-Tab Content 2: Local Stock Casa/Bodega -->
+      <div class="inventory-subcontent" id="subtab-local">
+        <div class="table-container card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Cuenta</th>
+                <th>Stock Casa</th>
+                <th>Stock Mínimo</th>
+                <th>Costo Unit. (COP)</th>
+                <th>Valor Total</th>
+                <th>Ubicación</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="localInventoryTable">
+              <tr><td colspan="10" class="empty-cell">Cargando stock local...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sub-Tab Content 3: Stock Full Mercado Libre -->
+      <div class="inventory-subcontent" id="subtab-full">
+        <div class="section-actions-row mb-3">
+          <button class="btn btn-primary" onclick="syncMlFullInventory()">📡 Sincronizar Stock Mercado Libre Full</button>
+        </div>
+
+        <div class="table-container card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Item ML / SKU</th>
+                <th>Producto</th>
+                <th>Cuenta</th>
+                <th>Stock Full ML</th>
+                <th>Stock Casa</th>
+                <th>Ventas (30d)</th>
+                <th>Días Cobertura</th>
+                <th>Estado Cobertura</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="mlFullInventoryTable">
+              <tr><td colspan="9" class="empty-cell">Cargando stock Full Mercado Libre...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sub-Tab Content 4: Alertas de Reorden -->
+      <div class="inventory-subcontent" id="subtab-alerts">
+        <div class="alerts-grid" id="reorderAlertsGrid">
+          <div class="empty-state"><p>Cargando alertas de reorden...</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Módulo de Ofertas & Márgenes con IA -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-promotions">
+      <div class="section-header">
+        <h1>Ofertas & Calculadora de Margen Real</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="loadPromotions()">🔄 Actualizar</button>
+          <button class="btn btn-primary" onclick="openPromotionModal()">🏷️ Nueva Oferta / Promoción</button>
+        </div>
+      </div>
+
+      <!-- Live Margin Calculator Card -->
+      <div class="card margin-calculator-card mb-4">
+        <div class="card-header">
+          <h3>🧮 Calculadora de Rentabilidad Neta Mercado Libre Colombia</h3>
+        </div>
+        <div class="card-body">
+          <div class="calculator-grid">
+            <div class="calc-inputs">
+              <div class="form-group">
+                <label>Precio de Lista / Publicación ($ COP):</label>
+                <input type="number" id="calcOriginalPrice" class="form-input" value="80000" oninput="calculateLiveMargin()">
+              </div>
+              <div class="form-group">
+                <label>Precio Oferta Propuesto ($ COP):</label>
+                <input type="number" id="calcPromoPrice" class="form-input" value="68000" oninput="calculateLiveMargin()">
+              </div>
+              <div class="form-group">
+                <label>Comisión Mercado Libre (%):</label>
+                <input type="number" id="calcCommissionPercent" class="form-input" value="13" step="0.5" oninput="calculateLiveMargin()">
+              </div>
+              <div class="form-group">
+                <label>Costo de Envío Flex / Full ($ COP):</label>
+                <input type="number" id="calcShippingCost" class="form-input" value="9500" oninput="calculateLiveMargin()">
+              </div>
+              <div class="form-group">
+                <label>Costo de Adquisición CIF/Landed ($ COP):</label>
+                <input type="number" id="calcProductCost" class="form-input" value="25000" oninput="calculateLiveMargin()">
+              </div>
+            </div>
+
+            <div class="calc-results card accent-blue">
+              <h4>Resumen Financiero Neto</h4>
+              <div class="result-row">
+                <span>Descuento aplicado:</span>
+                <strong id="calcResDiscount">15.0%</strong>
+              </div>
+              <div class="result-row">
+                <span>Comisión ML (COP):</span>
+                <strong id="calcResCommission">$8,840</strong>
+              </div>
+              <div class="result-row">
+                <span>Costo Envío (COP):</span>
+                <strong id="calcResShipping">$9,500</strong>
+              </div>
+              <div class="result-row">
+                <span>Costo Producto (COP):</span>
+                <strong id="calcResCost">$25,000</strong>
+              </div>
+              <hr class="calc-divider">
+              <div class="result-row total">
+                <span>Ganancia Neta por Venta:</span>
+                <strong id="calcResNetCop">$24,660 COP</strong>
+              </div>
+              <div class="result-row total">
+                <span>Margen Neto Real:</span>
+                <strong id="calcResNetPercent" class="badge-success">36.3%</strong>
+              </div>
+
+              <div class="ai-eval-box mt-3" id="aiMarginEvaluation">
+                <button class="btn btn-secondary btn-sm btn-block" onclick="runAiMarginEvaluation()">🤖 Evaluar Estrategia con IA</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Promotions List -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Historial de Ofertas & Campañas</h3>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cuenta</th>
+                  <th>Item ML / Producto</th>
+                  <th>Precio Lista</th>
+                  <th>Precio Oferta</th>
+                  <th>Descuento</th>
+                  <th>Margen Neto</th>
+                  <th>Estado</th>
+                  <th>Evaluación IA</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="promotionsTable">
+                <tr><td colspan="9" class="empty-cell">Cargando promociones...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- MODALS PARA INVENTARIO Y OFERTAS -->
+  <!-- ══════════════════════════════════════ -->
+
+  <!-- Modal 1: China Shipment -->
+  <div class="modal-overlay" id="chinaShipmentModal" style="display:none">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="chinaModalTitle">Registrar Nuevo Embarque desde China</h3>
+        <button class="modal-close" onclick="closeChinaShipmentModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="chinaShipmentId">
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Proveedor / Fabricante:</label>
+            <input type="text" id="chinaSupplierName" class="form-input" placeholder="Ej: Shenzhen Biotech Co.">
+          </div>
+          <div class="form-group col">
+            <label>Tracking / BL Number:</label>
+            <input type="text" id="chinaTrackingNumber" class="form-input" placeholder="Ej: CN-HK-2026-991">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Tipo de Transporte:</label>
+            <select id="chinaShipmentType" class="form-input">
+              <option value="maritimo">🚢 Marítimo (Contenedor / LCL)</option>
+              <option value="aereo">✈️ Aéreo (Express)</option>
+            </select>
+          </div>
+          <div class="form-group col">
+            <label>Estado del Embarque:</label>
+            <select id="chinaStatus" class="form-input">
+              <option value="produccion">⚙️ En Producción</option>
+              <option value="transito_maritimo">🚢 En Tránsito Marítimo</option>
+              <option value="transito_aereo">✈️ En Tránsito Aéreo</option>
+              <option value="aduana">🛃 En Aduana Colombia</option>
+              <option value="recibido">✅ Recibido en Bodega Casa</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Fecha Salida (ETD):</label>
+            <input type="date" id="chinaEtdDate" class="form-input">
+          </div>
+          <div class="form-group col">
+            <label>Fecha Estimada Arribo (ETA):</label>
+            <input type="date" id="chinaEtaDate" class="form-input">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>TRM Dólar USD a COP:</label>
+            <input type="number" id="chinaTrmCop" class="form-input" value="4000">
+          </div>
+          <div class="form-group col">
+            <label>Costo Total USD (FOB/CIF):</label>
+            <input type="number" id="chinaTotalCostUsd" class="form-input" placeholder="3500">
+          </div>
+          <div class="form-group col">
+            <label>Total Unidades:</label>
+            <input type="number" id="chinaTotalUnits" class="form-input" placeholder="1000">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notas / Observaciones:</label>
+          <textarea id="chinaNotes" class="form-input" rows="2" placeholder="Agrega notas sobre este embarque..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeChinaShipmentModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveChinaShipmentFromModal()">Guardar Embarque</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Stock Casa Local Item -->
+  <div class="modal-overlay" id="localItemModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="localItemModalTitle">Agregar Producto a Bodega Casa</h3>
+        <button class="modal-close" onclick="closeLocalItemModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="localItemId">
+        <div class="form-group">
+          <label>Cuenta / Tienda Asignada:</label>
+          <select id="localAccountSelect" class="form-input">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>SKU (Código único):</label>
+            <input type="text" id="localSku" class="form-input" placeholder="Ej: VIT-D3K2-60">
+          </div>
+          <div class="form-group col">
+            <label>Categoría:</label>
+            <input type="text" id="localCategory" class="form-input" placeholder="Ej: Suplementos">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nombre del Producto:</label>
+          <input type="text" id="localTitle" class="form-input" placeholder="Nombre completo del producto">
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Unidades en Casa:</label>
+            <input type="number" id="localUnitsHouse" class="form-input" value="50">
+          </div>
+          <div class="form-group col">
+            <label>Costo Unitario ($ COP):</label>
+            <input type="number" id="localUnitCostCop" class="form-input" value="25000">
+          </div>
+          <div class="form-group col">
+            <label>Stock Mínimo (Alerta):</label>
+            <input type="number" id="localMinStock" class="form-input" value="15">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Ubicación en Bodega:</label>
+          <input type="text" id="localLocation" class="form-input" value="Bodega Principal - Estante A1">
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeLocalItemModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveLocalItemFromModal()">Guardar Producto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Transfer to Full ML -->
+  <div class="modal-overlay" id="transferFullModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Transferir Inventario de Casa a ML Full</h3>
+        <button class="modal-close" onclick="closeTransferFullModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Producto / SKU:</label>
+          <input type="text" id="transferSku" class="form-input" readonly>
+        </div>
+        <div class="form-group">
+          <label>Unidades a Transferir a Mercado Libre Full:</label>
+          <input type="number" id="transferUnits" class="form-input" value="20" min="1">
+        </div>
+        <div class="form-group">
+          <label>Notas de Envió / Guía ML Full:</label>
+          <input type="text" id="transferNotes" class="form-input" placeholder="Ej: Envío colectivo ML Full #98123">
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeTransferFullModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="submitTransferToFull()">Confirmar Transferencia</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Promotion Modal -->
+  <div class="modal-overlay" id="promotionModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="promoModalTitle">Crear Oferta / Promoción</h3>
+        <button class="modal-close" onclick="closePromotionModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="promoId">
+        <div class="form-group">
+          <label>Cuenta Mercado Libre:</label>
+          <select id="promoAccountSelect" class="form-input">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Item ID Mercado Libre:</label>
+            <input type="text" id="promoMlItemId" class="form-input" placeholder="Ej: MCO14892019">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Título del Producto:</label>
+          <input type="text" id="promoTitle" class="form-input" placeholder="Ej: Vitamina D3+K2 60 Cápsulas">
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Precio Original / Lista ($ COP):</label>
+            <input type="number" id="promoOriginalPrice" class="form-input" value="80000">
+          </div>
+          <div class="form-group col">
+            <label>Precio Oferta ($ COP):</label>
+            <input type="number" id="promoPromoPrice" class="form-input" value="68000">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Comisión ML (%):</label>
+            <input type="number" id="promoMlCommission" class="form-input" value="13">
+          </div>
+          <div class="form-group col">
+            <label>Costo Envío ($ COP):</label>
+            <input type="number" id="promoShippingCost" class="form-input" value="9500">
+          </div>
+          <div class="form-group col">
+            <label>Costo Producto CIF ($ COP):</label>
+            <input type="number" id="promoProductCost" class="form-input" value="25000">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closePromotionModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="savePromotionFromModal()">Guardar Oferta</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>

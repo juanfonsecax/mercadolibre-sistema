@@ -229,6 +229,147 @@ function initSchema() {
     )
   `);
 
+  // ── Fase 1: Importaciones China ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS china_shipments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tracking_number TEXT,
+      supplier_name TEXT NOT NULL,
+      status TEXT DEFAULT 'produccion', -- produccion, transito_maritimo, transito_aereo, aduana, recibido
+      shipment_type TEXT DEFAULT 'maritimo', -- maritimo, aereo
+      etd_date TEXT, -- Estimated Time of Departure
+      eta_date TEXT, -- Estimated Time of Arrival
+      trm_cop REAL DEFAULT 4000.0, -- Tasa de Cambio USD a COP
+      total_cost_usd REAL DEFAULT 0,
+      total_units INTEGER DEFAULT 0,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS china_shipment_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shipment_id INTEGER NOT NULL,
+      sku TEXT NOT NULL,
+      title TEXT NOT NULL,
+      account_id INTEGER, -- Tienda asignada
+      units INTEGER DEFAULT 0,
+      unit_cost_usd REAL DEFAULT 0,
+      FOREIGN KEY (shipment_id) REFERENCES china_shipments(id) ON DELETE CASCADE
+    )
+  `);
+
+  // ── Fase 2: Stock Casa / Bodega Local ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS local_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER,
+      sku TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT,
+      units_house INTEGER DEFAULT 0,
+      unit_cost_cop REAL DEFAULT 0,
+      min_stock_alert INTEGER DEFAULT 10,
+      location TEXT DEFAULT 'Bodega Principal',
+      image_url TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS inventory_movements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER,
+      sku TEXT NOT NULL,
+      movement_type TEXT NOT NULL, -- entrada_importacion, ajuste_manual, transferencia_full, venta_local
+      units INTEGER NOT NULL,
+      description TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── Fase 3: Stock Full Mercado Libre ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ml_full_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      ml_item_id TEXT NOT NULL,
+      sku TEXT,
+      title TEXT NOT NULL,
+      units_full INTEGER DEFAULT 0,
+      sales_last_7d INTEGER DEFAULT 0,
+      sales_last_30d INTEGER DEFAULT 0,
+      coverage_days REAL DEFAULT 0, -- Calculado: units_full / (sales_last_30d / 30)
+      last_sync_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(account_id, ml_item_id)
+    )
+  `);
+
+  // ── Modulo de Ofertas & Margen ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS product_promotions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      ml_item_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      original_price REAL NOT NULL,
+      promo_price REAL NOT NULL,
+      discount_percent REAL DEFAULT 0,
+      ml_commission_percent REAL DEFAULT 13.0,
+      shipping_cost_cop REAL DEFAULT 0,
+      product_cost_cop REAL DEFAULT 0,
+      net_margin_cop REAL DEFAULT 0,
+      net_margin_percent REAL DEFAULT 0,
+      status TEXT DEFAULT 'activa', -- activa, pausada, programada
+      ai_evaluation TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Seed default demo inventory if empty
+  const localCount = queryOne('SELECT COUNT(*) as count FROM local_inventory');
+  if (!localCount || localCount.count === 0) {
+    db.run(`
+      INSERT INTO local_inventory (account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location)
+      VALUES 
+      (1, 'VIT-D3K2-60', 'Vitamina D3 5000 IU + K2 MK7 60 Cápsulas Softgel', 'Suplementos', 120, 24000, 30, 'Bodega Casa - Estante A1'),
+      (1, 'COL-PEP-300', 'Péptidos de Colágeno Hidrolizado Multi 300g', 'Nutrición', 85, 38000, 20, 'Bodega Casa - Estante B2'),
+      (2, 'MAG-GLY-120', 'Glicinato de Magnesio Alta Absorción 120 Cápsulas', 'Suplementos', 45, 29000, 15, 'Bodega Casa - Estante A3'),
+      (2, 'HAIR-GRO-60', 'Fórmula Crecimiento Capilar Avanzado 60 Caps', 'Belleza', 60, 31000, 20, 'Bodega Casa - Estante C1')
+    `);
+  }
+
+  const shipmentCount = queryOne('SELECT COUNT(*) as count FROM china_shipments');
+  if (!shipmentCount || shipmentCount.count === 0) {
+    db.run(`
+      INSERT INTO china_shipments (tracking_number, supplier_name, status, shipment_type, etd_date, eta_date, trm_cop, total_cost_usd, total_units, notes)
+      VALUES 
+      ('CN-HK-2026-9812', 'Shenzhen Health Biotech Ltd', 'transito_maritimo', 'maritimo', '2026-08-01', '2026-09-10', 4050.0, 3800.0, 1000, 'Contenedor compartido 20ft - Suplementos D3K2 y Magnesio'),
+      ('AIR-CZ-77291', 'Guangzhou BioCare Corp', 'produccion', 'aereo', '2026-08-25', '2026-09-02', 4050.0, 1450.0, 300, 'Envío express por avión para reposición rápida de Colágeno')
+    `);
+    db.run(`
+      INSERT INTO china_shipment_items (shipment_id, sku, title, account_id, units, unit_cost_usd)
+      VALUES 
+      (1, 'VIT-D3K2-60', 'Vitamina D3 5000 IU + K2 MK7 60 Caps', 1, 600, 3.50),
+      (1, 'MAG-GLY-120', 'Glicinato de Magnesio Alta Absorción', 2, 400, 4.25),
+      (2, 'COL-PEP-300', 'Péptidos de Colágeno Hidrolizado', 1, 300, 4.83)
+    `);
+  }
+
+  const mlFullCount = queryOne('SELECT COUNT(*) as count FROM ml_full_inventory');
+  if (!mlFullCount || mlFullCount.count === 0) {
+    db.run(`
+      INSERT INTO ml_full_inventory (account_id, ml_item_id, sku, title, units_full, sales_last_7d, sales_last_30d, coverage_days)
+      VALUES 
+      (1, 'MCO14892019', 'VIT-D3K2-60', 'Vitamina D3 5000 IU + K2 MK7 60 Cápsulas Softgel', 18, 14, 48, 11.25),
+      (1, 'MCO14892020', 'COL-PEP-300', 'Péptidos de Colágeno Hidrolizado Multi 300g', 6, 9, 32, 5.62),
+      (2, 'MCO29401928', 'MAG-GLY-120', 'Glicinato de Magnesio Alta Absorción 120 Caps', 40, 11, 39, 30.76),
+      (2, 'MCO29401929', 'HAIR-GRO-60', 'Fórmula Crecimiento Capilar Avanzado 60 Caps', 4, 8, 28, 4.28)
+    `);
+  }
+
   saveDbToFile();
 }
 
@@ -633,6 +774,215 @@ function getOverviewStats(accountId = null) {
   };
 }
 
+// ── Fase 1: Importaciones China Operations ──
+
+function getChinaShipments() {
+  const shipments = queryAll('SELECT * FROM china_shipments ORDER BY created_at DESC');
+  return shipments.map(s => {
+    const items = queryAll('SELECT i.*, a.name as account_name FROM china_shipment_items i LEFT JOIN accounts a ON i.account_id = a.id WHERE i.shipment_id = ?', [s.id]);
+    return { ...s, items };
+  });
+}
+
+function saveChinaShipment(shipment, items = []) {
+  if (shipment.id) {
+    runSql(
+      'UPDATE china_shipments SET tracking_number = ?, supplier_name = ?, status = ?, shipment_type = ?, etd_date = ?, eta_date = ?, trm_cop = ?, total_cost_usd = ?, total_units = ?, notes = ?, updated_at = datetime("now") WHERE id = ?',
+      [shipment.tracking_number, shipment.supplier_name, shipment.status, shipment.shipment_type, shipment.etd_date, shipment.eta_date, shipment.trm_cop || 4000, shipment.total_cost_usd || 0, shipment.total_units || 0, shipment.notes || '', shipment.id]
+    );
+    if (items.length > 0) {
+      runSql('DELETE FROM china_shipment_items WHERE shipment_id = ?', [shipment.id]);
+      items.forEach(item => {
+        runSql(
+          'INSERT INTO china_shipment_items (shipment_id, sku, title, account_id, units, unit_cost_usd) VALUES (?, ?, ?, ?, ?, ?)',
+          [shipment.id, item.sku, item.title, item.account_id || null, item.units || 0, item.unit_cost_usd || 0]
+        );
+      });
+    }
+    return shipment.id;
+  } else {
+    runSql(
+      'INSERT INTO china_shipments (tracking_number, supplier_name, status, shipment_type, etd_date, eta_date, trm_cop, total_cost_usd, total_units, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [shipment.tracking_number, shipment.supplier_name, shipment.status || 'produccion', shipment.shipment_type || 'maritimo', shipment.etd_date, shipment.eta_date, shipment.trm_cop || 4000, shipment.total_cost_usd || 0, shipment.total_units || 0, shipment.notes || '']
+    );
+    const created = queryOne('SELECT id FROM china_shipments ORDER BY id DESC LIMIT 1');
+    if (created && items.length > 0) {
+      items.forEach(item => {
+        runSql(
+          'INSERT INTO china_shipment_items (shipment_id, sku, title, account_id, units, unit_cost_usd) VALUES (?, ?, ?, ?, ?, ?)',
+          [created.id, item.sku, item.title, item.account_id || null, item.units || 0, item.unit_cost_usd || 0]
+        );
+      });
+    }
+    return created ? created.id : null;
+  }
+}
+
+function deleteChinaShipment(id) {
+  runSql('DELETE FROM china_shipments WHERE id = ?', [id]);
+}
+
+// ── Fase 2: Stock Casa / Bodega Local Operations ──
+
+function getLocalInventory(accountId = null) {
+  let sql = 'SELECT i.*, a.name as account_name FROM local_inventory i LEFT JOIN accounts a ON i.account_id = a.id WHERE 1=1';
+  const params = [];
+  if (accountId) {
+    sql += ' AND i.account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY i.sku ASC';
+  return queryAll(sql, params);
+}
+
+function saveLocalInventoryItem(item) {
+  if (item.id) {
+    runSql(
+      'UPDATE local_inventory SET account_id = ?, sku = ?, title = ?, category = ?, units_house = ?, unit_cost_cop = ?, min_stock_alert = ?, location = ?, updated_at = datetime("now") WHERE id = ?',
+      [item.account_id || null, item.sku, item.title, item.category || 'General', item.units_house || 0, item.unit_cost_cop || 0, item.min_stock_alert || 10, item.location || 'Bodega Principal', item.id]
+    );
+    return item.id;
+  } else {
+    runSql(
+      'INSERT INTO local_inventory (account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [item.account_id || null, item.sku, item.title, item.category || 'General', item.units_house || 0, item.unit_cost_cop || 0, item.min_stock_alert || 10, item.location || 'Bodega Principal']
+    );
+    const created = queryOne('SELECT id FROM local_inventory WHERE sku = ?', [item.sku]);
+    return created ? created.id : null;
+  }
+}
+
+function deleteLocalInventoryItem(id) {
+  runSql('DELETE FROM local_inventory WHERE id = ?', [id]);
+}
+
+function recordInventoryMovement(movement) {
+  runSql(
+    'INSERT INTO inventory_movements (account_id, sku, movement_type, units, description) VALUES (?, ?, ?, ?, ?)',
+    [movement.account_id || null, movement.sku, movement.movement_type, movement.units, movement.description || '']
+  );
+
+  // Update local inventory house stock if applicable
+  if (movement.movement_type === 'entrada_importacion' || movement.movement_type === 'ajuste_manual_suma') {
+    runSql('UPDATE local_inventory SET units_house = units_house + ? WHERE sku = ?', [Math.abs(movement.units), movement.sku]);
+  } else if (movement.movement_type === 'transferencia_full' || movement.movement_type === 'ajuste_manual_resta') {
+    runSql('UPDATE local_inventory SET units_house = MAX(0, units_house - ?) WHERE sku = ?', [Math.abs(movement.units), movement.sku]);
+  }
+}
+
+function getInventoryMovements(sku = null, limit = 50) {
+  let sql = 'SELECT m.*, a.name as account_name FROM inventory_movements m LEFT JOIN accounts a ON m.account_id = a.id WHERE 1=1';
+  const params = [];
+  if (sku) {
+    sql += ' AND m.sku = ?';
+    params.push(sku);
+  }
+  sql += ' ORDER BY m.created_at DESC LIMIT ?';
+  params.push(limit);
+  return queryAll(sql, params);
+}
+
+// ── Fase 3: Stock Full ML Operations ──
+
+function getMlFullInventory(accountId = null) {
+  let sql = 'SELECT f.*, a.name as account_name, l.units_house as stock_casa, l.unit_cost_cop FROM ml_full_inventory f LEFT JOIN accounts a ON f.account_id = a.id LEFT JOIN local_inventory l ON f.sku = l.sku WHERE 1=1';
+  const params = [];
+  if (accountId) {
+    sql += ' AND f.account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY f.units_full ASC';
+  return queryAll(sql, params);
+}
+
+function saveMlFullInventoryItem(item) {
+  const dailySales = (item.sales_last_30d || 0) / 30;
+  const coverageDays = dailySales > 0 ? (item.units_full / dailySales) : 999;
+  
+  runSql(
+    `INSERT INTO ml_full_inventory (account_id, ml_item_id, sku, title, units_full, sales_last_7d, sales_last_30d, coverage_days, last_sync_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(account_id, ml_item_id) DO UPDATE SET
+       sku = excluded.sku,
+       title = excluded.title,
+       units_full = excluded.units_full,
+       sales_last_7d = excluded.sales_last_7d,
+       sales_last_30d = excluded.sales_last_30d,
+       coverage_days = excluded.coverage_days,
+       last_sync_at = datetime('now')`,
+    [item.account_id, item.ml_item_id, item.sku || null, item.title, item.units_full || 0, item.sales_last_7d || 0, item.sales_last_30d || 0, coverageDays]
+  );
+}
+
+function getReorderAlerts(accountId = null) {
+  // Reorder alerts for Local House Stock (under min_stock_alert)
+  const localAlerts = getLocalInventory(accountId).filter(i => i.units_house <= i.min_stock_alert).map(i => ({
+    type: 'reorder_china',
+    severity: i.units_house === 0 ? 'critical' : 'warning',
+    sku: i.sku,
+    title: i.title,
+    account_name: i.account_name,
+    message: `Stock Casa crítico (${i.units_house} unds, Mín: ${i.min_stock_alert}). Realizar pedido a China.`
+  }));
+
+  // Reorder alerts for Mercado Libre Full Stock (coverage < 10 days)
+  const fullAlerts = getMlFullInventory(accountId).filter(f => f.coverage_days < 10).map(f => ({
+    type: 'transfer_to_full',
+    severity: f.coverage_days < 5 ? 'critical' : 'warning',
+    sku: f.sku,
+    title: f.title,
+    account_name: f.account_name,
+    message: `Stock Full ML bajo (${f.units_full} unds, ${f.coverage_days.toFixed(1)} días cobertura). Transferir desde Casa.`
+  }));
+
+  return [...localAlerts, ...fullAlerts];
+}
+
+// ── Modulo Ofertas & Margen Operations ──
+
+function getProductPromotions(accountId = null) {
+  let sql = 'SELECT p.*, a.name as account_name FROM product_promotions p LEFT JOIN accounts a ON p.account_id = a.id WHERE 1=1';
+  const params = [];
+  if (accountId) {
+    sql += ' AND p.account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY p.created_at DESC';
+  return queryAll(sql, params);
+}
+
+function saveProductPromotion(promo) {
+  // Calculate net margin
+  const original = parseFloat(promo.original_price || 0);
+  const promoPrice = parseFloat(promo.promo_price || 0);
+  const discountPercent = original > 0 ? ((original - promoPrice) / original) * 100 : 0;
+  const commissionCop = promoPrice * ((parseFloat(promo.ml_commission_percent || 13)) / 100);
+  const shippingCop = parseFloat(promo.shipping_cost_cop || 0);
+  const productCostCop = parseFloat(promo.product_cost_cop || 0);
+
+  const netMarginCop = promoPrice - commissionCop - shippingCop - productCostCop;
+  const netMarginPercent = promoPrice > 0 ? (netMarginCop / promoPrice) * 100 : 0;
+
+  if (promo.id) {
+    runSql(
+      'UPDATE product_promotions SET account_id = ?, ml_item_id = ?, title = ?, original_price = ?, promo_price = ?, discount_percent = ?, ml_commission_percent = ?, shipping_cost_cop = ?, product_cost_cop = ?, net_margin_cop = ?, net_margin_percent = ?, status = ?, ai_evaluation = ? WHERE id = ?',
+      [promo.account_id, promo.ml_item_id, promo.title, original, promoPrice, discountPercent, promo.ml_commission_percent || 13, shippingCop, productCostCop, netMarginCop, netMarginPercent, promo.status || 'activa', promo.ai_evaluation || '', promo.id]
+    );
+    return promo.id;
+  } else {
+    runSql(
+      'INSERT INTO product_promotions (account_id, ml_item_id, title, original_price, promo_price, discount_percent, ml_commission_percent, shipping_cost_cop, product_cost_cop, net_margin_cop, net_margin_percent, status, ai_evaluation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [promo.account_id, promo.ml_item_id, promo.title, original, promoPrice, discountPercent, promo.ml_commission_percent || 13, shippingCop, productCostCop, netMarginCop, netMarginPercent, promo.status || 'activa', promo.ai_evaluation || '']
+    );
+    const created = queryOne('SELECT id FROM product_promotions WHERE ml_item_id = ? ORDER BY id DESC LIMIT 1', [promo.ml_item_id]);
+    return created ? created.id : null;
+  }
+}
+
+function deleteProductPromotion(id) {
+  runSql('DELETE FROM product_promotions WHERE id = ?', [id]);
+}
+
 module.exports = {
   initDb, getDb, saveDbToFile,
   // Accounts
@@ -654,4 +1004,13 @@ module.exports = {
   logActivity, getActivityLog,
   // Stats
   updateDailyStats, getDailyStats, getOverviewStats,
+  // China Shipments (Fase 1)
+  getChinaShipments, saveChinaShipment, deleteChinaShipment,
+  // Local Inventory (Fase 2)
+  getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
+  // Stock Full ML (Fase 3)
+  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts,
+  // Product Promotions & Margin Calculator
+  getProductPromotions, saveProductPromotion, deleteProductPromotion,
 };
+

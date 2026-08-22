@@ -235,10 +235,57 @@ async function testConnection() {
   };
 }
 
+/**
+ * Evaluate promotion strategy & margin using Gemini AI
+ */
+async function evaluatePromotionStrategy(productData, targetMarginPercent = 20) {
+  if (!model) {
+    if (!initGemini()) {
+      const margin = productData.net_margin_percent || 0;
+      return `Recomendación automática: Margen calculado del ${margin.toFixed(1)}%.`;
+    }
+  }
+
+  const prompt = `Eres un consultor experto en comercio electrónico y estrategias de precios para Mercado Libre Colombia.
+Analiza la siguiente propuesta de oferta/promoción y determina si es altamente rentable o si entraña riesgos de margen:
+
+DATOS DEL PRODUCTO Y OFERTA:
+- Producto: ${productData.title || 'Producto'}
+- Precio Original / Lista: $${(productData.original_price || 0).toLocaleString('es-CO')} COP
+- Precio Oferta Propuesto: $${(productData.promo_price || 0).toLocaleString('es-CO')} COP
+- Descuento: ${(productData.discount_percent || 0).toFixed(1)}%
+- Comisión Mercado Libre: ${productData.ml_commission_percent || 13}%
+- Costo Envío estimado (Flex/Full): $${(productData.shipping_cost_cop || 0).toLocaleString('es-CO')} COP
+- Costo de Adquisición (FOB/CIF Landed): $${(productData.product_cost_cop || 0).toLocaleString('es-CO')} COP
+- Ganancia Neta Calculada: $${(productData.net_margin_cop || 0).toLocaleString('es-CO')} COP
+- Margen Neto Calculado: ${(productData.net_margin_percent || 0).toFixed(1)}%
+- Margen Mínimo Deseado: ${targetMarginPercent}%
+
+INSTRUCCIONES:
+1. Emite un dictamen claro (RECOMENDADO, PRECAUCIÓN o NO RECOMENDADO).
+2. Justifica brevemente la razón (máximo 2 frases).
+3. Responde en texto plano, en español de Colombia, máximo 280 caracteres.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch (error) {
+    console.error('[Gemini] Error evaluating promotion strategy:', error.message);
+    const margin = productData.net_margin_percent || 0;
+    if (margin >= targetMarginPercent) {
+      return `✅ RECOMENDADO: La oferta deja una ganancia neta del ${margin.toFixed(1)}% ($${(productData.net_margin_cop || 0).toLocaleString('es-CO')} COP).`;
+    } else {
+      return `⚠️ PRECAUCIÓN: El margen neto (${margin.toFixed(1)}%) está por debajo de tu objetivo del ${targetMarginPercent}%.`;
+    }
+  }
+}
+
 module.exports = {
   initGemini,
   generateQuestionAnswer,
   generateMessageAnswer,
   generateClaimResponse,
+  evaluatePromotionStrategy,
   testConnection,
 };
+
