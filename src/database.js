@@ -64,18 +64,34 @@ function initSchema() {
   try { db.run('ALTER TABLE daily_stats ADD COLUMN account_id INTEGER'); } catch {}
 
 
-  // Seed default stores if accounts table is empty
+  // Default redirect URI for Render or local
+  const defaultRedirectUri = process.env.RENDER_EXTERNAL_URL
+    ? `${process.env.RENDER_EXTERNAL_URL}/auth/callback`
+    : 'https://mercadolibre-sistema.onrender.com/auth/callback';
+
+  // Seed / Sync default stores from Env Vars or defaults
   const countObj = queryOne('SELECT COUNT(*) as count FROM accounts');
   if (!countObj || countObj.count === 0) {
     db.run(
       'INSERT INTO accounts (name, app_id, secret_key, redirect_uri) VALUES (?, ?, ?, ?)',
-      ['Tienda Juan', 'COMPLETAR_APP_ID', 'COMPLETAR_SECRET_KEY', 'http://localhost:3000/auth/callback']
+      ['Tienda Juan', process.env.ACCOUNT1_APP_ID || 'COMPLETAR_APP_ID', process.env.ACCOUNT1_SECRET_KEY || 'COMPLETAR_SECRET_KEY', defaultRedirectUri]
     );
     db.run(
       'INSERT INTO accounts (name, app_id, secret_key, redirect_uri) VALUES (?, ?, ?, ?)',
-      ['Tienda Carlos', 'COMPLETAR_APP_ID', 'COMPLETAR_SECRET_KEY', 'http://localhost:3000/auth/callback']
+      ['Tienda Carlos', process.env.ACCOUNT2_APP_ID || 'COMPLETAR_APP_ID', process.env.ACCOUNT2_SECRET_KEY || 'COMPLETAR_SECRET_KEY', defaultRedirectUri]
     );
+  } else {
+    // If Env Vars are present, update account credentials automatically
+    if (process.env.ACCOUNT1_APP_ID && process.env.ACCOUNT1_SECRET_KEY) {
+      runSql('UPDATE accounts SET app_id = ?, secret_key = ?, redirect_uri = ? WHERE name = ? OR id = 1',
+        [process.env.ACCOUNT1_APP_ID, process.env.ACCOUNT1_SECRET_KEY, defaultRedirectUri, 'Tienda Juan']);
+    }
+    if (process.env.ACCOUNT2_APP_ID && process.env.ACCOUNT2_SECRET_KEY) {
+      runSql('UPDATE accounts SET app_id = ?, secret_key = ?, redirect_uri = ? WHERE name = ? OR id = 2',
+        [process.env.ACCOUNT2_APP_ID, process.env.ACCOUNT2_SECRET_KEY, defaultRedirectUri, 'Tienda Carlos']);
+    }
   }
+
 
 
   // Tokens table linked to account_id

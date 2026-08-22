@@ -11,3 +11,11 @@ services:
         value: supervised
       - key: POLLING_INTERVAL_MINUTES
         value: 2
+      - key: ACCOUNT1_APP_ID
+        sync: false
+      - key: ACCOUNT1_SECRET_KEY
+        sync: false
+      - key: ACCOUNT2_APP_ID
+        sync: false
+      - key: ACCOUNT2_SECRET_KEY
+        sync: false
