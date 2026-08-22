@@ -202,13 +202,19 @@ Genera una respuesta empática y orientada a resolver el problema. Solo devuelve
  * Test the Gemini connection
  */
 async function testConnection() {
+  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('TU_GEMINI')) {
+    return {
+      ok: false,
+      error: 'No has agregado la clave GEMINI_API_KEY en las variables de entorno de Render (o en tu archivo .env). Obtén tu clave en aistudio.google.com/apikey'
+    };
+  }
+
   if (!genAI) {
-    if (!initGemini()) {
-      return { ok: false, error: 'No valid GEMINI_API_KEY configured in environment variables' };
-    }
+    initGemini();
   }
 
   const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+  let lastError = '';
 
   for (const mName of modelsToTry) {
     try {
@@ -218,10 +224,11 @@ async function testConnection() {
       return { ok: true, model: mName, response: result.response.text().trim() };
     } catch (err) {
       console.warn(`[Gemini] Model ${mName} failed:`, err.message);
+      lastError = err.message;
     }
   }
 
-  return { ok: false, error: 'Could not connect to Gemini models. Check your API Key.' };
+  return { ok: false, error: `Error conectando con Gemini: ${lastError || 'Verifica que tu API Key esté activa en Google AI Studio.'}` };
 }
 
 module.exports = {
