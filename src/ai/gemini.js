@@ -213,8 +213,8 @@ async function testConnection() {
     initGemini();
   }
 
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
-  let lastError = '';
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
+  const errors = [];
 
   for (const mName of modelsToTry) {
     try {
@@ -224,11 +224,14 @@ async function testConnection() {
       return { ok: true, model: mName, response: result.response.text().trim() };
     } catch (err) {
       console.warn(`[Gemini] Model ${mName} failed:`, err.message);
-      lastError = err.message;
+      errors.push(`${mName}: ${err.message}`);
     }
   }
 
-  return { ok: false, error: `Error conectando con Gemini: ${lastError || 'Verifica que tu API Key esté activa en Google AI Studio.'}` };
+  return {
+    ok: false,
+    error: `Error probando modelos de Gemini (${errors.join(' | ')}). Verifica tu GEMINI_API_KEY en aistudio.google.com/apikey`
+  };
 }
 
 module.exports = {
