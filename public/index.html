@@ -821,12 +821,16 @@
         </div>
         <div class="form-row">
           <div class="form-group col">
-            <label>Fecha Estimada Llegada (ETA):</label>
-            <input type="text" id="chinaEtaDate" class="form-input" placeholder="October 21, 2026">
+            <label>Fecha de Compra (Chinese Winery):</label>
+            <input type="date" id="chinaChineseWineryDate" class="form-input" onchange="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Fecha Estimada Llegada (ETA = +90 días):</label>
+            <input type="text" id="chinaEtaDate" class="form-input" readonly style="background: var(--bg-card-secondary);" placeholder="Automático: Compra + 90 Días">
           </div>
           <div class="form-group col">
             <label>Días para Llegar:</label>
-            <input type="number" id="chinaDaysToArrive" class="form-input" value="30">
+            <input type="number" id="chinaDaysToArrive" class="form-input" readonly style="background: var(--bg-card-secondary);" value="90">
           </div>
           <div class="form-group col">
             <label>Tarjeta de Pago:</label>
@@ -842,7 +846,7 @@
             <input type="number" id="chinaQuantity" class="form-input" value="100" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
-            <label>Número de Cajas:</label>
+            <label>Número de Cajas (Cartones):</label>
             <input type="number" id="chinaBoxes" class="form-input" value="1" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
@@ -867,16 +871,26 @@
             <input type="number" id="chinaTotalPriceCop" class="form-input" value="1500000" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
-            <label>Costo Contenedor por m³ ($ COP):</label>
-            <input type="number" id="chinaContainerM3Cost" class="form-input" value="2500000" oninput="updateChinaLiveCalc()">
+            <label>Tarifa Contenedor por m³ ($ COP):</label>
+            <select id="chinaContainerM3Select" class="form-input" onchange="updateChinaLiveCalc()">
+              <option value="2500000">$2.500.000 COP / m³</option>
+              <option value="2700000">$2.700.000 COP / m³</option>
+              <option value="2900000">$2.900.000 COP / m³</option>
+              <option value="3000000" selected>$3.000.000 COP / m³</option>
+              <option value="3300000">$3.300.000 COP / m³</option>
+              <option value="3500000">$3.500.000 COP / m³</option>
+              <option value="4000000">$4.000.000 COP / m³</option>
+              <option value="custom">✏️ Otro Valor Personalizado...</option>
+            </select>
+            <input type="number" id="chinaContainerM3Cost" class="form-input" style="display:none; margin-top: 6px;" value="2500000" placeholder="Ej: 2800000" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
-            <label>Flete Nacional ($ COP Total):</label>
-            <input type="number" id="chinaNationalFreightCop" class="form-input" value="60000" oninput="updateChinaLiveCalc()">
+            <label>Flete Nacional (Cajas × $30.000 COP):</label>
+            <input type="number" id="chinaNationalFreightCop" class="form-input" readonly style="background: var(--bg-card-secondary);" value="30000">
           </div>
           <div class="form-group col">
-            <label>Costo Envío Full ($ COP Total):</label>
-            <input type="number" id="chinaFullCostCop" class="form-input" value="50000" oninput="updateChinaLiveCalc()">
+            <label>Costo Envío Full (Unidades × $500 COP):</label>
+            <input type="number" id="chinaFullCostCop" class="form-input" readonly style="background: var(--bg-card-secondary);" value="50000">
           </div>
           <div class="form-group col">
             <label>Gastos Extras ($ COP Total):</label>
