@@ -1211,29 +1211,25 @@ function isShipmentDelayed(s) {
     return false;
   }
 
-  if (delStatus.includes('RETRASADO')) return true;
-
-  if (s.eta_date) {
-    const etaDate = new Date(s.eta_date);
-    if (!isNaN(etaDate.getTime())) {
-      const today = new Date();
-      if (today > etaDate) return true;
-    }
-  }
-
+  // Strictly check if > 90 days have elapsed since Chinese Winery purchase date
   if (s.chinese_winery_date) {
     let buyDate = new Date(s.chinese_winery_date);
     if (isNaN(buyDate.getTime())) {
-      const parts = s.chinese_winery_date.split('/');
+      const parts = s.chinese_winery_date.split(/[\/\-]/);
       if (parts.length === 3) {
-        buyDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        if (parts[0].length === 4) {
+          buyDate = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          buyDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
       }
     }
+
     if (!isNaN(buyDate.getTime())) {
       const today = new Date();
       const diffMs = today.getTime() - buyDate.getTime();
       const daysPassed = diffMs / (1000 * 60 * 60 * 24);
-      if (daysPassed > 90) return true;
+      return daysPassed > 90;
     }
   }
 
