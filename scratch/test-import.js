@@ -1,8 +1,8 @@
+const db = require('../src/database');
 const fs = require('fs');
 const path = require('path');
-const db = require('../src/database');
 
-const CSV_PATH = process.argv[2] || path.join(
+const CSV_PATH = path.join(
   process.env.USERPROFILE || 'C:\\Users\\juand',
   'Downloads',
   'cc19263a-067c-466c-a026-d584baf5b822_ExportBlock-407fe7a0-d86d-45a2-bc40-ba80a6ad0359',
@@ -22,6 +22,7 @@ function parsePercent(str) {
   return parseFloat(clean) || 0;
 }
 
+// Robust multiline CSV parser
 function parseFullCSV(text) {
   const rows = [];
   let currentRow = [];
@@ -63,34 +64,15 @@ function parseFullCSV(text) {
   return rows;
 }
 
-async function runImport() {
+async function run() {
   await db.initDb();
-  console.log(`[China Importer] Leyendo CSV desde: ${CSV_PATH}`);
-
-  let filePath = CSV_PATH;
-  if (!fs.existsSync(filePath)) {
-    filePath = path.join(
-      process.env.USERPROFILE || 'C:\\Users\\juand',
-      'Downloads',
-      '8a1add21-c770-42e3-bc2b-76304640d553_ExportBlock-2761deb1-683b-42bd-b42e-eae935b6ef9c',
-      'ExportBlock-2761deb1-683b-42bd-b42e-eae935b6ef9c-Part-1',
-      'IMPORTACIONES 2026 2fea272ac4798074beb0c2a33a525493.csv'
-    );
-  }
-
-  if (!fs.existsSync(filePath)) {
-    console.error(`❌ Archivo CSV de importaciones no encontrado`);
-    process.exit(1);
-  }
-
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const rows = parseFullCSV(content);
+  const text = fs.readFileSync(CSV_PATH, 'utf-8');
+  const rows = parseFullCSV(text);
 
   db.getDb().run('DELETE FROM china_shipments');
 
-  let importedShipments = 0;
-
-  rows.forEach(cols => {
+  let count = 0;
+  rows.forEach((cols, idx) => {
     const productName = cols[0] ? cols[0].replace(/^"|"$/g, '').trim() : '';
     if (!productName || productName.toUpperCase().includes('PRODUCT') || productName.toUpperCase().includes('PEDIR') || productName.toUpperCase().includes('SEPRODUCTS')) return;
 
@@ -123,7 +105,7 @@ async function runImport() {
     const etaDate = cols[29] || '';
     const daysToArrive = parseInt(cols[30] || 0) || 0;
     const activeTransitUnits = parseInt(cols[31] || 0) || 0;
-    
+
     let finalWineryDate = chineseWineryDate;
     let finalEtaDate = etaDate;
     if (productName.toLowerCase().includes('gafas') && (productName.toLowerCase().includes('se') || productName.toLowerCase().includes('sñr') || productName.toLowerCase().includes('senora') || productName.toLowerCase().includes('señora'))) {
@@ -172,16 +154,13 @@ async function runImport() {
       delivery_status: deliveryStatus
     });
 
-    importedShipments++;
+    count++;
   });
 
   db.saveDbToFile();
-  console.log(`\n✅ ¡Importación completa de Embarques China 2026!`);
-  console.log(`   - 🚢 Filas/Importaciones procesadas: ${importedShipments}`);
-  console.log('');
+  console.log('✅ IMPORTER COMPLETED. Total products imported:', count);
+  const dbRows = db.getChinaShipments();
+  console.log('✅ DB TOTAL ROWS:', dbRows.length);
 }
 
-runImport().catch(err => {
-  console.error('Fatal error importing china CSV:', err);
-  process.exit(1);
-});
+run();
