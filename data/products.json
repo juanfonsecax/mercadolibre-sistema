@@ -1,0 +1,10 @@
+[
+  {
+    "ml_item_id": "",
+    "name": "Ejemplo: Nombre de tu producto",
+    "description": "Descripción detallada del producto. Incluye características, materiales, tamaños, etc.",
+    "features": ["Característica 1", "Característica 2", "Característica 3"],
+    "shipping_info": "Envío gratis a todo Colombia, 3-5 días hábiles",
+    "warranty": "30 días de garantía"
+  }
+]

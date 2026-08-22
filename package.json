@@ -1,0 +1,22 @@
+{
+  "name": "mercadolibre-bot",
+  "version": "1.0.0",
+  "description": "Sistema de automatización para Mercado Libre Colombia — responde preguntas y gestiona reclamos con IA",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test:connection": "node scripts/test-connection.js",
+    "test:ai": "node scripts/test-ai.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.11.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "@google/generative-ai": "^0.21.0",
+    "node-cron": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

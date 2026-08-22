@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: mercadolibre-sistema
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AUTO_REPLY_MODE
+        value: supervised
+      - key: POLLING_INTERVAL_MINUTES
+        value: 2

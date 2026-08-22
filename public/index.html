@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ML Bot — Dashboard Multi-Cuenta</title>
+  <meta name="description" content="Sistema inteligente de automatización multi-cuenta para Mercado Libre Colombia">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">🤖</span>
+        <span class="logo-text">ML Bot</span>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">☰</button>
+    </div>
+
+    <!-- Account Selector -->
+    <div class="account-selector-container">
+      <label for="activeAccountSelect">🏪 Cuenta Activa:</label>
+      <select id="activeAccountSelect" class="form-input account-select" onchange="onAccountChange()">
+        <option value="">Todas las cuentas</option>
+      </select>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="overview" id="nav-overview">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Panel Principal</span>
+      </a>
+      <a href="#" class="nav-item" data-section="questions" id="nav-questions">
+        <span class="nav-icon">❓</span>
+        <span class="nav-label">Preguntas</span>
+        <span class="nav-badge" id="badge-questions" style="display:none">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="messages" id="nav-messages">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">Mensajes Directos</span>
+        <span class="nav-badge" id="badge-messages" style="display:none">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="claims" id="nav-claims">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Novedades</span>
+        <span class="nav-badge" id="badge-claims" style="display:none">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="knowledge" id="nav-knowledge">
+        <span class="nav-icon">📚</span>
+        <span class="nav-label">Conocimiento</span>
+      </a>
+      <a href="#" class="nav-item" data-section="stats" id="nav-stats">
+        <span class="nav-icon">📈</span>
+        <span class="nav-label">Estadísticas</span>
+      </a>
+      <a href="#" class="nav-item" data-section="settings" id="nav-settings">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Configuración</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="connection-indicator" id="connectionIndicator">
+        <span class="status-dot disconnected"></span>
+        <span class="status-text">Desconectado</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+    <!-- ══════════════════════════════════════ -->
+    <!-- Overview Section -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section active" id="section-overview">
+      <div class="section-header">
+        <h1>Panel Principal</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" id="btnRefreshOverview" onclick="refreshOverview()">🔄 Actualizar</button>
+        </div>
+      </div>
+
+      <!-- Metrics Cards -->
+      <div class="metrics-grid">
+        <div class="metric-card accent-green">
+          <div class="metric-icon">💵</div>
+          <div class="metric-body">
+            <span class="metric-value" id="metric-revenue">$0</span>
+            <span class="metric-label">Ventas registradas (COP)</span>
+          </div>
+        </div>
+        <div class="metric-card accent-blue">
+          <div class="metric-icon">📈</div>
+          <div class="metric-body">
+            <span class="metric-value" id="metric-profit">$0</span>
+            <span class="metric-label">Ganancia estimada</span>
+          </div>
+        </div>
+        <div class="metric-card accent-yellow">
+          <div class="metric-icon">❓</div>
+          <div class="metric-body">
+            <span class="metric-value" id="metric-pending-questions">0</span>
+            <span class="metric-label">Preguntas pendientes</span>
+          </div>
+        </div>
+        <div class="metric-card accent-purple">
+          <div class="metric-icon">💬</div>
+          <div class="metric-body">
+            <span class="metric-value" id="metric-pending-messages">0</span>
+            <span class="metric-label">Mensajes pendientes</span>
+          </div>
+        </div>
+        <div class="metric-card accent-red">
+          <div class="metric-icon">📋</div>
+          <div class="metric-body">
+            <span class="metric-value" id="metric-active-claims">0</span>
+            <span class="metric-label">Reclamos activos</span>
+          </div>
+        </div>
+        <div class="metric-card accent-green">
+          <div class="metric-icon">🤖</div>
+          <div class="metric-body">
+            <span class="metric-value" id="metric-mode">Supervisado</span>
+            <span class="metric-label">Modo actual</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart + Activity -->
+      <div class="dashboard-grid">
+        <div class="card chart-card">
+          <div class="card-header">
+            <h3>Actividad de los últimos 7 días</h3>
+          </div>
+          <div class="card-body">
+            <canvas id="activityChart" width="600" height="250"></canvas>
+          </div>
+        </div>
+
+        <div class="card activity-card">
+          <div class="card-header">
+            <h3>Actividad reciente</h3>
+          </div>
+          <div class="card-body">
+            <div class="activity-list" id="activityList">
+              <p class="empty-state">No hay actividad reciente</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Questions Section -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-questions">
+      <div class="section-header">
+        <h1>Preguntas</h1>
+        <div class="header-actions">
+          <select class="filter-select" id="questionFilter" onchange="loadQuestions()">
+            <option value="">Todas</option>
+            <option value="pending" selected>Pendientes</option>
+            <option value="answered">Respondidas</option>
+            <option value="rejected">Rechazadas</option>
+          </select>
+          <button class="btn btn-primary" id="btnPollQuestions" onclick="pollQuestions()">📡 Buscar nuevas</button>
+        </div>
+      </div>
+
+      <div class="questions-list" id="questionsList">
+        <div class="empty-state">
+          <span class="empty-icon">❓</span>
+          <p>No hay preguntas para mostrar</p>
+          <button class="btn btn-primary" onclick="pollQuestions()">Buscar preguntas en ML</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Messages Section (Post-Purchase Direct Messages) -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-messages">
+      <div class="section-header">
+        <h1>Mensajes Directos Post-Compra</h1>
+        <div class="header-actions">
+          <select class="filter-select" id="messageFilter" onchange="loadMessages()">
+            <option value="">Todos</option>
+            <option value="pending" selected>Pendientes</option>
+            <option value="answered">Respondidos</option>
+            <option value="rejected">Rechazados</option>
+          </select>
+          <button class="btn btn-primary" id="btnPollMessages" onclick="pollMessages()">📡 Buscar nuevos</button>
+        </div>
+      </div>
+
+      <div class="messages-list" id="messagesList">
+        <div class="empty-state">
+          <span class="empty-icon">💬</span>
+          <p>No hay mensajes post-compra para mostrar</p>
+          <button class="btn btn-primary" onclick="pollMessages()">Buscar mensajes en ML</button>
+        </div>
+      </div>
+
+      <!-- Message detail modal -->
+      <div class="modal-overlay" id="messageModal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="messageModalTitle">Conversación post-compra</h3>
+            <button class="modal-close" onclick="closeMessageModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="chat-messages" id="directChatMessages"></div>
+            <div class="chat-input-area">
+              <textarea id="directResponseInput" rows="3" placeholder="Respuesta sugerida por IA..."></textarea>
+              <div class="chat-actions">
+                <button class="btn btn-success" id="btnApproveDirectResponse" onclick="approveDirectMessageResponse()">✅ Enviar respuesta</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Claims Section -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-claims">
+      <div class="section-header">
+        <h1>Novedades / Reclamos</h1>
+        <div class="header-actions">
+          <select class="filter-select" id="claimFilter" onchange="loadClaims()">
+            <option value="">Todos</option>
+            <option value="active" selected>Activos</option>
+            <option value="responded">Respondidos</option>
+            <option value="resolved">Resueltos</option>
+          </select>
+          <button class="btn btn-primary" id="btnPollClaims" onclick="pollClaims()">📡 Buscar nuevos</button>
+        </div>
+      </div>
+
+      <div class="claims-list" id="claimsList">
+        <div class="empty-state">
+          <span class="empty-icon">📋</span>
+          <p>No hay reclamos para mostrar</p>
+          <button class="btn btn-primary" onclick="pollClaims()">Buscar reclamos en ML</button>
+        </div>
+      </div>
+
+      <!-- Claim detail modal -->
+      <div class="modal-overlay" id="claimModal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="claimModalTitle">Detalle del reclamo</h3>
+            <button class="modal-close" onclick="closeClaimModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="chat-messages" id="claimChatMessages"></div>
+            <div class="chat-input-area">
+              <textarea id="claimResponseInput" rows="3" placeholder="Respuesta sugerida por IA..."></textarea>
+              <div class="chat-actions">
+                <button class="btn btn-success" id="btnApproveClaimResponse" onclick="approveClaimResponse()">✅ Enviar respuesta</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Knowledge Section -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-knowledge">
+      <div class="section-header">
+        <h1>Base de Conocimiento</h1>
+        <div class="header-actions">
+          <select class="filter-select" id="knowledgeFilter" onchange="loadKnowledge()">
+            <option value="">Todas las categorías</option>
+            <option value="product">Productos</option>
+            <option value="faq">FAQs</option>
+            <option value="policy">Políticas</option>
+          </select>
+          <button class="btn btn-secondary" id="btnImportML" onclick="importFromML()">📥 Importar de ML</button>
+          <button class="btn btn-primary" id="btnAddKnowledge" onclick="showAddKnowledge()">➕ Agregar</button>
+        </div>
+      </div>
+
+      <div class="knowledge-list" id="knowledgeList">
+        <div class="empty-state">
+          <span class="empty-icon">📚</span>
+          <p>No hay contenido en la base de conocimiento</p>
+          <button class="btn btn-primary" onclick="showAddKnowledge()">Agregar contenido</button>
+        </div>
+      </div>
+
+      <!-- Add/Edit knowledge modal -->
+      <div class="modal-overlay" id="knowledgeModal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="knowledgeModalTitle">Agregar conocimiento</h3>
+            <button class="modal-close" onclick="closeKnowledgeModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="kbCategory">Categoría</label>
+              <select id="kbCategory" class="form-input">
+                <option value="product">Producto</option>
+                <option value="faq">FAQ</option>
+                <option value="policy">Política</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="kbTitle">Título</label>
+              <input type="text" id="kbTitle" class="form-input" placeholder="Ej: Interruptor Inteligente Wi-Fi — Manual">
+            </div>
+            <div class="form-group">
+              <label for="kbContent">Contenido</label>
+              <textarea id="kbContent" class="form-input" rows="6" placeholder="Escribe toda la información relevante..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="kbItemId">ID de Producto ML (opcional)</label>
+              <input type="text" id="kbItemId" class="form-input" placeholder="MCO...">
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-secondary" onclick="closeKnowledgeModal()">Cancelar</button>
+              <button class="btn btn-primary" id="btnSaveKnowledge" onclick="saveKnowledge()">Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Stats Section -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-stats">
+      <div class="section-header">
+        <h1>Estadísticas</h1>
+        <div class="header-actions">
+          <select class="filter-select" id="statsPeriod" onchange="loadStats()">
+            <option value="7">Últimos 7 días</option>
+            <option value="14">Últimos 14 días</option>
+            <option value="30">Últimos 30 días</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="stats-summary" id="statsSummary">
+        <div class="metric-card accent-yellow">
+          <div class="metric-body">
+            <span class="metric-value" id="stat-total-questions">0</span>
+            <span class="metric-label">Preguntas totales</span>
+          </div>
+        </div>
+        <div class="metric-card accent-green">
+          <div class="metric-body">
+            <span class="metric-value" id="stat-total-answered">0</span>
+            <span class="metric-label">Respondidas</span>
+          </div>
+        </div>
+        <div class="metric-card accent-red">
+          <div class="metric-body">
+            <span class="metric-value" id="stat-total-claims">0</span>
+            <span class="metric-label">Reclamos totales</span>
+          </div>
+        </div>
+        <div class="metric-card accent-purple">
+          <div class="metric-body">
+            <span class="metric-value" id="stat-total-messages">0</span>
+            <span class="metric-label">Mensajes totales</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Actividad diaria</h3></div>
+        <div class="card-body">
+          <canvas id="statsChart" width="800" height="300"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Settings Section -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-settings">
+      <div class="section-header">
+        <h1>Configuración</h1>
+        <button class="btn btn-primary" onclick="showAddAccountModal()">➕ Agregar Cuenta de ML</button>
+      </div>
+
+      <!-- Accounts Manager -->
+      <div class="card settings-card mb-24">
+        <div class="card-header">
+          <h3>🏪 Cuentas de Mercado Libre Conectadas</h3>
+        </div>
+        <div class="card-body">
+          <div class="accounts-list" id="settingsAccountsList">
+            <p class="empty-state">No hay cuentas registradas. Agrega tu primera cuenta a continuación.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <!-- Mode -->
+        <div class="card settings-card">
+          <div class="card-header">
+            <h3>🤖 Modo de Respuesta</h3>
+          </div>
+          <div class="card-body">
+            <div class="toggle-group">
+              <label class="toggle-option">
+                <input type="radio" name="replyMode" value="supervised" id="modeSupervisado" checked>
+                <div class="toggle-card">
+                  <strong>👀 Supervisado</strong>
+                  <p>Las respuestas generadas se guardan como pendientes. Tú las revisas y apruebas desde el dashboard.</p>
+                </div>
+              </label>
+              <label class="toggle-option">
+                <input type="radio" name="replyMode" value="automatic" id="modeAutomatico">
+                <div class="toggle-card">
+                  <strong>⚡ Automático</strong>
+                  <p>Las respuestas se envían automáticamente sin revisión. Recomendado solo después de calibrar el sistema.</p>
+                </div>
+              </label>
+            </div>
+            <button class="btn btn-primary" id="btnSaveMode" onclick="saveMode()" style="margin-top: 16px">Guardar modo</button>
+          </div>
+        </div>
+
+        <!-- AI Test -->
+        <div class="card settings-card">
+          <div class="card-header">
+            <h3>🧠 Inteligencia Artificial (Gemini)</h3>
+          </div>
+          <div class="card-body">
+            <div class="ai-status" id="aiStatus">
+              <span class="status-dot disconnected"></span>
+              <span>No verificado</span>
+            </div>
+            <p class="settings-hint">Verifica que la conexión con Google Gemini funciona correctamente.</p>
+            <button class="btn btn-secondary" id="btnTestAI" onclick="testAI()">🧪 Probar conexión IA</button>
+          </div>
+        </div>
+
+        <!-- Webhook Info -->
+        <div class="card settings-card">
+          <div class="card-header">
+            <h3>📡 Webhook URL</h3>
+          </div>
+          <div class="card-body">
+            <p class="settings-hint">Configura esta URL en el portal de desarrolladores de Mercado Libre para recibir notificaciones en tiempo real:</p>
+            <div class="code-block" id="webhookUrl">
+              <code>http://localhost:3000/webhooks</code>
+            </div>
+            <p class="settings-hint" style="margin-top:12px">Topics a suscribir: <strong>questions</strong>, <strong>claims</strong>, <strong>messages</strong>, <strong>orders_v2</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add/Edit Account Modal -->
+      <div class="modal-overlay" id="accountModal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="accountModalTitle">Agregar Cuenta de Mercado Libre</h3>
+            <button class="modal-close" onclick="closeAccountModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="accId">
+            <div class="form-group">
+              <label for="accName">Nombre identificador de la cuenta</label>
+              <input type="text" id="accName" class="form-input" placeholder="Ej: Cuenta Domótica Principal">
+            </div>
+            <div class="form-group">
+              <label for="accAppId">App ID (Client ID)</label>
+              <input type="text" id="accAppId" class="form-input" placeholder="Obtenido en developers.mercadolibre.com.co">
+            </div>
+            <div class="form-group">
+              <label for="accSecretKey">Client Secret (Secret Key)</label>
+              <input type="password" id="accSecretKey" class="form-input" placeholder="Obtenido en developers.mercadolibre.com.co">
+            </div>
+            <div class="form-group">
+              <label for="accRedirectUri">Redirect URI</label>
+              <input type="text" id="accRedirectUri" class="form-input" value="http://localhost:3000/auth/callback">
+              <p class="settings-hint" style="margin-top:4px">Debe coincidir exactamente con la configurada en el portal de desarrolladores ML.</p>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-secondary" onclick="closeAccountModal()">Cancelar</button>
+              <button class="btn btn-primary" onclick="saveAccountFromModal()">Guardar Cuenta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
