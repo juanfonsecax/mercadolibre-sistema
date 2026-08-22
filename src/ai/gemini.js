@@ -9,7 +9,8 @@ function initGemini() {
     return false;
   }
   genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  model = genAI.getGenerativeModel({ model: modelName });
   return true;
 }
 
@@ -201,18 +202,26 @@ Genera una respuesta empática y orientada a resolver el problema. Solo devuelve
  * Test the Gemini connection
  */
 async function testConnection() {
-  if (!model) {
+  if (!genAI) {
     if (!initGemini()) {
-      return { ok: false, error: 'No valid API key configured in .env' };
+      return { ok: false, error: 'No valid GEMINI_API_KEY configured in environment variables' };
     }
   }
 
-  try {
-    const result = await model.generateContent('Responde solo "OK" si puedes leer este mensaje.');
-    return { ok: true, response: result.response.text().trim() };
-  } catch (error) {
-    return { ok: false, error: error.message };
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+
+  for (const mName of modelsToTry) {
+    try {
+      const testModel = genAI.getGenerativeModel({ model: mName });
+      const result = await testModel.generateContent('Responde solo "OK" si puedes leer este mensaje.');
+      model = testModel; // save working model
+      return { ok: true, model: mName, response: result.response.text().trim() };
+    } catch (err) {
+      console.warn(`[Gemini] Model ${mName} failed:`, err.message);
+    }
   }
+
+  return { ok: false, error: 'Could not connect to Gemini models. Check your API Key.' };
 }
 
 module.exports = {
