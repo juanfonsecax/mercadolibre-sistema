@@ -1382,10 +1382,14 @@ function updateChinaLiveCalc() {
 
 function openChinaShipmentModal(shipment = null) {
   document.getElementById('chinaShipmentId').value = shipment ? shipment.id : '';
-  document.getElementById('chinaProductName').value = shipment ? (shipment.product_name || shipment.supplier_name || '') : '';
+  
+  let prodName = shipment ? (shipment.product_name || '') : '';
+  if (['William', 'David', 'Carlos', 'Juan'].includes(prodName)) prodName = '';
+  document.getElementById('chinaProductName').value = prodName;
+
   document.getElementById('chinaNotionLink').value = shipment ? (shipment.notion_link || '') : '';
   document.getElementById('chinaAgency').value = shipment ? (shipment.agency || 'William') : 'William';
-  document.getElementById('chinaSupply').value = shipment ? (shipment.supply || 'Alibaba') : '1688';
+  document.getElementById('chinaSupply').value = shipment ? (shipment.supply || '1688') : '1688';
   document.getElementById('chinaDeliveryStatus').value = shipment ? (shipment.delivery_status || 'EN CAMINO') : 'EN CAMINO';
 
   const defaultDate = new Date().toISOString().split('T')[0];
@@ -1394,13 +1398,13 @@ function openChinaShipmentModal(shipment = null) {
   document.getElementById('chinaDaysToArrive').value = shipment ? (shipment.days_to_arrive || 90) : 90;
   document.getElementById('chinaPaymentCard').value = shipment ? (shipment.payment_card || '') : '';
 
-  document.getElementById('chinaQuantity').value = shipment ? (shipment.quantity || 100) : 100;
-  document.getElementById('chinaBoxes').value = shipment ? (shipment.boxes || 1) : 1;
-  document.getElementById('chinaLengthM').value = shipment ? (shipment.length_m || 0.41) : 0.41;
-  document.getElementById('chinaHeightM').value = shipment ? (shipment.height_m || 0.215) : 0.215;
-  document.getElementById('chinaWidthM').value = shipment ? (shipment.width_m || 0.275) : 0.275;
+  document.getElementById('chinaQuantity').value = shipment && shipment.quantity !== undefined ? shipment.quantity : 100;
+  document.getElementById('chinaBoxes').value = shipment && shipment.boxes !== undefined ? shipment.boxes : 1;
+  document.getElementById('chinaLengthM').value = shipment && shipment.length_m !== undefined ? shipment.length_m : 0.41;
+  document.getElementById('chinaHeightM').value = shipment && shipment.height_m !== undefined ? shipment.height_m : 0.215;
+  document.getElementById('chinaWidthM').value = shipment && shipment.width_m !== undefined ? shipment.width_m : 0.275;
 
-  document.getElementById('chinaTotalPriceCop').value = shipment ? (shipment.total_price_cop || 1500000) : 1500000;
+  document.getElementById('chinaTotalPriceCop').value = shipment && shipment.total_price_cop !== undefined ? shipment.total_price_cop : 1500000;
   
   const costM3 = shipment ? (shipment.container_m3_cost || 3000000) : 3000000;
   const selectElem = document.getElementById('chinaContainerM3Select');
@@ -1411,18 +1415,19 @@ function openChinaShipmentModal(shipment = null) {
   }
   document.getElementById('chinaContainerM3Cost').value = costM3;
 
-  document.getElementById('chinaPriceMlCop').value = shipment ? (shipment.price_ml_cop || 49700) : 49700;
-  document.getElementById('chinaCommissionMlCop').value = shipment ? (shipment.commission_ml_cop || 10549) : 10549;
+  document.getElementById('chinaPriceMlCop').value = shipment && shipment.price_ml_cop !== undefined ? shipment.price_ml_cop : 49700;
+  document.getElementById('chinaCommissionMlCop').value = shipment && shipment.commission_ml_cop !== undefined ? shipment.commission_ml_cop : 10549;
 
-  document.getElementById('chinaModalTitle').innerText = shipment ? `🧮 Editar Importación: ${shipment.product_name || 'Producto'}` : '🧮 Simular & Registrar Importación China';
+  document.getElementById('chinaModalTitle').innerText = shipment ? `🧮 Editar Importación: ${prodName || 'Producto'}` : '🧮 Simular & Registrar Importación China';
   document.getElementById('chinaShipmentModal').style.display = 'flex';
   updateChinaLiveCalc();
 }
 
 function editChinaShipment(id) {
   apiFetch('/api/inventory/china').then(data => {
-    const shipment = (data.shipments || []).find(s => s.id === id);
+    const shipment = (data.shipments || []).find(s => s.id == id);
     if (shipment) openChinaShipmentModal(shipment);
+    else showToast('No se encontró la importación seleccionada', 'error');
   });
 }
 

@@ -849,22 +849,23 @@ function getOverviewStats(accountId = null) {
 
 function computeShipmentFormulas(s) {
   const qty = parseInt(s.quantity || s.total_units || 0);
-  const boxes = parseInt(s.boxes || 1);
+  const boxes = parseInt(s.boxes || 0);
   const lengthM = parseFloat(s.length_m || 0);
   const heightM = parseFloat(s.height_m || 0);
   const widthM = parseFloat(s.width_m || 0);
   
-  const cubicMeter = s.cubic_meter !== undefined && s.cubic_meter > 0 ? parseFloat(s.cubic_meter) : (boxes * lengthM * heightM * widthM);
+  const calcM3 = boxes * lengthM * heightM * widthM;
+  const cubicMeter = calcM3 > 0 ? calcM3 : parseFloat(s.cubic_meter || 0);
   const containerM3Cost = parseFloat(s.container_m3_cost || 3000000);
-  const importCostCop = s.import_cost_cop !== undefined && s.import_cost_cop > 0 ? parseFloat(s.import_cost_cop) : (cubicMeter * containerM3Cost);
+  const importCostCop = cubicMeter > 0 ? (cubicMeter * containerM3Cost) : parseFloat(s.import_cost_cop || 0);
   
   const totalPriceCop = parseFloat(s.total_price_cop || 0);
-  const nationalFreightCop = parseFloat(s.national_freight_cop || 0);
-  const fullCostCop = parseFloat(s.full_cost_cop || 0);
+  const nationalFreightCop = s.national_freight_cop !== undefined && s.national_freight_cop !== null ? parseFloat(s.national_freight_cop) : (boxes * 30000);
+  const fullCostCop = s.full_cost_cop !== undefined && s.full_cost_cop !== null ? parseFloat(s.full_cost_cop) : (qty * 500);
   const extraExpensesCop = parseFloat(s.extra_expenses_cop || 0);
 
   const totalLandedCop = totalPriceCop + importCostCop + nationalFreightCop + fullCostCop + extraExpensesCop;
-  const unitCostCop = s.unit_cost_cop !== undefined && s.unit_cost_cop > 0 ? parseFloat(s.unit_cost_cop) : (qty > 0 ? totalLandedCop / qty : 0);
+  const unitCostCop = qty > 0 && totalLandedCop > 0 ? (totalLandedCop / qty) : parseFloat(s.unit_cost_cop || 0);
   const totalCostCop = unitCostCop * qty;
 
   const priceMlCop = parseFloat(s.price_ml_cop || 0);
@@ -881,10 +882,19 @@ function computeShipmentFormulas(s) {
     else delStatus = 'EN CAMINO';
   }
 
+  let prodName = s.product_name || '';
+  if (!prodName || prodName === 'William' || prodName === 'David' || prodName === 'Carlos' || prodName === 'Juan') {
+    if (s.supplier_name && !['William', 'David', 'Carlos', 'Juan'].includes(s.supplier_name)) {
+      prodName = s.supplier_name;
+    } else {
+      prodName = 'Producto Importación';
+    }
+  }
+
   return {
     ...s,
     delivery_status: delStatus,
-    product_name: s.product_name || s.supplier_name || 'Producto Importación',
+    product_name: prodName,
     quantity: qty,
     boxes,
     length_m: lengthM,

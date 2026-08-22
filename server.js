@@ -392,19 +392,16 @@ app.get('/api/inventory/china', (req, res) => {
 
 app.post('/api/inventory/china', (req, res) => {
   try {
-    const { id, tracking_number, supplier_name, status, shipment_type, etd_date, eta_date, trm_cop, total_cost_usd, total_units, notes, items } = req.body;
-    if (!supplier_name) return res.status(400).json({ error: 'Nombre de proveedor es requerido' });
+    const shipmentData = req.body;
+    const prodName = shipmentData.product_name || shipmentData.supplier_name || 'Producto Importación';
+    if (!prodName) return res.status(400).json({ error: 'Nombre del producto es requerido' });
 
     const shipmentId = db.saveChinaShipment({
-      id: id ? parseInt(id) : null,
-      tracking_number, supplier_name, status, shipment_type, etd_date, eta_date,
-      trm_cop: parseFloat(trm_cop || 4000),
-      total_cost_usd: parseFloat(total_cost_usd || 0),
-      total_units: parseInt(total_units || 0),
-      notes
-    }, items || []);
+      ...shipmentData,
+      id: shipmentData.id ? parseInt(shipmentData.id) : null
+    }, shipmentData.items || []);
 
-    db.logActivity('china_shipment', `Embarque China "${supplier_name}" guardado`, null);
+    db.logActivity('china_shipment', `Embarque China "${prodName}" guardado`, null);
     res.json({ success: true, id: shipmentId });
   } catch (error) {
     res.status(500).json({ error: error.message });
