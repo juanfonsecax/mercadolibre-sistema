@@ -988,7 +988,8 @@ function getLocalInventory(accountId = null) {
     params.push(accountId);
   }
   sql += ' ORDER BY i.sku ASC';
-  return queryAll(sql, params);
+  const items = queryAll(sql, params);
+  return items.filter(i => !isProductDiscontinued(i.title));
 }
 
 function saveLocalInventoryItem(item) {
@@ -1206,7 +1207,7 @@ module.exports = {
   // Local Inventory (Fase 2)
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
   // Stock Full ML (Fase 3)
-  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts,
+  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, isProductDiscontinued,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
 };

@@ -104,6 +104,9 @@ async function runImport() {
     const productName = cols[0];
     if (!productName || productName.toUpperCase() === 'PRODUCTO') continue;
 
+    // Skip discontinued products requested by user
+    if (db.isProductDiscontinued(productName)) continue;
+
     const internetUnits = parseInt(cols[1] || 0) || 0;
     const piezaUnits = parseInt(cols[2] || 0) || 0;
     const salaUnits = parseInt(cols[3] || 0) || 0;

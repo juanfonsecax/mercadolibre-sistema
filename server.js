@@ -645,7 +645,7 @@ async function startServer() {
   kb.seedDefaults();
   gemini.initGemini();
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log('');
     console.log('  ╔═══════════════════════════════════════════════╗');
     console.log('  ║   🤖 Mercado Libre Bot — Sistema Multi-Cuenta║');
@@ -656,6 +656,18 @@ async function startServer() {
     console.log('');
 
     startPolling();
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`[Server] Puerto ${PORT} ocupado, reintentando en 1.5s...`);
+      setTimeout(() => {
+        server.close();
+        server.listen(PORT);
+      }, 1500);
+    } else {
+      console.error('[Server] Server error:', err);
+    }
   });
 }
 
