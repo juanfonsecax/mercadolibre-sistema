@@ -64,33 +64,20 @@ async function runImport() {
 
   const content = fs.readFileSync(filePath, 'utf-8');
   const rawLines = content.split(/\r?\n/);
-  
-  const lines = [];
-  let currentLine = '';
-  for (const raw of rawLines) {
-    if (currentLine) currentLine += ' ' + raw;
-    else currentLine = raw;
-    
-    const quoteCount = (currentLine.match(/"/g) || []).length;
-    if (quoteCount % 2 === 0) {
-      lines.push(currentLine);
-      currentLine = '';
-    }
-  }
 
   // Clear existing importations before reload
   db.getDb().run('DELETE FROM china_shipments');
 
   let importedShipments = 0;
 
-  // Header is line 2 (starts from index 3)
-  for (let i = 3; i < lines.length; i++) {
-    const line = lines[i].trim();
+  // Header ends around line 3 (index 3 is first product row: Lampara 15w)
+  for (let i = 3; i < rawLines.length; i++) {
+    const line = rawLines[i].trim();
     if (!line) continue;
 
     const cols = parseCSVLine(line);
     const productName = cols[0];
-    if (!productName || productName.toUpperCase() === 'PRODUCTS') continue;
+    if (!productName || productName.toUpperCase().includes('PRODUCTS') || productName.toUpperCase().includes('PEDIR')) continue;
 
     const notionLink = cols[1] || '';
     const quantity = parseInt(cols[2] || 0) || 0;
