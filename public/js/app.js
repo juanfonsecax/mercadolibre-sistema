@@ -1256,21 +1256,76 @@ async function loadChinaShipments() {
   }
 }
 
+function updateChinaLiveCalc() {
+  const qty = parseInt(document.getElementById('chinaQuantity').value || 0) || 0;
+  const boxes = parseInt(document.getElementById('chinaBoxes').value || 1) || 1;
+  const lengthM = parseFloat(document.getElementById('chinaLengthM').value || 0) || 0;
+  const heightM = parseFloat(document.getElementById('chinaHeightM').value || 0) || 0;
+  const widthM = parseFloat(document.getElementById('chinaWidthM').value || 0) || 0;
+
+  const cubicMeter = boxes * lengthM * heightM * widthM;
+  const containerM3Cost = parseFloat(document.getElementById('chinaContainerM3Cost').value || 0) || 0;
+  const importCostCop = cubicMeter * containerM3Cost;
+
+  const totalPriceCop = parseFloat(document.getElementById('chinaTotalPriceCop').value || 0) || 0;
+  const nationalFreightCop = parseFloat(document.getElementById('chinaNationalFreightCop').value || 0) || 0;
+  const fullCostCop = parseFloat(document.getElementById('chinaFullCostCop').value || 0) || 0;
+  const extraExpensesCop = parseFloat(document.getElementById('chinaExtraExpensesCop').value || 0) || 0;
+
+  const totalLandedCop = totalPriceCop + importCostCop + nationalFreightCop + fullCostCop + extraExpensesCop;
+  const unitCostCop = qty > 0 ? (totalLandedCop / qty) : 0;
+
+  const priceMlCop = parseFloat(document.getElementById('chinaPriceMlCop').value || 0) || 0;
+  const commissionMlCop = parseFloat(document.getElementById('chinaCommissionMlCop').value || 0) || 0;
+  const incomeCop = priceMlCop - commissionMlCop - unitCostCop;
+  const marginPercent = unitCostCop > 0 ? (incomeCop / unitCostCop * 100) : 0;
+  const totalProfitCop = incomeCop * qty;
+
+  document.getElementById('calcLiveM3').innerText = `${cubicMeter.toFixed(3)} m³`;
+  document.getElementById('calcLiveImportCop').innerText = `$${Math.round(importCostCop).toLocaleString('es-CO')} COP`;
+  document.getElementById('calcLiveUnitCostCop').innerText = `$${Math.round(unitCostCop).toLocaleString('es-CO')} COP`;
+  document.getElementById('calcLiveIncomeCop').innerText = `$${Math.round(incomeCop).toLocaleString('es-CO')} COP`;
+  document.getElementById('calcLiveMargin').innerText = `${marginPercent.toFixed(1)}%`;
+  document.getElementById('calcLiveMargin').className = marginPercent >= 100 ? 'badge-success' : (marginPercent >= 50 ? 'badge-warning' : 'badge-critical');
+  document.getElementById('calcLiveTotalProfit').innerText = `$${Math.round(totalProfitCop).toLocaleString('es-CO')} COP`;
+}
+
 function openChinaShipmentModal(shipment = null) {
   document.getElementById('chinaShipmentId').value = shipment ? shipment.id : '';
-  document.getElementById('chinaSupplierName').value = shipment ? shipment.supplier_name : '';
-  document.getElementById('chinaTrackingNumber').value = shipment ? shipment.tracking_number : '';
-  document.getElementById('chinaShipmentType').value = shipment ? shipment.shipment_type : 'maritimo';
-  document.getElementById('chinaStatus').value = shipment ? shipment.status : 'produccion';
-  document.getElementById('chinaEtdDate').value = shipment ? shipment.etd_date : '';
-  document.getElementById('chinaEtaDate').value = shipment ? shipment.eta_date : '';
-  document.getElementById('chinaTrmCop').value = shipment ? shipment.trm_cop : 4050;
-  document.getElementById('chinaTotalCostUsd').value = shipment ? shipment.total_cost_usd : '';
-  document.getElementById('chinaTotalUnits').value = shipment ? shipment.total_units : '';
-  document.getElementById('chinaNotes').value = shipment ? shipment.notes : '';
+  document.getElementById('chinaProductName').value = shipment ? (shipment.product_name || shipment.supplier_name || '') : '';
+  document.getElementById('chinaNotionLink').value = shipment ? (shipment.notion_link || '') : '';
+  document.getElementById('chinaAgency').value = shipment ? (shipment.agency || 'William') : 'William';
+  document.getElementById('chinaSupply').value = shipment ? (shipment.supply || 'Alibaba') : '1688';
+  document.getElementById('chinaDeliveryStatus').value = shipment ? (shipment.delivery_status || 'EN CAMINO') : 'EN CAMINO';
+  document.getElementById('chinaEtaDate').value = shipment ? (shipment.eta_date || '') : 'October 21, 2026';
+  document.getElementById('chinaDaysToArrive').value = shipment ? (shipment.days_to_arrive || 30) : 30;
+  document.getElementById('chinaPaymentCard').value = shipment ? (shipment.payment_card || '') : '';
 
-  document.getElementById('chinaModalTitle').innerText = shipment ? 'Editar Embarque China' : 'Registrar Nuevo Embarque desde China';
+  document.getElementById('chinaQuantity').value = shipment ? (shipment.quantity || 100) : 100;
+  document.getElementById('chinaBoxes').value = shipment ? (shipment.boxes || 1) : 1;
+  document.getElementById('chinaLengthM').value = shipment ? (shipment.length_m || 0.41) : 0.41;
+  document.getElementById('chinaHeightM').value = shipment ? (shipment.height_m || 0.215) : 0.215;
+  document.getElementById('chinaWidthM').value = shipment ? (shipment.width_m || 0.275) : 0.275;
+
+  document.getElementById('chinaTotalPriceCop').value = shipment ? (shipment.total_price_cop || 1500000) : 1500000;
+  document.getElementById('chinaContainerM3Cost').value = shipment ? (shipment.container_m3_cost || 2500000) : 2500000;
+  document.getElementById('chinaNationalFreightCop').value = shipment ? (shipment.national_freight_cop || 60000) : 60000;
+  document.getElementById('chinaFullCostCop').value = shipment ? (shipment.full_cost_cop || 50000) : 50000;
+  document.getElementById('chinaExtraExpensesCop').value = shipment ? (shipment.extra_expenses_cop || 0) : 0;
+
+  document.getElementById('chinaPriceMlCop').value = shipment ? (shipment.price_ml_cop || 49700) : 49700;
+  document.getElementById('chinaCommissionMlCop').value = shipment ? (shipment.commission_ml_cop || 10549) : 10549;
+
+  document.getElementById('chinaModalTitle').innerText = shipment ? `🧮 Editar Importación: ${shipment.product_name || 'Producto'}` : '🧮 Simular & Registrar Importación China';
   document.getElementById('chinaShipmentModal').style.display = 'flex';
+  updateChinaLiveCalc();
+}
+
+function editChinaShipment(id) {
+  apiFetch('/api/inventory/china').then(data => {
+    const shipment = (data.shipments || []).find(s => s.id === id);
+    if (shipment) openChinaShipmentModal(shipment);
+  });
 }
 
 function closeChinaShipmentModal() {
@@ -1279,30 +1334,40 @@ function closeChinaShipmentModal() {
 
 async function saveChinaShipmentFromModal() {
   const id = document.getElementById('chinaShipmentId').value;
-  const supplier_name = document.getElementById('chinaSupplierName').value.trim();
-  if (!supplier_name) return showToast('El proveedor es requerido', 'error');
+  const product_name = document.getElementById('chinaProductName').value.trim();
+  if (!product_name) return showToast('El nombre del producto es requerido', 'error');
 
   const payload = {
     id: id || null,
-    supplier_name,
-    tracking_number: document.getElementById('chinaTrackingNumber').value.trim(),
-    shipment_type: document.getElementById('chinaShipmentType').value,
-    status: document.getElementById('chinaStatus').value,
-    etd_date: document.getElementById('chinaEtdDate').value,
-    eta_date: document.getElementById('chinaEtaDate').value,
-    trm_cop: parseFloat(document.getElementById('chinaTrmCop').value || 4000),
-    total_cost_usd: parseFloat(document.getElementById('chinaTotalCostUsd').value || 0),
-    total_units: parseInt(document.getElementById('chinaTotalUnits').value || 0),
-    notes: document.getElementById('chinaNotes').value.trim(),
+    product_name,
+    notion_link: document.getElementById('chinaNotionLink').value.trim(),
+    agency: document.getElementById('chinaAgency').value,
+    supply: document.getElementById('chinaSupply').value,
+    delivery_status: document.getElementById('chinaDeliveryStatus').value,
+    eta_date: document.getElementById('chinaEtaDate').value.trim(),
+    days_to_arrive: parseInt(document.getElementById('chinaDaysToArrive').value || 0),
+    payment_card: document.getElementById('chinaPaymentCard').value.trim(),
+    quantity: parseInt(document.getElementById('chinaQuantity').value || 0),
+    boxes: parseInt(document.getElementById('chinaBoxes').value || 0),
+    length_m: parseFloat(document.getElementById('chinaLengthM').value || 0),
+    height_m: parseFloat(document.getElementById('chinaHeightM').value || 0),
+    width_m: parseFloat(document.getElementById('chinaWidthM').value || 0),
+    total_price_cop: parseFloat(document.getElementById('chinaTotalPriceCop').value || 0),
+    container_m3_cost: parseFloat(document.getElementById('chinaContainerM3Cost').value || 0),
+    national_freight_cop: parseFloat(document.getElementById('chinaNationalFreightCop').value || 0),
+    full_cost_cop: parseFloat(document.getElementById('chinaFullCostCop').value || 0),
+    extra_expenses_cop: parseFloat(document.getElementById('chinaExtraExpensesCop').value || 0),
+    price_ml_cop: parseFloat(document.getElementById('chinaPriceMlCop').value || 0),
+    commission_ml_cop: parseFloat(document.getElementById('chinaCommissionMlCop').value || 0),
   };
 
   try {
     await apiFetch('/api/inventory/china', { method: 'POST', body: JSON.stringify(payload) });
-    showToast('Embarque desde China guardado con éxito', 'success');
+    showToast('¡Importación y fórmulas guardadas con éxito!', 'success');
     closeChinaShipmentModal();
     loadChinaShipments();
   } catch (error) {
-    showToast('Error guardando embarque: ' + error.message, 'error');
+    showToast('Error guardando importación: ' + error.message, 'error');
   }
 }
 

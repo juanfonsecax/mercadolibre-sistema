@@ -759,75 +759,147 @@
   <!-- MODALS PARA INVENTARIO Y OFERTAS -->
   <!-- ══════════════════════════════════════ -->
 
-  <!-- Modal 1: China Shipment -->
+  <!-- Modal 1: China Shipment & Financial Calculator -->
   <div class="modal-overlay" id="chinaShipmentModal" style="display:none">
     <div class="modal modal-lg">
       <div class="modal-header">
-        <h3 id="chinaModalTitle">Registrar Nuevo Embarque desde China</h3>
+        <h3 id="chinaModalTitle">🧮 Calculadora & Registro de Importación China (Fase 1)</h3>
         <button class="modal-close" onclick="closeChinaShipmentModal()">✕</button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="chinaShipmentId">
+
+        <!-- Live Financial & Volumetric Summary Bar -->
+        <div class="calc-live-bar" style="background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div><small class="text-muted">Metros Cúbicos:</small> <strong id="calcLiveM3" class="text-accent">0.000 m³</strong></div>
+          <div><small class="text-muted">Flete Importación:</small> <strong id="calcLiveImportCop">$0 COP</strong></div>
+          <div><small class="text-muted">Costo Landed Unit.:</small> <strong id="calcLiveUnitCostCop" class="text-warning">$0 COP</strong></div>
+          <div><small class="text-muted">Ingreso Neto Unit.:</small> <strong id="calcLiveIncomeCop" class="text-primary">$0 COP</strong></div>
+          <div><small class="text-muted">% Rentabilidad:</small> <strong id="calcLiveMargin" class="badge-success">0.0%</strong></div>
+          <div><small class="text-muted">Utilidad Total:</small> <strong id="calcLiveTotalProfit" class="text-success">$0 COP</strong></div>
+        </div>
+
+        <!-- Section 1: Product & Logistic Info -->
+        <div class="calc-section-title" style="font-weight: 600; font-size: 0.95rem; color: var(--accent-color); margin-bottom: 8px;">📌 1. Información de Producto & Logística</div>
         <div class="form-row">
           <div class="form-group col">
-            <label>Proveedor / Fabricante:</label>
-            <input type="text" id="chinaSupplierName" class="form-input" placeholder="Ej: Shenzhen Biotech Co.">
+            <label>Nombre del Producto:</label>
+            <input type="text" id="chinaProductName" class="form-input" placeholder="Ej: Interruptor 3 Botón" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
-            <label>Tracking / BL Number:</label>
-            <input type="text" id="chinaTrackingNumber" class="form-input" placeholder="Ej: CN-HK-2026-991">
+            <label>Enlace Notion / Ficha Técnica:</label>
+            <input type="text" id="chinaNotionLink" class="form-input" placeholder="https://app.notion.com/p/...">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group col">
-            <label>Tipo de Transporte:</label>
-            <select id="chinaShipmentType" class="form-input">
-              <option value="maritimo">🚢 Marítimo (Contenedor / LCL)</option>
-              <option value="aereo">✈️ Aéreo (Express)</option>
+            <label>Agente Encargado:</label>
+            <select id="chinaAgency" class="form-input">
+              <option value="William">William</option>
+              <option value="David">David</option>
+              <option value="Carlos">Carlos</option>
+              <option value="Juan">Juan</option>
             </select>
           </div>
           <div class="form-group col">
-            <label>Estado del Embarque:</label>
-            <select id="chinaStatus" class="form-input">
-              <option value="produccion">⚙️ En Producción</option>
-              <option value="transito_maritimo">🚢 En Tránsito Marítimo</option>
-              <option value="transito_aereo">✈️ En Tránsito Aéreo</option>
-              <option value="aduana">🛃 En Aduana Colombia</option>
-              <option value="recibido">✅ Recibido en Bodega Casa</option>
+            <label>Proveedor / Plataforma:</label>
+            <select id="chinaSupply" class="form-input">
+              <option value="1688">1688</option>
+              <option value="Alibaba">Alibaba</option>
+              <option value="Fabricante Directo">Fabricante Directo</option>
+            </select>
+          </div>
+          <div class="form-group col">
+            <label>Estado de Entrega:</label>
+            <select id="chinaDeliveryStatus" class="form-input">
+              <option value="EN CAMINO">🚢 EN CAMINO</option>
+              <option value="RETRASADO">⚠️ RETRASADO</option>
+              <option value="In China">⚙️ EN CHINA</option>
+              <option value="House">✅ RECIBIDO EN CASA</option>
             </select>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group col">
-            <label>Fecha Salida (ETD):</label>
-            <input type="date" id="chinaEtdDate" class="form-input">
+            <label>Fecha Estimada Llegada (ETA):</label>
+            <input type="text" id="chinaEtaDate" class="form-input" placeholder="October 21, 2026">
           </div>
           <div class="form-group col">
-            <label>Fecha Estimada Arribo (ETA):</label>
-            <input type="date" id="chinaEtaDate" class="form-input">
+            <label>Días para Llegar:</label>
+            <input type="number" id="chinaDaysToArrive" class="form-input" value="30">
+          </div>
+          <div class="form-group col">
+            <label>Tarjeta de Pago:</label>
+            <input type="text" id="chinaPaymentCard" class="form-input" placeholder="Ej: Tarjeta (1)">
           </div>
         </div>
+
+        <!-- Section 2: Cubaje & Volumetría -->
+        <div class="calc-section-title" style="font-weight: 600; font-size: 0.95rem; color: var(--accent-color); margin-top: 12px; margin-bottom: 8px;">📐 2. Cantidad & Volumetría (Metros Cúbicos m³)</div>
         <div class="form-row">
           <div class="form-group col">
-            <label>TRM Dólar USD a COP:</label>
-            <input type="number" id="chinaTrmCop" class="form-input" value="4000">
+            <label>Cantidad Unidades:</label>
+            <input type="number" id="chinaQuantity" class="form-input" value="100" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
-            <label>Costo Total USD (FOB/CIF):</label>
-            <input type="number" id="chinaTotalCostUsd" class="form-input" placeholder="3500">
+            <label>Número de Cajas:</label>
+            <input type="number" id="chinaBoxes" class="form-input" value="1" oninput="updateChinaLiveCalc()">
           </div>
           <div class="form-group col">
-            <label>Total Unidades:</label>
-            <input type="number" id="chinaTotalUnits" class="form-input" placeholder="1000">
+            <label>Largo (m):</label>
+            <input type="number" step="0.001" id="chinaLengthM" class="form-input" value="0.41" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Alto (m):</label>
+            <input type="number" step="0.001" id="chinaHeightM" class="form-input" value="0.215" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Ancho (m):</label>
+            <input type="number" step="0.001" id="chinaWidthM" class="form-input" value="0.275" oninput="updateChinaLiveCalc()">
           </div>
         </div>
-        <div class="form-group">
-          <label>Notas / Observaciones:</label>
-          <textarea id="chinaNotes" class="form-input" rows="2" placeholder="Agrega notas sobre este embarque..."></textarea>
+
+        <!-- Section 3: Cost Breakdown COP -->
+        <div class="calc-section-title" style="font-weight: 600; font-size: 0.95rem; color: var(--accent-color); margin-top: 12px; margin-bottom: 8px;">💰 3. Costos de Importación (COP)</div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Precio Mercancía FOB ($ COP Total):</label>
+            <input type="number" id="chinaTotalPriceCop" class="form-input" value="1500000" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Costo Contenedor por m³ ($ COP):</label>
+            <input type="number" id="chinaContainerM3Cost" class="form-input" value="2500000" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Flete Nacional ($ COP Total):</label>
+            <input type="number" id="chinaNationalFreightCop" class="form-input" value="60000" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Costo Envío Full ($ COP Total):</label>
+            <input type="number" id="chinaFullCostCop" class="form-input" value="50000" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Gastos Extras ($ COP Total):</label>
+            <input type="number" id="chinaExtraExpensesCop" class="form-input" value="0" oninput="updateChinaLiveCalc()">
+          </div>
         </div>
+
+        <!-- Section 4: ML Commercials & Margin -->
+        <div class="calc-section-title" style="font-weight: 600; font-size: 0.95rem; color: var(--accent-color); margin-top: 12px; margin-bottom: 8px;">🛒 4. Venta en Mercado Libre & Rentabilidad (COP)</div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Precio de Venta en ML ($ COP):</label>
+            <input type="number" id="chinaPriceMlCop" class="form-input" value="49700" oninput="updateChinaLiveCalc()">
+          </div>
+          <div class="form-group col">
+            <label>Comisión Mercado Libre ($ COP):</label>
+            <input type="number" id="chinaCommissionMlCop" class="form-input" value="10549" oninput="updateChinaLiveCalc()">
+          </div>
+        </div>
+
         <div class="form-actions">
           <button class="btn btn-secondary" onclick="closeChinaShipmentModal()">Cancelar</button>
-          <button class="btn btn-primary" onclick="saveChinaShipmentFromModal()">Guardar Embarque</button>
+          <button class="btn btn-primary" onclick="saveChinaShipmentFromModal()">💾 Guardar Importación & Fórmulas</button>
         </div>
       </div>
     </div>
