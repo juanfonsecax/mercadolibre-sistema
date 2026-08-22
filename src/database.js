@@ -56,6 +56,14 @@ function initSchema() {
     )
   `);
 
+  // Migrations for existing DB files
+  try { db.run('ALTER TABLE tokens ADD COLUMN account_id INTEGER'); } catch {}
+  try { db.run('ALTER TABLE questions ADD COLUMN account_id INTEGER'); } catch {}
+  try { db.run('ALTER TABLE claims ADD COLUMN account_id INTEGER'); } catch {}
+  try { db.run('ALTER TABLE activity_log ADD COLUMN account_id INTEGER'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN account_id INTEGER'); } catch {}
+
+
   // Seed default stores if accounts table is empty
   const countObj = queryOne('SELECT COUNT(*) as count FROM accounts');
   if (!countObj || countObj.count === 0) {
