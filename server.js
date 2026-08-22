@@ -618,6 +618,19 @@ async function startServer() {
   await db.initDb();
   console.log('[DB] Database initialized');
 
+  try {
+    const chinaRows = db.getChinaShipments();
+    if (!chinaRows || chinaRows.length < 10) {
+      console.log('[DB Seed] Seeding China shipments & Stock for Cloud Deployment...');
+      const { execSync } = require('child_process');
+      execSync('node scripts/import-china-csv.js');
+      execSync('node scripts/import-stock-csv.js');
+      db.reloadDbFromFile();
+    }
+  } catch (e) {
+    console.error('[DB Seed] Error seeding database:', e.message);
+  }
+
   kb.seedDefaults();
   gemini.initGemini();
 
