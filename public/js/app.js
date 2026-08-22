@@ -1205,6 +1205,40 @@ function filterChinaTable(filterType, btnElem = null) {
   renderChinaShipments();
 }
 
+function parseDateToTimestamp(dateStr) {
+  if (!dateStr) return 0;
+  let d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d.getTime();
+
+  const parts = dateStr.split(/[\/\-]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+    } else {
+      d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    }
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return 0;
+}
+
+function formatDateToInput(dateStr) {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
+  let d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  const parts = dateStr.split(/[\/\-]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    } else {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
 function isShipmentDelayed(s) {
   const delStatus = (s.delivery_status || s.status || '').toUpperCase();
   if (delStatus.includes('RECIBIDO') || s.status === 'House' || delStatus.includes('CHINA') || s.status === 'In China') {
@@ -1213,21 +1247,10 @@ function isShipmentDelayed(s) {
 
   // Strictly check if > 90 days have elapsed since Chinese Winery purchase date
   if (s.chinese_winery_date) {
-    let buyDate = new Date(s.chinese_winery_date);
-    if (isNaN(buyDate.getTime())) {
-      const parts = s.chinese_winery_date.split(/[\/\-]/);
-      if (parts.length === 3) {
-        if (parts[0].length === 4) {
-          buyDate = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
-        } else {
-          buyDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-        }
-      }
-    }
-
-    if (!isNaN(buyDate.getTime())) {
+    const buyTs = parseDateToTimestamp(s.chinese_winery_date);
+    if (buyTs > 0) {
       const today = new Date();
-      const diffMs = today.getTime() - buyDate.getTime();
+      const diffMs = today.getTime() - buyTs;
       const daysPassed = diffMs / (1000 * 60 * 60 * 24);
       return daysPassed > 90;
     }
@@ -1271,6 +1294,12 @@ function renderChinaShipments() {
       totalM3 += parseFloat(s.cubic_meter || 0);
     }
   });
+
+  // Sort active shipments chronologically by purchase date / ETA
+  activeShipments.sort((a, b) => parseDateToTimestamp(a.chinese_winery_date || a.eta_date) - parseDateToTimestamp(b.chinese_winery_date || b.eta_date));
+
+  // Sort received shipments chronologically (newest received first)
+  receivedShipments.sort((a, b) => parseDateToTimestamp(b.chinese_winery_date || b.eta_date) - parseDateToTimestamp(a.chinese_winery_date || a.eta_date));
 
   const filterAllBtn = document.getElementById('filter-china-all');
   const filterTransitBtn = document.getElementById('filter-china-transit');
@@ -1449,7 +1478,7 @@ function openChinaShipmentModal(shipment = null) {
   document.getElementById('chinaDeliveryStatus').value = shipment ? (shipment.delivery_status || 'EN CAMINO') : 'EN CAMINO';
 
   const defaultDate = new Date().toISOString().split('T')[0];
-  document.getElementById('chinaChineseWineryDate').value = shipment ? (shipment.chinese_winery_date || defaultDate) : defaultDate;
+  document.getElementById('chinaChineseWineryDate').value = shipment ? formatDateToInput(shipment.chinese_winery_date) : defaultDate;
   document.getElementById('chinaEtaDate').value = shipment ? (shipment.eta_date || '') : '';
   document.getElementById('chinaDaysToArrive').value = shipment ? (shipment.days_to_arrive || 90) : 90;
   document.getElementById('chinaPaymentCard').value = shipment ? (shipment.payment_card || '') : '';
