@@ -1212,34 +1212,35 @@ async function loadChinaShipments() {
         totalProfitCop += profitTotal;
         totalM3 += m3;
 
-        const delStatus = s.delivery_status || s.status || '';
-        let statusBadge = '<span class="badge-primary">🚢 EN CAMINO</span>';
-        if (delStatus.toUpperCase().includes('RETRASADO')) statusBadge = '<span class="badge-critical">⚠️ RETRASADO</span>';
-        else if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') statusBadge = '<span class="badge-success">✅ RECIBIDO</span>';
-        else if (delStatus.toUpperCase().includes('CHINA')) statusBadge = '<span class="badge-warning">⚙️ EN CHINA</span>';
+        const delStatus = s.delivery_status || s.status || 'EN CAMINO';
+        let statusBadge = `<span class="badge-primary" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">🚢 EN CAMINO</span>`;
+        if (delStatus.toUpperCase().includes('RETRASADO')) {
+          statusBadge = `<span class="badge-critical" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚠️ RETRASADO</span>`;
+        } else if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') {
+          statusBadge = `<span class="badge-success" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">✅ RECIBIDO</span>`;
+        } else if (delStatus.toUpperCase().includes('CHINA')) {
+          statusBadge = `<span class="badge-warning" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚙️ EN CHINA</span>`;
+        }
 
         const margin = parseFloat(s.margin_percent || 0);
         const marginBadgeClass = margin >= 100 ? 'badge-success' : (margin >= 50 ? 'badge-warning' : 'badge-critical');
 
         html += `
           <tr>
-            <td>
-              <strong>${escapeHtml(s.product_name || s.supplier_name)}</strong><br>
-              ${s.notion_link ? `<small><a href="${escapeHtml(s.notion_link)}" target="_blank" class="text-accent">📋 Notion</a></small>` : ''}
-            </td>
-            <td><strong>${qty.toLocaleString('es-CO')}</strong> unds</td>
-            <td><span class="badge-secondary">${escapeHtml(s.agency || 'Agente')} (${escapeHtml(s.supply || 'Alibaba')})</span></td>
-            <td>${m3 > 0 ? m3.toFixed(3) + ' m³' : 'N/A'}</td>
-            <td>$${Math.round(s.unit_cost_cop || 0).toLocaleString('es-CO')} COP</td>
-            <td>$${Math.round(s.price_ml_cop || 0).toLocaleString('es-CO')} COP</td>
-            <td><strong>$${Math.round(s.income_cop || 0).toLocaleString('es-CO')} COP</strong></td>
-            <td><span class="${marginBadgeClass}">${margin.toFixed(1)}%</span></td>
-            <td><strong>$${Math.round(profitTotal).toLocaleString('es-CO')} COP</strong></td>
-            <td><small>${escapeHtml(s.eta_date || 'Por definir')}</small></td>
+            <td style="font-weight: 600;">${escapeHtml(s.product_name || s.supplier_name)}</td>
+            <td><strong>${qty.toLocaleString('es-CO')}</strong></td>
+            <td>${escapeHtml(s.agency || 'Agente')}</td>
+            <td>${m3 > 0 ? m3.toFixed(3) : '0'}</td>
+            <td>$${Math.round(s.unit_cost_cop || 0).toLocaleString('es-CO')}</td>
+            <td>$${Math.round(s.price_ml_cop || 0).toLocaleString('es-CO')}</td>
+            <td><strong>$${Math.round(s.income_cop || 0).toLocaleString('es-CO')}</strong></td>
+            <td><span class="${marginBadgeClass}">${margin.toFixed(0)}%</span></td>
+            <td><strong>$${Math.round(profitTotal).toLocaleString('es-CO')}</strong></td>
+            <td><small>${escapeHtml(s.eta_date || 'N/A')}</small></td>
             <td>${statusBadge}</td>
             <td>
-              <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})">✏️</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})">🗑️</button>
+              <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})" title="Editar importación">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})" title="Eliminar">🗑️</button>
             </td>
           </tr>
         `;
@@ -1429,6 +1430,24 @@ async function deleteChinaShipment(id) {
     loadChinaShipments();
   } catch (error) {
     showToast('Error eliminando embarque: ' + error.message, 'error');
+  }
+}
+
+async function toggleChinaDeliveryStatus(id, currentStatus) {
+  const isRecibido = currentStatus.toUpperCase().includes('RECIBIDO') || currentStatus === 'House';
+  const newStatus = isRecibido ? 'EN CAMINO' : 'RECIBIDO';
+  try {
+    const data = await apiFetch('/api/inventory/china');
+    const shipment = (data.shipments || []).find(s => s.id === id);
+    if (shipment) {
+      shipment.delivery_status = newStatus;
+      shipment.status = newStatus === 'RECIBIDO' ? 'House' : 'In progress';
+      await apiFetch('/api/inventory/china', { method: 'POST', body: JSON.stringify(shipment) });
+      showToast(`Estado cambiado a: ${newStatus === 'RECIBIDO' ? '✅ RECIBIDO EN CASA' : '🚢 EN CAMINO'}`, 'success');
+      loadChinaShipments();
+    }
+  } catch (error) {
+    showToast('Error cambiando estado: ' + error.message, 'error');
   }
 }
 
