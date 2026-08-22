@@ -1059,7 +1059,8 @@ function getMlFullInventory(accountId = null) {
     params.push(accountId);
   }
   sql += ' ORDER BY f.units_full ASC';
-  return queryAll(sql, params);
+  const items = queryAll(sql, params);
+  return items.filter(f => !isProductDiscontinued(f.title));
 }
 
 function saveMlFullInventoryItem(item) {
