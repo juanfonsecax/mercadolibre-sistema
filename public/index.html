@@ -560,6 +560,14 @@
           </div>
         </div>
 
+        <!-- Status Filter Buttons for China Importations -->
+        <div class="china-filter-bar" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+          <button class="btn btn-sm btn-primary china-filter-btn active" onclick="filterChinaTable('all', this)" id="filter-china-all">Todas (37)</button>
+          <button class="btn btn-sm btn-secondary china-filter-btn" onclick="filterChinaTable('transit', this)" id="filter-china-transit">🚢 En Tránsito / Camino</button>
+          <button class="btn btn-sm btn-secondary china-filter-btn" onclick="filterChinaTable('china', this)" id="filter-china-china">⚙️ En China</button>
+          <button class="btn btn-sm btn-secondary china-filter-btn" onclick="filterChinaTable('house', this)" id="filter-china-house">✅ Recibidas en Casa</button>
+        </div>
+
         <div class="table-container card">
           <table class="data-table">
             <thead>

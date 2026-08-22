@@ -864,8 +864,16 @@ function computeShipmentFormulas(s) {
   const totalProfitCop = incomeCop * qty;
   const totalMoneyCop = priceMlCop * qty;
 
+  let delStatus = s.delivery_status || '';
+  if (!delStatus) {
+    if (s.status === 'House') delStatus = 'RECIBIDO EN CASA';
+    else if (s.status === 'In China') delStatus = 'EN CHINA';
+    else delStatus = 'EN CAMINO';
+  }
+
   return {
     ...s,
+    delivery_status: delStatus,
     product_name: s.product_name || s.supplier_name || 'Producto Importación',
     quantity: qty,
     boxes,
@@ -914,7 +922,7 @@ function saveChinaShipment(shipment, items = []) {
         f.total_price_cop, f.boxes, f.length_m, f.height_m, f.width_m, f.cubic_meter, f.container_m3_cost,
         f.import_cost_cop, f.national_freight_cop, f.full_cost_cop, f.extra_expenses_cop, f.unit_cost_cop,
         f.total_cost_cop, f.price_ml_cop, f.commission_ml_cop, f.income_cop, f.margin_percent, f.total_profit_cop,
-        f.total_money_cop, f.payment_card || '', f.eta_date || '', f.days_to_arrive || 0, f.active_transit_units || 0, f.delivery_status || 'EN CAMINO',
+        f.total_money_cop, f.payment_card || '', f.eta_date || '', f.days_to_arrive || 0, f.active_transit_units || 0, f.delivery_status,
         f.id
       ]
     );
@@ -933,7 +941,7 @@ function saveChinaShipment(shipment, items = []) {
         f.total_price_cop, f.boxes, f.length_m, f.height_m, f.width_m, f.cubic_meter, f.container_m3_cost,
         f.import_cost_cop, f.national_freight_cop, f.full_cost_cop, f.extra_expenses_cop, f.unit_cost_cop,
         f.total_cost_cop, f.price_ml_cop, f.commission_ml_cop, f.income_cop, f.margin_percent, f.total_profit_cop,
-        f.total_money_cop, f.payment_card || '', f.eta_date || '', f.days_to_arrive || 0, f.active_transit_units || 0, f.delivery_status || 'EN CAMINO'
+        f.total_money_cop, f.payment_card || '', f.eta_date || '', f.days_to_arrive || 0, f.active_transit_units || 0, f.delivery_status
       ]
     );
     const created = queryOne('SELECT id FROM china_shipments ORDER BY id DESC LIMIT 1');

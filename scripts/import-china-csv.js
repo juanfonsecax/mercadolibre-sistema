@@ -108,7 +108,13 @@ async function runImport() {
     const etaDate = cols[29] || '';
     const daysToArrive = parseInt(cols[30] || 0) || 0;
     const activeTransitUnits = parseInt(cols[31] || 0) || 0;
-    const deliveryStatus = cols[32] || 'EN CAMINO';
+    
+    let deliveryStatus = cols[32] || '';
+    if (!deliveryStatus) {
+      if (rawStatus === 'House') deliveryStatus = 'RECIBIDO EN CASA';
+      else if (rawStatus === 'In China') deliveryStatus = 'EN CHINA';
+      else deliveryStatus = 'EN CAMINO';
+    }
 
     db.saveChinaShipment({
       product_name: productName,
