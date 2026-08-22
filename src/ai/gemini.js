@@ -9,7 +9,7 @@ function initGemini() {
     return false;
   }
   genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
   model = genAI.getGenerativeModel({ model: modelName });
   return true;
 }
@@ -213,7 +213,8 @@ async function testConnection() {
     initGemini();
   }
 
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
+  const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']));
   const errors = [];
 
   for (const mName of modelsToTry) {
