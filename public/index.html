@@ -561,14 +561,20 @@
         </div>
 
         <!-- Status Filter Buttons for China Importations -->
-        <div class="china-filter-bar" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+        <div class="china-filter-bar" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
           <button class="btn btn-sm btn-primary china-filter-btn active" onclick="filterChinaTable('all', this)" id="filter-china-all">Todas (37)</button>
           <button class="btn btn-sm btn-secondary china-filter-btn" onclick="filterChinaTable('transit', this)" id="filter-china-transit">🚢 En Tránsito / Camino</button>
           <button class="btn btn-sm btn-secondary china-filter-btn" onclick="filterChinaTable('china', this)" id="filter-china-china">⚙️ En China</button>
           <button class="btn btn-sm btn-secondary china-filter-btn" onclick="filterChinaTable('house', this)" id="filter-china-house">✅ Recibidas en Casa</button>
         </div>
 
-        <div class="table-container card">
+        <!-- 1. Active Pending / In Transit Table -->
+        <div class="table-title-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            🚢 Embarques Pendientes & En Tránsito <span class="badge-primary" id="active-transit-count-badge">0 órdenes</span>
+          </h3>
+        </div>
+        <div class="table-container card mb-24">
           <table class="data-table">
             <thead>
               <tr>
@@ -588,6 +594,36 @@
             </thead>
             <tbody id="chinaShipmentsTable">
               <tr><td colspan="12" class="empty-cell">Cargando importaciones de China...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 2. Historical Received Table -->
+        <div class="table-title-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            ✅ Historial de Importaciones Recibidas en Bodega Casa <span class="badge-success" id="received-house-count-badge">0 recibidas</span>
+          </h3>
+        </div>
+        <div class="table-container card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cant.</th>
+                <th>Agente</th>
+                <th>Vol. (m³)</th>
+                <th>Costo Unit.</th>
+                <th>Precio ML</th>
+                <th>Ingreso Unit.</th>
+                <th>Rentab. %</th>
+                <th>Utilidad Total</th>
+                <th>Llegada (ETA)</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="chinaReceivedTable">
+              <tr><td colspan="12" class="empty-cell">Cargando historial de importaciones recibidas...</td></tr>
             </tbody>
           </table>
         </div>

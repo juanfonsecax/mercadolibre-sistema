@@ -921,7 +921,12 @@ function computeShipmentFormulas(s) {
 function getChinaShipments() {
   const shipments = queryAll('SELECT * FROM china_shipments ORDER BY created_at DESC');
   return shipments.map(s => {
-    const items = queryAll('SELECT i.*, a.name as account_name FROM china_shipment_items i LEFT JOIN accounts a ON i.account_id = a.id WHERE i.shipment_id = ?', [s.id]);
+    let items = [];
+    try {
+      items = queryAll('SELECT i.*, a.name as account_name FROM china_shipment_items i LEFT JOIN accounts a ON i.account_id = a.id WHERE i.shipment_id = ?', [s.id]);
+    } catch (e) {
+      items = [];
+    }
     return { ...computeShipmentFormulas(s), items };
   });
 }

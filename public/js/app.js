@@ -1253,11 +1253,27 @@ function renderChinaShipments() {
   let countChina = 0;
   let countHouse = 0;
 
+  const activeShipments = [];
+  const receivedShipments = [];
+
   shipments.forEach(s => {
     const delStatus = (s.delivery_status || s.status || '').toUpperCase();
-    if (delStatus.includes('RECIBIDO') || s.status === 'House') countHouse++;
-    else if (delStatus.includes('CHINA') || s.status === 'In China') countChina++;
-    else countTransit++;
+    const isReceived = delStatus.includes('RECIBIDO') || s.status === 'House';
+
+    if (isReceived) {
+      countHouse++;
+      receivedShipments.push(s);
+    } else {
+      if (delStatus.includes('CHINA') || s.status === 'In China') countChina++;
+      else countTransit++;
+      activeShipments.push(s);
+
+      const qty = s.quantity || s.active_transit_units || 0;
+      totalUnits += qty;
+      totalLandedCop += s.total_cost_cop || (s.unit_cost_cop * qty) || 0;
+      totalProfitCop += s.total_profit_cop || (s.income_cop * qty) || 0;
+      totalM3 += parseFloat(s.cubic_meter || 0);
+    }
   });
 
   const filterAllBtn = document.getElementById('filter-china-all');
@@ -1270,65 +1286,74 @@ function renderChinaShipments() {
   if (filterChinaBtn) filterChinaBtn.innerText = `⚙️ En China (${countChina})`;
   if (filterHouseBtn) filterHouseBtn.innerText = `✅ Recibidas en Casa (${countHouse})`;
 
-  const filtered = shipments.filter(s => {
+  const activeBadge = document.getElementById('active-transit-count-badge');
+  const receivedBadge = document.getElementById('received-house-count-badge');
+  if (activeBadge) activeBadge.innerText = `${activeShipments.length} órdenes en tránsito/china`;
+  if (receivedBadge) receivedBadge.innerText = `${receivedShipments.length} recibidas en bodega`;
+
+  function buildRowHtml(s) {
+    const qty = s.quantity || s.active_transit_units || 0;
+    const profitTotal = s.total_profit_cop || (s.income_cop * qty) || 0;
+    const m3 = parseFloat(s.cubic_meter || 0);
+
+    const delStatus = s.delivery_status || s.status || 'EN CAMINO';
+    let statusBadge = `<span class="badge-primary" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">🚢 EN CAMINO</span>`;
+    if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') {
+      statusBadge = `<span class="badge-success" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">✅ RECIBIDO</span>`;
+    } else if (delStatus.toUpperCase().includes('CHINA')) {
+      statusBadge = `<span class="badge-warning" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚙️ EN CHINA</span>`;
+    } else if (isShipmentDelayed(s)) {
+      statusBadge = `<span class="badge-critical" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚠️ RETRASADO (+90d)</span>`;
+    }
+
+    const margin = parseFloat(s.margin_percent || 0);
+    const marginBadgeClass = margin >= 100 ? 'badge-success' : (margin >= 50 ? 'badge-warning' : 'badge-critical');
+
+    return `
+      <tr>
+        <td style="font-weight: 600;">${escapeHtml(s.product_name || s.supplier_name)}</td>
+        <td><strong>${qty.toLocaleString('es-CO')}</strong></td>
+        <td>${escapeHtml(s.agency || 'Agente')}</td>
+        <td>${m3 > 0 ? m3.toFixed(3) : '0'}</td>
+        <td>$${Math.round(s.unit_cost_cop || 0).toLocaleString('es-CO')}</td>
+        <td>$${Math.round(s.price_ml_cop || 0).toLocaleString('es-CO')}</td>
+        <td><strong>$${Math.round(s.income_cop || 0).toLocaleString('es-CO')}</strong></td>
+        <td><span class="${marginBadgeClass}">${margin.toFixed(0)}%</span></td>
+        <td><strong>$${Math.round(profitTotal).toLocaleString('es-CO')}</strong></td>
+        <td><small>${escapeHtml(s.eta_date || 'N/A')}</small></td>
+        <td>${statusBadge}</td>
+        <td>
+          <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})" title="Editar importación">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})" title="Eliminar">🗑️</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  const filteredActive = activeShipments.filter(s => {
     const delStatus = (s.delivery_status || s.status || '').toUpperCase();
     if (currentChinaFilter === 'transit') return delStatus.includes('CAMINO') || delStatus.includes('RETRASADO') || s.status === 'In progress';
     if (currentChinaFilter === 'china') return delStatus.includes('CHINA') || s.status === 'In China';
-    if (currentChinaFilter === 'house') return delStatus.includes('RECIBIDO') || s.status === 'House';
+    if (currentChinaFilter === 'house') return false;
     return true;
   });
 
-  let html = '';
-  if (filtered.length === 0) {
-    html = '<tr><td colspan="12" class="empty-cell">No hay importaciones en este filtro</td></tr>';
-  } else {
-    filtered.forEach(s => {
-      const qty = s.quantity || s.active_transit_units || 0;
-      const landedTotal = s.total_cost_cop || (s.unit_cost_cop * qty) || 0;
-      const profitTotal = s.total_profit_cop || (s.income_cop * qty) || 0;
-      const m3 = parseFloat(s.cubic_meter || 0);
+  const filteredReceived = receivedShipments.filter(s => {
+    if (currentChinaFilter === 'transit' || currentChinaFilter === 'china') return false;
+    return true;
+  });
 
-      totalUnits += qty;
-      totalLandedCop += landedTotal;
-      totalProfitCop += profitTotal;
-      totalM3 += m3;
+  let activeHtml = filteredActive.length === 0 
+    ? '<tr><td colspan="12" class="empty-cell">No hay embarques pendientes en tránsito ni en China</td></tr>'
+    : filteredActive.map(buildRowHtml).join('');
 
-      const delStatus = s.delivery_status || s.status || 'EN CAMINO';
-      let statusBadge = `<span class="badge-primary" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">🚢 EN CAMINO</span>`;
-      if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') {
-        statusBadge = `<span class="badge-success" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">✅ RECIBIDO</span>`;
-      } else if (delStatus.toUpperCase().includes('CHINA')) {
-        statusBadge = `<span class="badge-warning" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚙️ EN CHINA</span>`;
-      } else if (isShipmentDelayed(s)) {
-        statusBadge = `<span class="badge-critical" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚠️ RETRASADO (+90d)</span>`;
-      }
+  let receivedHtml = filteredReceived.length === 0 
+    ? '<tr><td colspan="12" class="empty-cell">No hay historial de importaciones recibidas en este filtro</td></tr>'
+    : filteredReceived.map(buildRowHtml).join('');
 
-      const margin = parseFloat(s.margin_percent || 0);
-      const marginBadgeClass = margin >= 100 ? 'badge-success' : (margin >= 50 ? 'badge-warning' : 'badge-critical');
+  document.getElementById('chinaShipmentsTable').innerHTML = activeHtml;
+  document.getElementById('chinaReceivedTable').innerHTML = receivedHtml;
 
-      html += `
-        <tr>
-          <td style="font-weight: 600;">${escapeHtml(s.product_name || s.supplier_name)}</td>
-          <td><strong>${qty.toLocaleString('es-CO')}</strong></td>
-          <td>${escapeHtml(s.agency || 'Agente')}</td>
-          <td>${m3 > 0 ? m3.toFixed(3) : '0'}</td>
-          <td>$${Math.round(s.unit_cost_cop || 0).toLocaleString('es-CO')}</td>
-          <td>$${Math.round(s.price_ml_cop || 0).toLocaleString('es-CO')}</td>
-          <td><strong>$${Math.round(s.income_cop || 0).toLocaleString('es-CO')}</strong></td>
-          <td><span class="${marginBadgeClass}">${margin.toFixed(0)}%</span></td>
-          <td><strong>$${Math.round(profitTotal).toLocaleString('es-CO')}</strong></td>
-          <td><small>${escapeHtml(s.eta_date || 'N/A')}</small></td>
-          <td>${statusBadge}</td>
-          <td>
-            <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})" title="Editar importación">✏️</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})" title="Eliminar">🗑️</button>
-          </td>
-        </tr>
-      `;
-    });
-  }
-
-  document.getElementById('chinaShipmentsTable').innerHTML = html;
   document.getElementById('china-total-units').innerText = `${totalUnits.toLocaleString('es-CO')} unds`;
   document.getElementById('china-total-landed').innerText = `$${Math.round(totalLandedCop).toLocaleString('es-CO')} COP`;
   document.getElementById('china-total-profit').innerText = `$${Math.round(totalProfitCop).toLocaleString('es-CO')} COP`;
