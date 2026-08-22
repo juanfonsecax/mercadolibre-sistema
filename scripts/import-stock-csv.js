@@ -141,6 +141,8 @@ async function runImport() {
     importedLocal++;
   }
 
+  db.saveDbToFile();
+
   console.log('');
   console.log(`✅ ¡Importación de Stock Casa completada exitosamente!`);
   console.log(`   - 🏠 Productos con Stock Físico en Casa (Units > 0): ${importedLocal}`);

@@ -36,6 +36,16 @@ function saveDbToFile() {
   fs.writeFileSync(DB_PATH, buffer);
 }
 
+function reloadDbFromFile() {
+  if (fs.existsSync(DB_PATH) && SQL) {
+    const buffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(buffer);
+    db.run('PRAGMA foreign_keys = ON');
+    initSchema();
+    console.log('[DB] Reloaded database from disk file bot.db');
+  }
+}
+
 // Auto-save every 10 seconds
 setInterval(() => {
   if (db) saveDbToFile();
@@ -1125,7 +1135,7 @@ function deleteProductPromotion(id) {
 }
 
 module.exports = {
-  initDb, getDb, saveDbToFile,
+  initDb, getDb, saveDbToFile, reloadDbFromFile,
   // Accounts
   saveAccount, getAccounts, getAccountById, getAccountByName, updateAccountSellerInfo, deleteAccount,
   // Tokens

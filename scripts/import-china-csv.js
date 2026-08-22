@@ -153,6 +153,8 @@ async function runImport() {
     importedShipments++;
   }
 
+  db.saveDbToFile();
+
   console.log('');
   console.log(`✅ ¡Importación completa de Embarques China 2026!`);
   console.log(`   - 🚢 Filas/Importaciones procesadas: ${importedShipments}`);

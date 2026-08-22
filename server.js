@@ -437,6 +437,7 @@ app.post('/api/inventory/import-csv', (req, res) => {
     const { execSync } = require('child_process');
     const outputStock = execSync('node scripts/import-stock-csv.js', { encoding: 'utf-8' });
     const outputChina = execSync('node scripts/import-china-csv.js', { encoding: 'utf-8' });
+    if (typeof db.reloadDbFromFile === 'function') db.reloadDbFromFile();
     db.logActivity('import_csv', 'Importación masiva de Stock Casa e Importaciones China realizada', null);
     res.json({ success: true, message: `${outputStock}\n${outputChina}` });
   } catch (error) {
