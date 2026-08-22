@@ -1080,26 +1080,57 @@ function saveMlFullInventoryItem(item) {
   );
 }
 
-function getReorderAlerts(accountId = null) {
-  // Reorder alerts for Local House Stock (under min_stock_alert)
-  const localAlerts = getLocalInventory(accountId).filter(i => i.units_house <= i.min_stock_alert).map(i => ({
-    type: 'reorder_china',
-    severity: i.units_house === 0 ? 'critical' : 'warning',
-    sku: i.sku,
-    title: i.title,
-    account_name: i.account_name,
-    message: `Stock Casa crítico (${i.units_house} unds, Mín: ${i.min_stock_alert}). Realizar pedido a China.`
-  }));
+const DISCONTINUED_KEYWORDS = [
+  'colpept', 'peptido', 'péptido',
+  'eucerin', 'control en original', 'fixodent',
+  'forro azul', 'forros azul', 'forro blanco', 'forros blanco', 'forro rojo', 'forros rojo', 'forro verde', 'forros verde', 'roberto',
+  'crecimiento capilar', 'formula de crecimiento', 'fórmula de crecimiento',
+  'geruxtic', 'hair wax',
+  'la roche', 'roche posay',
+  'glicinato', 'magnesio',
+  'miel', 'mielle',
+  'neutrogena',
+  'panoxyl', 'pan oxid',
+  'roc express', 'roc ', 'roku',
+  'toco', 'tocobo',
+  'efe',
+  'vichy',
+  'vitamina d3', 'vitamina d-3',
+  'bombillo 15w *2', 'bombillos 15w *2', 'bombilla 15w x2', 'bombilla 15w x4',
+  'bombillo 9w', 'bombilla 9w', 'bombillo 19w', 'bombilla 19w'
+];
 
-  // Reorder alerts for Mercado Libre Full Stock (coverage < 10 days)
-  const fullAlerts = getMlFullInventory(accountId).filter(f => f.coverage_days < 10).map(f => ({
-    type: 'transfer_to_full',
-    severity: f.coverage_days < 5 ? 'critical' : 'warning',
-    sku: f.sku,
-    title: f.title,
-    account_name: f.account_name,
-    message: `Stock Full ML bajo (${f.units_full} unds, ${f.coverage_days.toFixed(1)} días cobertura). Transferir desde Casa.`
-  }));
+function isProductDiscontinued(nameOrTitle) {
+  if (!nameOrTitle) return false;
+  const str = String(nameOrTitle).toLowerCase();
+  if (str.includes('laser') || str.includes('lacerazo')) return false;
+  return DISCONTINUED_KEYWORDS.some(k => str.includes(k));
+}
+
+function getReorderAlerts(accountId = null) {
+  // Reorder alerts for Local House Stock (under min_stock_alert, excluding discontinued items)
+  const localAlerts = getLocalInventory(accountId)
+    .filter(i => i.units_house <= i.min_stock_alert && !isProductDiscontinued(i.title))
+    .map(i => ({
+      type: 'reorder_china',
+      severity: i.units_house === 0 ? 'critical' : 'warning',
+      sku: i.sku,
+      title: i.title,
+      account_name: i.account_name,
+      message: `Stock Casa crítico (${i.units_house} unds, Mín: ${i.min_stock_alert}). Realizar pedido a China.`
+    }));
+
+  // Reorder alerts for Mercado Libre Full Stock (coverage < 10 days, excluding discontinued items)
+  const fullAlerts = getMlFullInventory(accountId)
+    .filter(f => f.coverage_days < 10 && !isProductDiscontinued(f.title))
+    .map(f => ({
+      type: 'transfer_to_full',
+      severity: f.coverage_days < 5 ? 'critical' : 'warning',
+      sku: f.sku,
+      title: f.title,
+      account_name: f.account_name,
+      message: `Stock Full ML bajo (${f.units_full} unds, ${f.coverage_days.toFixed(1)} días cobertura). Transferir desde Casa.`
+    }));
 
   return [...localAlerts, ...fullAlerts];
 }

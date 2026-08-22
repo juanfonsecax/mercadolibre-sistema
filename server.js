@@ -602,10 +602,21 @@ app.get('*', (req, res) => {
 
 const pollingInterval = parseInt(process.env.POLLING_INTERVAL_MINUTES || '2');
 
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught Exception:', err.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled Rejection:', reason);
+});
+
 function startPolling() {
   const cronExpr = `*/${pollingInterval} * * * *`;
   cron.schedule(cronExpr, async () => {
-    await processor.pollAll();
+    try {
+      await processor.pollAll();
+    } catch (err) {
+      console.error('[Cron] Polling error:', err.message || err);
+    }
   });
   console.log(`[Cron] Polling active accounts every ${pollingInterval} minutes`);
 }

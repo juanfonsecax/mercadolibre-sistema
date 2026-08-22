@@ -436,14 +436,18 @@ async function pollMessagesForAccount(accountId) {
 }
 
 async function pollAll() {
-  const accounts = db.getAccounts();
-  for (const account of accounts) {
-    const token = db.getToken(account.id);
-    if (token && Date.now() < token.expires_at) {
-      await pollQuestionsForAccount(account.id);
-      await pollClaimsForAccount(account.id);
-      await pollMessagesForAccount(account.id);
+  try {
+    const accounts = db.getAccounts();
+    for (const account of accounts) {
+      const token = db.getToken(account.id);
+      if (token && Date.now() < token.expires_at) {
+        await pollQuestionsForAccount(account.id);
+        await pollClaimsForAccount(account.id);
+        await pollMessagesForAccount(account.id);
+      }
     }
+  } catch (error) {
+    console.error('[Polling] Error in pollAll:', error.message);
   }
 }
 
