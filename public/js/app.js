@@ -1205,6 +1205,41 @@ function filterChinaTable(filterType, btnElem = null) {
   renderChinaShipments();
 }
 
+function isShipmentDelayed(s) {
+  const delStatus = (s.delivery_status || s.status || '').toUpperCase();
+  if (delStatus.includes('RECIBIDO') || s.status === 'House' || delStatus.includes('CHINA') || s.status === 'In China') {
+    return false;
+  }
+
+  if (delStatus.includes('RETRASADO')) return true;
+
+  if (s.eta_date) {
+    const etaDate = new Date(s.eta_date);
+    if (!isNaN(etaDate.getTime())) {
+      const today = new Date();
+      if (today > etaDate) return true;
+    }
+  }
+
+  if (s.chinese_winery_date) {
+    let buyDate = new Date(s.chinese_winery_date);
+    if (isNaN(buyDate.getTime())) {
+      const parts = s.chinese_winery_date.split('/');
+      if (parts.length === 3) {
+        buyDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      }
+    }
+    if (!isNaN(buyDate.getTime())) {
+      const today = new Date();
+      const diffMs = today.getTime() - buyDate.getTime();
+      const daysPassed = diffMs / (1000 * 60 * 60 * 24);
+      if (daysPassed > 90) return true;
+    }
+  }
+
+  return false;
+}
+
 function renderChinaShipments() {
   const shipments = cachedChinaShipments || [];
   
@@ -1260,12 +1295,12 @@ function renderChinaShipments() {
 
       const delStatus = s.delivery_status || s.status || 'EN CAMINO';
       let statusBadge = `<span class="badge-primary" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">🚢 EN CAMINO</span>`;
-      if (delStatus.toUpperCase().includes('RETRASADO')) {
-        statusBadge = `<span class="badge-critical" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚠️ RETRASADO</span>`;
-      } else if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') {
+      if (delStatus.toUpperCase().includes('RECIBIDO') || delStatus === 'House') {
         statusBadge = `<span class="badge-success" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">✅ RECIBIDO</span>`;
       } else if (delStatus.toUpperCase().includes('CHINA')) {
         statusBadge = `<span class="badge-warning" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚙️ EN CHINA</span>`;
+      } else if (isShipmentDelayed(s)) {
+        statusBadge = `<span class="badge-critical" style="cursor:pointer;" onclick="toggleChinaDeliveryStatus(${s.id}, '${escapeHtml(delStatus)}')">⚠️ RETRASADO (+90d)</span>`;
       }
 
       const margin = parseFloat(s.margin_percent || 0);
