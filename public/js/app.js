@@ -1207,35 +1207,46 @@ function filterChinaTable(filterType, btnElem = null) {
 
 function parseDateToTimestamp(dateStr) {
   if (!dateStr) return 0;
-  let d = new Date(dateStr);
+  
+  const str = String(dateStr).trim();
+  
+  // Check DD/MM/YYYY or YYYY-MM-DD first to prevent MM/DD/YYYY JS misinterpretation (e.g. 02/05/2026 => Feb 5 instead of May 2)
+  const parts = str.split(/[\/\-]/);
+  if (parts.length === 3) {
+    let year, month, day;
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+    } else if (parts[2].length === 4) {
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      year = parseInt(parts[2], 10);
+    }
+    if (year && !isNaN(month) && day) {
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+  }
+
+  const d = new Date(str);
   if (!isNaN(d.getTime())) return d.getTime();
 
-  const parts = dateStr.split(/[\/\-]/);
-  if (parts.length === 3) {
-    if (parts[0].length === 4) {
-      d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
-    } else {
-      d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-    }
-    if (!isNaN(d.getTime())) return d.getTime();
-  }
   return 0;
 }
 
 function formatDateToInput(dateStr) {
   if (!dateStr) return new Date().toISOString().split('T')[0];
-  let d = new Date(dateStr);
-  if (!isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0];
+  
+  const ts = parseDateToTimestamp(dateStr);
+  if (ts > 0) {
+    const d = new Date(ts);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
-  const parts = dateStr.split(/[\/\-]/);
-  if (parts.length === 3) {
-    if (parts[0].length === 4) {
-      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    } else {
-      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-    }
-  }
+
   return new Date().toISOString().split('T')[0];
 }
 
@@ -1295,11 +1306,19 @@ function renderChinaShipments() {
     }
   });
 
-  // Sort active shipments chronologically by purchase date / ETA
-  activeShipments.sort((a, b) => parseDateToTimestamp(a.chinese_winery_date || a.eta_date) - parseDateToTimestamp(b.chinese_winery_date || b.eta_date));
+  // Sort active shipments chronologically by purchase date / ETA (oldest purchase date first)
+  activeShipments.sort((a, b) => {
+    const tsA = parseDateToTimestamp(a.chinese_winery_date) || parseDateToTimestamp(a.eta_date);
+    const tsB = parseDateToTimestamp(b.chinese_winery_date) || parseDateToTimestamp(b.eta_date);
+    return tsA - tsB;
+  });
 
-  // Sort received shipments chronologically (newest received first)
-  receivedShipments.sort((a, b) => parseDateToTimestamp(b.chinese_winery_date || b.eta_date) - parseDateToTimestamp(a.chinese_winery_date || a.eta_date));
+  // Sort received shipments chronologically (most recently received first)
+  receivedShipments.sort((a, b) => {
+    const tsA = parseDateToTimestamp(a.chinese_winery_date) || parseDateToTimestamp(a.eta_date);
+    const tsB = parseDateToTimestamp(b.chinese_winery_date) || parseDateToTimestamp(b.eta_date);
+    return tsB - tsA;
+  });
 
   const filterAllBtn = document.getElementById('filter-china-all');
   const filterTransitBtn = document.getElementById('filter-china-transit');
