@@ -630,6 +630,12 @@ async function startServer() {
   console.log('[DB] Database initialized');
 
   try {
+    const fullRows = db.getMlFullInventory();
+    if (!fullRows || fullRows.length < 14) {
+      console.log('[DB Seed] Seeding active Mercado Libre listings in Full inventory...');
+      db.seedActiveMlListings();
+    }
+
     const chinaRows = db.getChinaShipments();
     if (!chinaRows || chinaRows.length < 10) {
       console.log('[DB Seed] Seeding China shipments & Stock for Cloud Deployment...');

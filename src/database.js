@@ -1063,6 +1063,31 @@ function getMlFullInventory(accountId = null) {
   return items.filter(f => !isProductDiscontinued(f.title));
 }
 
+const ACTIVE_ML_LISTINGS = [
+  { ml_item_id: 'MCO5914426965804815', sku: 'ENCHUFE-WIFI-SMART', title: 'Enchufe Inteligente Toma Wifi Smart Echo Alexa Google Y Siri', units_full: 34, sales_last_30d: 5, sales_last_7d: 2, account_id: 2 },
+  { ml_item_id: 'MCO1360887164', sku: 'INTERRUPTOR-SWITCH-10A-BLANCO', title: 'Interruptor Inteligente Switch Wifi Tuya *equivalente Sonoff 10 A 110v Blanco', units_full: 100, sales_last_30d: 2, sales_last_7d: 0, account_id: 2 },
+  { ml_item_id: 'MCO2953532088', sku: 'TOMACORRIENTE-MEDIDOR-TUYA', title: 'Tomacorriente Inteligente Wifi Con Medidor De Energía - Tuya Blanco', units_full: 109, sales_last_30d: 13, sales_last_7d: 6, account_id: 2 },
+  { ml_item_id: 'MCO1531049217', sku: 'VII-CAPACITOR-SIN-NEUTRO', title: 'Vii Capacitor Condensador Interruptor Inteligente Sin Neutro', units_full: 15, sales_last_30d: 1, sales_last_7d: 0, account_id: 2 },
+  { ml_item_id: 'MCO1412283655', sku: 'BOMBILLO-GU10-RGB-VII', title: 'Bombillo Gu10 Inteligente Wifi Led Rgb Vii Alexa Siri Google 110v Rgb', units_full: 9, sales_last_30d: 4, sales_last_7d: 3, account_id: 2 },
+  { ml_item_id: 'MCO1538098653', sku: 'SMART-SWITCH-10A-BLANCO-VII', title: 'Interruptor Inteligente Smart Switch Wifi Alexa Google Vii 10 A 110v Blanco', units_full: 12, sales_last_30d: 2, sales_last_7d: 0, account_id: 2 },
+  { ml_item_id: 'MCO1538015011', sku: 'VII-SMART-SWITCH-10A-BLANCO', title: 'Vii Interruptor Inteligente Smart Switch Wifi Alexa Google.. 10 A 110v Blanco', units_full: 43, sales_last_30d: 1, sales_last_7d: 0, account_id: 2 },
+  { ml_item_id: 'MCO2908323420', sku: '2-BOMBILLOS-WIFI-15W', title: '2 Bombillos Wifi Inteligente Rgb Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 4, sales_last_30d: 5, sales_last_7d: 5, account_id: 2 },
+  { ml_item_id: 'MCO2627945884', sku: 'VALVULA-CONTROLADOR-WIFI', title: 'Valvula Inteligente Controlador Wifi Alexa Google Agua Gas', units_full: 2, sales_last_30d: 2, sales_last_7d: 4, account_id: 2 },
+  { ml_item_id: 'MCO2628604956', sku: '4-BOMBILLOS-WIFI-15W', title: '4 Bombillos Wifi Inteligentes Led Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 1, sales_last_30d: 0, sales_last_7d: 0, account_id: 2 },
+  { ml_item_id: 'MCO608309396', sku: 'JUEGO-CASHFLOW-COMPUTADOR', title: 'Juego Cashflow Para Computador E Imprimible Nueva Version 20', units_full: 147, sales_last_30d: 1, sales_last_7d: 1, account_id: 1 },
+  { ml_item_id: 'MCO2875994304', sku: 'HOMEKIT-ENCHUFE-APPLE-SIRI', title: 'Homekit Casa Enchufe Toma Inteligente Siri Apple Alexa Wifi Blanco', units_full: 5, sales_last_30d: 1, sales_last_7d: 1, account_id: 2 },
+  { ml_item_id: 'MCO2843711932', sku: 'MODULO-MATTER-HOMEKIT-VII', title: 'Modulo Interruptor Wifi Inteligente Matter Apple Homekit Vii 16 A 110v Blanco', units_full: 4, sales_last_30d: 0, sales_last_7d: 0, account_id: 2 },
+  { ml_item_id: 'MCO2843698210', sku: 'LAMPARA-PANEL-LED-10W', title: 'Lampara Inteligente Panel Led Rgb Wifi Alexa Google Siri 10w 110v Blanco', units_full: 6, sales_last_30d: 0, sales_last_7d: 0, account_id: 2 }
+];
+
+function seedActiveMlListings() {
+  runSql('DELETE FROM ml_full_inventory');
+  ACTIVE_ML_LISTINGS.forEach(item => {
+    saveMlFullInventoryItem(item);
+  });
+  saveDbToFile();
+}
+
 function saveMlFullInventoryItem(item) {
   const dailySales = (item.sales_last_30d || 0) / 30;
   const coverageDays = dailySales > 0 ? (item.units_full / dailySales) : 999;
@@ -1208,7 +1233,7 @@ module.exports = {
   // Local Inventory (Fase 2)
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
   // Stock Full ML (Fase 3)
-  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, isProductDiscontinued,
+  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, isProductDiscontinued, seedActiveMlListings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
 };
