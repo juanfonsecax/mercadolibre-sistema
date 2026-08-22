@@ -70,6 +70,9 @@ async function runImport() {
 
   let importedShipments = 0;
 
+  // Clear existing rows to prevent duplicate/stale rows
+  db.getDb().run('DELETE FROM china_shipments');
+
   // Header ends around line 3 (index 3 is first product row: Lampara 15w)
   for (let i = 3; i < rawLines.length; i++) {
     const line = rawLines[i].trim();
@@ -109,6 +112,13 @@ async function runImport() {
     const daysToArrive = parseInt(cols[30] || 0) || 0;
     const activeTransitUnits = parseInt(cols[31] || 0) || 0;
     
+    let finalWineryDate = chineseWineryDate;
+    let finalEtaDate = etaDate;
+    if (productName.toLowerCase().includes('gafas') && (productName.toLowerCase().includes('se') || productName.toLowerCase().includes('sñr') || productName.toLowerCase().includes('senora'))) {
+      finalWineryDate = '10/07/2026';
+      finalEtaDate = 'October 8, 2026';
+    }
+
     let deliveryStatus = cols[32] || '';
     if (!deliveryStatus) {
       if (rawStatus === 'House') deliveryStatus = 'RECIBIDO EN CASA';
@@ -120,7 +130,7 @@ async function runImport() {
       product_name: productName,
       notion_link: notionLink,
       quantity,
-      chinese_winery_date: chineseWineryDate,
+      chinese_winery_date: finalWineryDate,
       agency,
       supply,
       status: rawStatus,
@@ -144,7 +154,7 @@ async function runImport() {
       total_profit_cop: totalProfitCop,
       total_money_cop: totalMoneyCop,
       payment_card: paymentCard,
-      eta_date: etaDate,
+      eta_date: finalEtaDate,
       days_to_arrive: daysToArrive,
       active_transit_units: activeTransitUnits,
       delivery_status: deliveryStatus
