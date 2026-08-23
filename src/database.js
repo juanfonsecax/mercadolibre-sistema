@@ -1500,20 +1500,32 @@ function getInventoryPlanningIntelligence(accountId = null) {
 
   // Next, map ML Full items
   fullItems.forEach(f => {
-    const masterTitle = (f.master_product_title || f.title).trim();
+    const rawMasterTitle = (f.master_product_title || f.title).trim();
+    let masterTitle = rawMasterTitle;
+
+    // Smart Auto-Merge: Check if rawMasterTitle corresponds to a local_inventory item key
     if (!planningMap[masterTitle]) {
-      planningMap[masterTitle] = {
-        master_title: masterTitle,
-        sku: f.sku || f.ml_item_id,
-        house_stock: f.master_stock_casa || f.stock_casa || 0,
-        full_stock: 0,
-        transit_stock: 0,
-        sales_30d: 0,
-        sales_7d: 0,
-        china_shipments_list: [],
-        linked_listings_count: 0,
-        linked_listings: []
-      };
+      const rLower = rawMasterTitle.toLowerCase();
+      const existingKey = Object.keys(planningMap).find(k => {
+        const kLower = k.toLowerCase();
+        return kLower === rLower || rLower.startsWith(kLower) || kLower.startsWith(rLower);
+      });
+      if (existingKey) {
+        masterTitle = existingKey;
+      } else {
+        planningMap[masterTitle] = {
+          master_title: masterTitle,
+          sku: f.sku || f.ml_item_id,
+          house_stock: f.master_stock_casa || f.stock_casa || 0,
+          full_stock: 0,
+          transit_stock: 0,
+          sales_30d: 0,
+          sales_7d: 0,
+          china_shipments_list: [],
+          linked_listings_count: 0,
+          linked_listings: []
+        };
+      }
     }
     planningMap[masterTitle].full_stock += (f.units_full || 0);
     planningMap[masterTitle].sales_30d += (f.sales_last_30d || 0);
