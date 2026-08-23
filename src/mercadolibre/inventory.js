@@ -14,7 +14,7 @@ async function getSellerItems(accountId = null) {
     const accessToken = await auth.getValidToken(accountId);
     if (!accessToken) return [];
 
-    const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=active&limit=50`;
+    const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=50`;
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
@@ -28,7 +28,7 @@ async function getSellerItems(accountId = null) {
     const data = await response.json();
     const itemIds = data.results || [];
     if (itemIds.length === 0) {
-      console.log(`[ML Inventory] No active items found for seller ${sellerId}`);
+      console.log(`[ML Inventory] No items found for seller ${sellerId}`);
       return [];
     }
 
