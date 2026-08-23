@@ -178,13 +178,18 @@ async function extractAndSaveProductContext(itemId, sales30d = 0, accountId = 1)
   const { itemData, descriptionText } = details;
 
   const pictures = itemData.pictures || [];
-  const imageUrls = pictures.slice(0, 4).map(p => p.secure_url || p.url).filter(Boolean);
+  // Extract up to 10 high-resolution pictures per listing to analyze all infographics & certifications
+  const imageUrls = pictures.slice(0, 10).map(p => p.secure_url || p.url).filter(Boolean);
+
+  console.log(`[ProductContext] Item ${itemId}: Fetching ${imageUrls.length} images for Gemini vision analysis...`);
 
   const imageParts = [];
   for (const imgUrl of imageUrls) {
     const inlineData = await fetchImageInlineData(imgUrl);
     if (inlineData) imageParts.push(inlineData);
   }
+
+  console.log(`[ProductContext] Item ${itemId}: Successfully loaded ${imageParts.length}/${imageUrls.length} images into Base64 for Gemini.`);
 
   const aiContext = await generateMultimodalProductContext(itemData, descriptionText, imageParts);
 

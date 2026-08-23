@@ -292,8 +292,8 @@ async function generateMultimodalProductContext(itemData, descriptionText, image
     ? itemData.attributes.map(a => `- ${a.name}: ${a.value_name || (a.value_struct ? a.value_struct.number : '') || 'N/A'}`).join('\n')
     : 'No especificados';
 
-  const textPrompt = `Eres un experto especialista en productos de comercio electrónico y atención al cliente en Mercado Libre Colombia.
-Analiza detenidamente la siguiente publicación de producto, incluyendo su descripción textual, especificaciones y las imágenes adjuntas.
+  const textPrompt = `Eres un experto especialista en análisis de productos de comercio electrónico y atención al cliente en Mercado Libre Colombia.
+Analiza detenidamente la siguiente publicación de producto, incluyendo su descripción textual, especificaciones y TODAS las imágenes adjuntas (afiches, diagramas, infografías y sellos).
 
 INFORMACIÓN DE LA PUBLICACIÓN:
 - Título: ${itemData.title || 'Sin título'}
@@ -307,24 +307,35 @@ DESCRIPCIÓN COMPLETA DE LA PUBLICACIÓN:
 ${descriptionText || 'Sin descripción textual.'}
 """
 
-INSTRUCCIONES DE ANÁLISIS PROFUNDO (EXTRAER TODO DETALLE VALIOSO DE FOTOS Y TEXTO):
-1. 🛡️ CERTIFICACIONES Y SEGURIDAD: Identifica y destaca explícitamente cualquier certificado de protección de energía, protección contra sobretensión/cortocircuito, certificaciones de calidad (RETIE, CE, RoHS, etc.), resistencia ignífuga y nivel de calidad del producto. Si las imágenes o el texto mencionan que es de grado superior o el mejor del mercado, explicítalo.
-2. 💎 MATERIALES Y RESISTENCIA: Detalla los materiales de construcción (ej: panel de vidrio templado de alta resistencia a rayones y humedad, cuerpo en PC ignífugo).
-3. 🔘 BOTONES Y VARIANTES DE COLOR: Identifica las variantes descritas o mostradas en fotos (ej: 1, 2 o 3 botones / gang, colores blanco y negro) y cómo se diferencian.
-4. ⚙️ ESPECIFICACIONES TÉCNICAS Y CONEXIÓN: Especifica voltajes (110V-240V), corriente máx, frecuencia, potencia por canal, necesidad de cable neutro (o si incluye capacitor para instalación sin neutro), conectividad Wi-Fi 2.4GHz y apps compatibles (Tuya, Smart Life, Alexa, Google Home).
-5. 🛠️ INSTALACIÓN Y CONTENIDO DE LA CAJA: Pasos sencillos de instalación, qué incluye la caja (tornillos, capacitador, manual) y visualización física según las fotos.
-6. ❓ PREGUNTAS FRECUENTES Y ASISTENCIA: Respuestas directas a preguntas probables del comprador resaltando las ventajas superiores de este producto frente a otras publicaciones.
+REGLA CRÍTICA DE ANÁLISIS DE IMÁGENES (OCR E INFOGRAFÍAS A FONDO):
+Inspecciona y LEE TODO EL TEXTO Y LOS DIAGRAMAS DENTRO DE CADA IMAGEN ADJUNTA. Las imágenes contienen los mayores elementos diferenciadores y ventajas competitivas de este producto frente a la competencia.
+
+EXTRAE E INCLUYE OBLIGATORIAMENTE SI APARECEN EN FOTOS O EN TEXTO:
+1. 🛡️ BLINDAJE DE VOLTAJE Y CERTIFICACIONES COLOMBIANAS:
+   - Certificado de Seguridad Eléctrica Colombia (Ej: Certificado co.9019129 o similar).
+   - "Único con blindaje de voltaje en Colombia" para proteger contra la red eléctrica inestable de Colombia, tormentas y picos de voltaje que queman interruptores genéricos.
+   - Componentes de protección interna: Varistor de Protección contra Sobretensiones (MOV), Fusible de Acción Rápida y Filtro de Ruido Eléctrico.
+2. 💎 GRADO DE CALIDAD Y COMPARATIVA (+100.000 CLICS):
+   - Nivel de calidad: "Calidad Premium Certificada - Grado Industrial" con vida útil de más de 100.000 clics (comparado con 20.000 o 40.000 clics de versiones de baja/estándar calidad).
+   - Panel de vidrio templado de alta resistencia a rayones, humedad e impactos.
+   - Borneras de conexión traseras de grado industrial y sellos CE / RoHS / FCC.
+3. 💡 ESTABILIZADOR DE LUZ / CAPACITADOR ANTI-PARPADEO GRATIS:
+   - Inclusión GRATIS del Estabilizador de Luz en la compra (elimina el parpadeo molesto en bombillas LED o luces que quedan encendidas tenue en sistemas sin neutro).
+4. 🔌 TECNOLOGÍA HÍBRIDA UNIVERSAL (CON O SIN CABLE NEUTRO):
+   - Diagrama de cableado e instalación fácil para 1 Gang (1 botón), 2 Gang (2 botones) y 3 Gang (3 botones), en colores Blanco y Negro.
+5. 📲 COMPATIBILIDAD CON SMART HOME:
+   - Conexión Wi-Fi 2.4GHz con Tuya App, Smart Life, Alexa y Google Home.
 
 Devuelve una síntesis estructurada clara con las siguientes secciones:
 
 1. 📌 RESUMEN Y PUNTOS FUERTES DEL PRODUCTO
-2. 🛡️ CERTIFICADOS, SEGURIDAD Y MATERIALES (Protección de energía, vidrio templado, calidad)
-3. ⚙️ ESPECIFICACIONES TÉCNICAS Y COMPATIBILIDAD (Apps, neutro, capacitador, voltajes)
-4. 🔘 VARIANTES (1, 2, 3 botones, colores blanco/negro)
-5. 📷 DETALLES VISUALES Y CONTENIDO DE LA CAJA (DE LAS FOTOS)
-6. ❓ PREGUNTAS FRECUENTES Y ASISTENCIA POST-VENTA
+2. 🛡️ CERTIFICADOS, BLINDAJE Y SEGURIDAD ELÉCTRICA (Certificado Colombia co.9019129, MOV, Fusible, Filtro)
+3. 💎 GRADO DE CALIDAD Y MATERIALES (+100.000 Clics industrial, Vidrio templado)
+4. 🔌 INSTALACIÓN Y COMPATIBILIDAD (Con/Sin neutro, Estabilizador anti-parpadeo gratis incluido, 1/2/3 botones, Blanco/Negro)
+5. 📷 DETALLES VISUALES DE LAS FOTOS E INFOGRAFÍAS
+6. ❓ PREGUNTAS FRECUENTES Y RESPUESTAS RECOMENDADAS
 
-Responde en texto claro en español de Colombia, estructurado y directo.`;
+Responde en texto claro en español de Colombia, estructurado y muy completo.`;
 
   try {
     const contents = [textPrompt, ...imageParts];
