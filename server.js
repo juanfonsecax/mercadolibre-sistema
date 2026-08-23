@@ -572,6 +572,18 @@ app.post('/api/inventory/full/sync', async (req, res) => {
   }
 });
 
+app.post('/api/inventory/full/sales30d', (req, res) => {
+  try {
+    const { ml_item_id, sales_last_30d } = req.body;
+    if (!ml_item_id) return res.status(400).json({ error: 'ml_item_id es requerido' });
+    db.updateMlItemSales30d(ml_item_id, sales_last_30d);
+    db.logActivity('update_sales30d', `Ventas 30d actualizadas a ${sales_last_30d} para ${ml_item_id}`, null, null);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/inventory/alerts', (req, res) => {
   try {
     const { accountId } = req.query;

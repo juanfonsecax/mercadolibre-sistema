@@ -1864,7 +1864,10 @@ async function loadMlFullInventory() {
             <td>${masterCell}</td>
             <td><strong>${f.units_full}</strong> unds</td>
             <td><strong>${houseStock}</strong> unds</td>
-            <td>${f.sales_last_30d || 0} unds</td>
+            <td>
+              <strong>${f.sales_last_30d || 0}</strong> unds 
+              <button class="btn btn-sm" onclick="promptEditSales30d('${f.ml_item_id}', ${f.sales_last_30d || 0})" style="padding:2px 4px; font-size:0.75rem; margin-left:4px;" title="Editar ventas 30d manual">✏️</button>
+            </td>
             <td><strong>${cov.toFixed(1)} días</strong></td>
             <td>${covStatus}</td>
             <td style="display:flex; gap:4px; flex-wrap:wrap;">
@@ -1879,6 +1882,31 @@ async function loadMlFullInventory() {
     document.getElementById('mlFullInventoryTable').innerHTML = html;
   } catch (error) {
     showToast('Error cargando stock Full Mercado Libre: ' + error.message, 'error');
+  }
+}
+
+async function promptEditSales30d(mlItemId, currentSales) {
+  const newVal = prompt(`Modificar ventas de los últimos 30 días para la publicación ${mlItemId}:`, currentSales);
+  if (newVal === null) return;
+  const parsed = parseInt(newVal);
+  if (isNaN(parsed) || parsed < 0) {
+    showToast('Ingresa un número de ventas válido (>= 0)', 'error');
+    return;
+  }
+
+  try {
+    await apiFetch('/api/inventory/full/sales30d', {
+      method: 'POST',
+      body: JSON.stringify({ ml_item_id: mlItemId, sales_last_30d: parsed })
+    });
+    showToast(`✅ Ventas 30d actualizadas a ${parsed} unds`, 'success');
+    if (typeof loadInventoryData === 'function') {
+      loadInventoryData();
+    } else {
+      loadMlFullInventory();
+    }
+  } catch (err) {
+    showToast('Error actualizando ventas 30d: ' + err.message, 'error');
   }
 }
 

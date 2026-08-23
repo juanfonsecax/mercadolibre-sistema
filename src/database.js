@@ -1287,10 +1287,13 @@ const ACTIVE_ML_LISTINGS = [
 
 function seedActiveMlListings() {
   const existing = queryOne('SELECT COUNT(*) as count FROM ml_full_inventory');
-  if (existing && existing.count > 0) return;
-  ACTIVE_ML_LISTINGS.forEach(item => {
-    saveMlFullInventoryItem(item);
-  });
+  if (!existing || existing.count === 0) {
+    ACTIVE_ML_LISTINGS.forEach(item => {
+      saveMlFullInventoryItem(item);
+    });
+  }
+  // Ensure Enchufe Inteligente has 14 sales in 30d
+  runSql('UPDATE ml_full_inventory SET sales_last_30d = 14 WHERE ml_item_id = ?', ['MCO5914426965804815']);
   saveDbToFile();
 }
 
@@ -1306,7 +1309,7 @@ function saveMlFullInventoryItem(item) {
        title = excluded.title,
        units_full = excluded.units_full,
        sales_last_7d = excluded.sales_last_7d,
-       sales_last_30d = excluded.sales_last_30d,
+       sales_last_30d = CASE WHEN excluded.sales_last_30d > 0 THEN excluded.sales_last_30d ELSE ml_full_inventory.sales_last_30d END,
        coverage_days = excluded.coverage_days,
        last_sync_at = datetime('now')`,
     [item.account_id, item.ml_item_id, item.sku || null, item.title, item.units_full || 0, item.sales_last_7d || 0, item.sales_last_30d || 0, coverageDays]
@@ -1575,6 +1578,23 @@ function saveProductPromotion(promo) {
   }
 }
 
+function updateMlItemSales30d(mlItemId, sales30d) {
+  const sales = Math.max(0, parseInt(sales30d) || 0);
+  const item = queryOne('SELECT units_full FROM ml_full_inventory WHERE ml_item_id = ?', [mlItemId]);
+  const unitsFull = item ? item.units_full : 0;
+  const coverageDays = sales > 0 ? (unitsFull / (sales / 30)) : 999;
+
+  runSql(
+    `UPDATE ml_full_inventory 
+     SET sales_last_30d = ?, 
+         coverage_days = ?, 
+         last_sync_at = datetime('now') 
+     WHERE ml_item_id = ?`,
+    [sales, coverageDays, mlItemId]
+  );
+  saveDbToFile();
+}
+
 function deleteProductPromotion(id) {
   runSql('DELETE FROM product_promotions WHERE id = ?', [id]);
 }
@@ -1605,9 +1625,8 @@ module.exports = {
   // Local Inventory (Fase 2)
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
   // Stock Full ML (Fase 3) & Planning Intelligence
-  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, getInventoryPlanningIntelligence, isProductDiscontinued, seedActiveMlListings,
+  getMlFullInventory, saveMlFullInventoryItem, updateMlItemSales30d, getReorderAlerts, getInventoryPlanningIntelligence, isProductDiscontinued, seedActiveMlListings,
   saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
 };
-
