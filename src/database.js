@@ -371,17 +371,41 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS ml_full_inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account_id INTEGER NOT NULL,
-      ml_item_id TEXT NOT NULL,
+      ml_item_id TEXT NOT NULL UNIQUE,
       sku TEXT,
       title TEXT NOT NULL,
       units_full INTEGER DEFAULT 0,
       sales_last_7d INTEGER DEFAULT 0,
       sales_last_30d INTEGER DEFAULT 0,
       coverage_days REAL DEFAULT 0, -- Calculado: units_full / (sales_last_30d / 30)
-      last_sync_at TEXT DEFAULT (datetime('now')),
-      UNIQUE(account_id, ml_item_id)
+      last_sync_at TEXT DEFAULT (datetime('now'))
     )
   `);
+
+  // Clean up duplicate ml_item_id rows (keep the one with highest sales or most recent)
+  try {
+    const dupes = db.exec(`
+      SELECT ml_item_id, COUNT(*) as cnt FROM ml_full_inventory
+      GROUP BY ml_item_id HAVING cnt > 1
+    `);
+    if (dupes && dupes.length > 0 && dupes[0].values) {
+      dupes[0].values.forEach(([mlItemId]) => {
+        // Keep the row with the highest sales_last_30d, delete others
+        db.run(`
+          DELETE FROM ml_full_inventory WHERE ml_item_id = ? AND id NOT IN (
+            SELECT id FROM ml_full_inventory WHERE ml_item_id = ?
+            ORDER BY sales_last_30d DESC, last_sync_at DESC LIMIT 1
+          )
+        `, [mlItemId, mlItemId]);
+      });
+      console.log('[DB] Cleaned up duplicate ml_full_inventory entries');
+    }
+  } catch (e) {
+    // Ignore if no dupes
+  }
+
+  // Ensure UNIQUE index exists on ml_item_id (for databases created before this fix)
+  try { db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_item_id_unique ON ml_full_inventory(ml_item_id)'); } catch(e) {}
 
   // ── Modulo de Vinculación Multi-Publicaciones <-> Producto Físico Padre ──
   db.run(`
@@ -1137,7 +1161,7 @@ function getMlFullInventory(accountId = null) {
     sql += ' AND f.account_id = ?';
     params.push(accountId);
   }
-  sql += ' ORDER BY f.units_full ASC';
+  sql += ' GROUP BY f.ml_item_id ORDER BY f.units_full ASC';
   const items = queryAll(sql, params);
   return items.filter(f => !isProductDiscontinued(f.title));
 }
@@ -1352,7 +1376,8 @@ function saveMlFullInventoryItem(item) {
   runSql(
     `INSERT INTO ml_full_inventory (account_id, ml_item_id, sku, title, units_full, sales_last_7d, sales_last_30d, coverage_days, last_sync_at) 
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-     ON CONFLICT(account_id, ml_item_id) DO UPDATE SET
+     ON CONFLICT(ml_item_id) DO UPDATE SET
+       account_id = excluded.account_id,
        sku = excluded.sku,
        title = excluded.title,
        units_full = excluded.units_full,
