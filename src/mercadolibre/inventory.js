@@ -9,10 +9,7 @@ async function getSellerItems(accountId = null) {
     const account = db.getAccountById(accountId);
     const tokenObj = db.getToken(accountId);
     const sellerId = (account && account.seller_id) || (tokenObj && tokenObj.seller_id);
-    if (!sellerId) {
-      console.warn('[ML Inventory] No seller_id found for account:', accountId);
-      return [];
-    }
+    if (!sellerId) return [];
 
     const accessToken = await auth.getValidToken(accountId);
     if (!accessToken) return [];
