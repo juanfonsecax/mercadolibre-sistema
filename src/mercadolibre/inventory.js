@@ -14,19 +14,23 @@ async function getSellerItems(accountId = null) {
     const accessToken = await auth.getValidToken(accountId);
     if (!accessToken) return [];
 
-    const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=50`;
+    const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=active&limit=50`;
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
 
     if (!response.ok) {
-      console.warn(`[ML Inventory] Search items failed: ${response.status}`);
+      const errText = await response.text();
+      console.warn(`[ML Inventory] Search items failed (${response.status}): ${errText}`);
       return [];
     }
 
     const data = await response.json();
     const itemIds = data.results || [];
-    if (itemIds.length === 0) return [];
+    if (itemIds.length === 0) {
+      console.log(`[ML Inventory] No active items found for seller ${sellerId}`);
+      return [];
+    }
 
     // Multiget items details
     const itemsUrl = `https://api.mercadolibre.com/items?ids=${itemIds.slice(0, 50).join(',')}`;
