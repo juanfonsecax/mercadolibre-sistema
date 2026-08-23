@@ -1779,7 +1779,11 @@ async function saveLinkProductFromModal() {
 
     showToast('¡Publicación vinculada al producto físico permanentemente! 🔗', 'success');
     closeLinkProductModal();
-    loadMlFullInventory();
+    if (typeof loadInventoryData === 'function') {
+      loadInventoryData();
+    } else {
+      loadMlFullInventory();
+    }
   } catch (error) {
     showToast('Error vinculando producto: ' + error.message, 'error');
   }
@@ -1793,7 +1797,11 @@ async function unlinkProductFromModal() {
     await apiFetch(`/api/inventory/mappings/${ml_item_id}`, { method: 'DELETE' });
     showToast('Vinculación removida', 'info');
     closeLinkProductModal();
-    loadMlFullInventory();
+    if (typeof loadInventoryData === 'function') {
+      loadInventoryData();
+    } else {
+      loadMlFullInventory();
+    }
   } catch (error) {
     showToast('Error desvinculando: ' + error.message, 'error');
   }
