@@ -347,6 +347,16 @@ app.post('/api/knowledge/import-past-questions', async (req, res) => {
   }
 });
 
+app.post('/api/knowledge/web-research', async (req, res) => {
+  try {
+    const webResearch = require('./src/ai/web-research');
+    const added = await webResearch.runWebResearchEnrichment(req.body.accountId || null);
+    res.json({ success: true, added });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Activity Log & Stats ---
 app.get('/api/activity', (req, res) => {
   try {

@@ -903,6 +903,20 @@ async function importPastQuestionsToKnowledge() {
   }
 }
 
+async function triggerWebResearchEnrichment() {
+  try {
+    showToast('🌐 Ejecutando enriquecimiento con Investigación Web (Web Research)...', 'info');
+    const data = await apiFetch('/api/knowledge/web-research', {
+      method: 'POST',
+      body: JSON.stringify({ accountId: activeAccountId || null }),
+    });
+    showToast(`🚀 ¡Base de Conocimiento enriquecida con ${data.added} temas técnicos de investigación web!`, 'success');
+    loadKnowledge();
+  } catch (error) {
+    showToast('Error en investigación web: ' + error.message, 'error');
+  }
+}
+
 // ══════════════════════════════════════════
 // Statistics
 // ══════════════════════════════════════════

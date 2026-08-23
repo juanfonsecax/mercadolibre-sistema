@@ -174,6 +174,14 @@ function seedDefaults() {
 
   defaults.forEach(item => db.saveKnowledge(item));
   console.log('[KnowledgeBase] Default knowledge seeded');
+
+  // Always run web research enrichment for smart domotics knowledge
+  try {
+    const webResearch = require('./web-research');
+    webResearch.runWebResearchEnrichment();
+  } catch (e) {
+    console.error('[KnowledgeBase] Error running web research enrichment:', e.message);
+  }
 }
 
 /**
@@ -245,5 +253,6 @@ module.exports = {
   getKnowledgeForClaims,
   importProductToKnowledge,
   importPastQuestionsToKnowledge,
+  runWebResearchEnrichment: require('./web-research').runWebResearchEnrichment,
   seedDefaults,
 };
