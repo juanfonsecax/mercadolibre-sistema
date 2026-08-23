@@ -679,10 +679,55 @@
         </div>
       </div>
 
-      <!-- Sub-Tab Content 4: Alertas de Reorden -->
+      <!-- Sub-Tab Content 4: Alertas & Planificación de Compras China -->
       <div class="inventory-subcontent" id="subtab-alerts">
-        <div class="alerts-grid" id="reorderAlertsGrid">
-          <div class="empty-state"><p>Cargando alertas de reorden...</p></div>
+        <!-- Summary Cards Row -->
+        <div class="stats-grid mb-3">
+          <div class="stat-card border-left-critical">
+            <div class="stat-icon">🚨</div>
+            <div class="stat-info">
+              <span class="stat-value" id="planningCriticalCount">0</span>
+              <span class="stat-label">Pedidos Urgentes a China hoy</span>
+            </div>
+          </div>
+          <div class="stat-card border-left-warning">
+            <div class="stat-icon">🟡</div>
+            <div class="stat-info">
+              <span class="stat-value" id="planningWarningCount">0</span>
+              <span class="stat-label">Pedidos Próximos (30 días)</span>
+            </div>
+          </div>
+          <div class="stat-card border-left-primary">
+            <div class="stat-icon">📦</div>
+            <div class="stat-info">
+              <span class="stat-value" id="planningTotalProducts">0</span>
+              <span class="stat-label">Productos Físicos Monitoreados</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container card">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <h3>📊 Planificación Inteligente de Pedidos (Lead Time Tránsito: 105 días)</h3>
+            <span class="badge-secondary">🇨🇳 Producción + Tránsito Marítimo: 105d | Ciclo Objetivo: 120d</span>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Producto Físico (Bodega)</th>
+                <th>Stock Actual (Casa + Full)</th>
+                <th>En Tránsito China</th>
+                <th>Velocidad (Unds/Día)</th>
+                <th>Días Cobertura</th>
+                <th>Punto Reorden (ROP)</th>
+                <th>Pedido Sugerido a China</th>
+                <th>Estado & Acción</th>
+              </tr>
+            </thead>
+            <tbody id="reorderAlertsGrid">
+              <tr><td colspan="8" class="empty-cell">Cargando planificación de compras...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>

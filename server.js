@@ -550,6 +550,17 @@ app.get('/api/inventory/full', (req, res) => {
   }
 });
 
+app.get('/api/inventory/planning', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : null;
+    const planning = db.getInventoryPlanningIntelligence(accId);
+    res.json({ planning });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/inventory/full/sync', async (req, res) => {
   try {
     const { accountId } = req.body;

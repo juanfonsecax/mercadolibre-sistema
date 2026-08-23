@@ -1932,37 +1932,74 @@ async function submitTransferToFull() {
   }
 }
 
-// --- Subtab 4: Alertas & Reorden ---
+// --- Subtab 4: Alertas & Planificación de Compras China ---
 async function loadReorderAlerts() {
   try {
-    const data = await apiFetch(`/api/inventory/alerts?accountId=${activeAccountId}`);
-    const alerts = data.alerts || [];
+    const data = await apiFetch(`/api/inventory/planning?accountId=${activeAccountId}`);
+    const items = data.planning || [];
+
+    let criticalCount = 0;
+    let warningCount = 0;
 
     let html = '';
-    if (alerts.length === 0) {
-      html = '<div class="empty-state">🎉 ¡Excelente! No hay alertas de reabastecimiento ni quiebre de stock en este momento.</div>';
+    if (items.length === 0) {
+      html = '<tr><td colspan="8" class="empty-cell">No hay datos suficientes para calcular la planificación de compras</td></tr>';
     } else {
-      alerts.forEach(a => {
-        const isCrit = a.severity === 'critical';
+      items.forEach(p => {
+        if (p.status === 'CRITICAL_ORDER_NOW') criticalCount++;
+        if (p.status === 'WARNING_ORDER_SOON') warningCount++;
+
+        const linkedBadge = p.linked_listings_count > 0 
+          ? `<br><small class="text-muted">🛍️ ${p.linked_listings_count} publicación(es) ML vinculada(s)</small>`
+          : `<br><small class="text-muted" style="font-style:italic;">Producto físico único</small>`;
+
+        const orderQtyDisplay = p.suggested_po_quantity > 0 
+          ? `<strong class="text-critical" style="font-size:1.1rem;">${p.suggested_po_quantity.toLocaleString('es-CO')} unds</strong>` 
+          : `<span class="text-muted">0 unds</span>`;
+
         html += `
-          <div class="alert-card ${isCrit ? 'critical' : ''}">
-            <div>
-              <strong>${isCrit ? '🚨 CRÍTICO' : '⚠️ ALERTA'}: ${escapeHtml(a.title)}</strong> (SKU: <code>${escapeHtml(a.sku)}</code>)<br>
-              <span class="text-secondary">${escapeHtml(a.message)}</span>
-            </div>
-            <div>
-              <button class="btn btn-sm ${isCrit ? 'btn-primary' : 'btn-secondary'}" onclick="handleAlertAction('${a.type}', '${escapeAttr(a.sku)}')">
-                ${a.type === 'reorder_china' ? '🚢 Pedir a China' : '📦 Transferir a Full'}
-              </button>
-            </div>
-          </div>
+          <tr>
+            <td>
+              <strong>📦 ${escapeHtml(p.master_title)}</strong>
+              ${linkedBadge}
+            </td>
+            <td>
+              <strong>${p.total_current_stock}</strong> unds<br>
+              <small class="text-muted">(Casa: ${p.house_stock} | Full: ${p.full_stock})</small>
+            </td>
+            <td>
+              <strong>${p.transit_stock}</strong> unds<br>
+              <small class="text-muted">${p.transit_stock > 0 ? '🚢 Viniendo de China' : 'Sin pedidos en camino'}</small>
+            </td>
+            <td>
+              <strong>${p.adjusted_velocity_daily}</strong> /día<br>
+              <small class="text-muted">${p.sales_30d} unds en 30d (Ajustado)</small>
+            </td>
+            <td>
+              <strong>${p.days_coverage_remaining} días</strong>
+            </td>
+            <td>
+              <strong>${p.reorder_point_units} unds</strong><br>
+              <small class="text-muted">(Garantiza 105d tránsito)</small>
+            </td>
+            <td>
+              ${orderQtyDisplay}
+            </td>
+            <td>
+              <span class="${p.badge_class}" style="font-size:0.85rem; padding:4px 8px; display:inline-block; margin-bottom:4px;">${p.status_label}</span><br>
+              <button class="btn btn-sm btn-primary" onclick="openChinaShipmentModal({ product_name: '${escapeAttr(p.master_title)}', quantity: ${p.suggested_po_quantity || 100} })">🚢 Crear Pedido a China</button>
+            </td>
+          </tr>
         `;
       });
     }
 
     document.getElementById('reorderAlertsGrid').innerHTML = html;
+    document.getElementById('planningCriticalCount').textContent = criticalCount;
+    document.getElementById('planningWarningCount').textContent = warningCount;
+    document.getElementById('planningTotalProducts').textContent = items.length;
   } catch (error) {
-    showToast('Error cargando alertas: ' + error.message, 'error');
+    showToast('Error cargando planificación de compras: ' + error.message, 'error');
   }
 }
 

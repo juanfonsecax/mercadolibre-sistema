@@ -1330,6 +1330,141 @@ function isProductDiscontinued(nameOrTitle) {
   return DISCONTINUED_KEYWORDS.some(k => str.includes(k));
 }
 
+/**
+ * Advanced Inventory & PO Reorder Intelligence for China Imports
+ */
+function getInventoryPlanningIntelligence(accountId = null) {
+  const localItems = getLocalInventory(accountId).filter(i => !isProductDiscontinued(i.title));
+  const fullItems = getMlFullInventory(accountId).filter(f => !isProductDiscontinued(f.title));
+  const chinaShipments = getChinaShipments().filter(c => c.delivery_status !== 'Entregado');
+
+  const planningMap = {};
+
+  // First, seed map with Local House Products
+  localItems.forEach(item => {
+    const key = item.title.trim();
+    if (!planningMap[key]) {
+      planningMap[key] = {
+        master_title: key,
+        sku: item.sku,
+        house_stock: item.units_house || 0,
+        full_stock: 0,
+        transit_stock: 0,
+        sales_30d: 0,
+        linked_listings_count: 0,
+        linked_listings: []
+      };
+    } else {
+      planningMap[key].house_stock += (item.units_house || 0);
+    }
+  });
+
+  // Next, map ML Full items
+  fullItems.forEach(f => {
+    const masterTitle = (f.master_product_title || f.title).trim();
+    if (!planningMap[masterTitle]) {
+      planningMap[masterTitle] = {
+        master_title: masterTitle,
+        sku: f.sku || f.ml_item_id,
+        house_stock: f.master_stock_casa || f.stock_casa || 0,
+        full_stock: 0,
+        transit_stock: 0,
+        sales_30d: 0,
+        linked_listings_count: 0,
+        linked_listings: []
+      };
+    }
+    planningMap[masterTitle].full_stock += (f.units_full || 0);
+    planningMap[masterTitle].sales_30d += (f.sales_last_30d || 0);
+    planningMap[masterTitle].linked_listings_count += 1;
+    planningMap[masterTitle].linked_listings.push({
+      ml_item_id: f.ml_item_id,
+      title: f.title,
+      units_full: f.units_full,
+      sales_30d: f.sales_last_30d
+    });
+  });
+
+  // Next, add active China transit stock matching by title keyword
+  chinaShipments.forEach(c => {
+    const cName = (c.product_name || '').trim().toLowerCase();
+    if (!cName) return;
+    for (const key of Object.keys(planningMap)) {
+      if (key.toLowerCase().includes(cName) || cName.includes(key.toLowerCase())) {
+        planningMap[key].transit_stock += (c.quantity || c.active_transit_units || 0);
+      }
+    }
+  });
+
+  const LEAD_TIME_DAYS = 105; // 15d production + 90d transit China -> Colombia
+  const COVERAGE_CYCLE_DAYS = 120; // 4-month inventory cycle target
+  const SAFETY_STOCK_DAYS = 15; // 15d safety buffer
+
+  const planningList = Object.values(planningMap).map(p => {
+    const totalCurrentStock = p.house_stock + p.full_stock;
+    const totalAvailablePosition = totalCurrentStock + p.transit_stock;
+
+    // Stockout-Adjusted Sales Velocity
+    let activeDays = 30;
+    if (totalCurrentStock === 0 && p.sales_30d > 0) {
+      activeDays = Math.max(7, Math.min(25, p.sales_30d));
+    }
+    const adjustedVelocity = p.sales_30d > 0 ? (p.sales_30d / activeDays) : 0.1;
+
+    // Reorder Point (ROP)
+    const reorderPointUnits = Math.ceil((adjustedVelocity * LEAD_TIME_DAYS) + (adjustedVelocity * SAFETY_STOCK_DAYS));
+
+    // Target Inventory Level
+    const targetInventoryLevel = Math.ceil(adjustedVelocity * (LEAD_TIME_DAYS + COVERAGE_CYCLE_DAYS));
+
+    // Suggested PO Quantity
+    const suggestedPoQuantity = Math.max(0, Math.ceil(targetInventoryLevel - totalAvailablePosition));
+
+    // Coverage Days Remaining
+    const daysCoverageRemaining = adjustedVelocity > 0 ? (totalAvailablePosition / adjustedVelocity) : 999;
+
+    // Days Until PO Trigger
+    const daysUntilPoTrigger = Math.max(0, Math.round(daysCoverageRemaining - LEAD_TIME_DAYS));
+
+    let status = 'OPTIMAL';
+    let statusLabel = '🟢 STOCK SUFICIENTE';
+    let badgeClass = 'badge-success';
+
+    if (totalAvailablePosition < reorderPointUnits || daysCoverageRemaining <= LEAD_TIME_DAYS) {
+      status = 'CRITICAL_ORDER_NOW';
+      statusLabel = '🚨 PEDIR A CHINA HOY';
+      badgeClass = 'badge-critical';
+    } else if (daysUntilPoTrigger <= 30) {
+      status = 'WARNING_ORDER_SOON';
+      statusLabel = `🟡 PEDIR EN ${daysUntilPoTrigger} DÍAS`;
+      badgeClass = 'badge-warning';
+    }
+
+    return {
+      ...p,
+      total_current_stock: totalCurrentStock,
+      total_available_position: totalAvailablePosition,
+      adjusted_velocity_daily: parseFloat(adjustedVelocity.toFixed(2)),
+      reorder_point_units: reorderPointUnits,
+      target_inventory_level: targetInventoryLevel,
+      suggested_po_quantity: suggestedPoQuantity,
+      days_coverage_remaining: parseFloat(daysCoverageRemaining.toFixed(1)),
+      days_until_po_trigger: daysUntilPoTrigger,
+      status,
+      status_label: statusLabel,
+      badge_class: badgeClass
+    };
+  });
+
+  planningList.sort((a, b) => {
+    if (a.status === 'CRITICAL_ORDER_NOW' && b.status !== 'CRITICAL_ORDER_NOW') return -1;
+    if (a.status !== 'CRITICAL_ORDER_NOW' && b.status === 'CRITICAL_ORDER_NOW') return 1;
+    return a.days_coverage_remaining - b.days_coverage_remaining;
+  });
+
+  return planningList;
+}
+
 function getReorderAlerts(accountId = null) {
   // Reorder alerts for Local House Stock (under min_stock_alert, excluding discontinued items)
   const localAlerts = getLocalInventory(accountId)
@@ -1428,8 +1563,8 @@ module.exports = {
   getChinaShipments, saveChinaShipment, deleteChinaShipment,
   // Local Inventory (Fase 2)
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
-  // Stock Full ML (Fase 3)
-  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, isProductDiscontinued, seedActiveMlListings,
+  // Stock Full ML (Fase 3) & Planning Intelligence
+  getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, getInventoryPlanningIntelligence, isProductDiscontinued, seedActiveMlListings,
   saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
