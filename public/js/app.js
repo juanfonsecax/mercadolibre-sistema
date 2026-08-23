@@ -1739,10 +1739,11 @@ async function openLinkProductModal(mlItemId, title, currentMasterTitle = '') {
   document.getElementById('linkMasterCustom').value = '';
 
   const selectElem = document.getElementById('linkMasterSelect');
-  selectElem.innerHTML = '<option value="">-- Cargando bodega... --</option>';
+  selectElem.innerHTML = '<option value="">-- Cargando productos de bodega... --</option>';
 
   try {
-    const data = await apiFetch(`/api/inventory/local?accountId=${activeAccountId}`);
+    // Query all house inventory items across accounts so user can link any bodega product
+    const data = await apiFetch('/api/inventory/local');
     const localItems = data.inventory || [];
     let options = '<option value="">-- Seleccionar de Bodega Casa --</option>';
     localItems.forEach(i => {
@@ -1768,7 +1769,7 @@ async function saveLinkProductFromModal() {
 
   const master_product_title = customVal || selectVal;
   if (!master_product_title) {
-    return showToast('Selecciona o escribe el nombre del producto físico', 'warning');
+    return showToast('Selecciona un producto de la bodega o escribe el nombre del producto físico', 'warning');
   }
 
   try {
@@ -1777,7 +1778,27 @@ async function saveLinkProductFromModal() {
       body: JSON.stringify({ ml_item_id, master_product_title })
     });
 
-    showToast('¡Publicación vinculada al producto físico permanentemente! 🔗', 'success');
+    // If custom typed title does not exist in local inventory, create it in Bodega Casa
+    if (customVal) {
+      try {
+        const dataLocal = await apiFetch('/api/inventory/local');
+        const exists = (dataLocal.inventory || []).some(i => i.title.toLowerCase() === customVal.toLowerCase());
+        if (!exists) {
+          await apiFetch('/api/inventory/local', {
+            method: 'POST',
+            body: JSON.stringify({
+              title: customVal,
+              units_house: 50,
+              unit_cost_cop: 25000,
+              min_stock_alert: 10,
+              location: 'Bodega Principal'
+            })
+          });
+        }
+      } catch (e) {}
+    }
+
+    showToast(`¡Publicación vinculada a "${master_product_title}" permanentemente! 🔗`, 'success');
     closeLinkProductModal();
     if (typeof loadInventoryData === 'function') {
       loadInventoryData();
