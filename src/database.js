@@ -6,6 +6,8 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'bot.db');
 const MAPPINGS_JSON_PATH = path.join(__dirname, '..', 'data', 'product_mappings.json');
 const CHINA_JSON_PATH = path.join(__dirname, '..', 'data', 'china_shipments.json');
 const LOCAL_JSON_PATH = path.join(__dirname, '..', 'data', 'local_inventory.json');
+const TOKENS_JSON_PATH = path.join(__dirname, '..', 'data', 'tokens.json');
+const ML_SALES_JSON_PATH = path.join(__dirname, '..', 'data', 'ml_sales.json');
 
 let db = null;
 let SQL = null;
@@ -393,6 +395,8 @@ function initSchema() {
   restoreChinaShipmentsFromJsonFile();
   restoreLocalInventoryFromJsonFile();
   restoreProductMappingsFromJsonFile();
+  restoreTokensFromJsonFile();
+  restoreMlSalesFromJsonFile();
 
   // ── Modulo de Ofertas & Margen ──
   db.run(`
@@ -529,6 +533,37 @@ function saveToken(accountId, tokenData) {
     'INSERT INTO tokens (account_id, access_token, refresh_token, expires_at, user_id, seller_id) VALUES (?, ?, ?, ?, ?, ?)',
     [accountId, tokenData.access_token, tokenData.refresh_token, tokenData.expires_at, tokenData.user_id || null, tokenData.seller_id || null]
   );
+  saveTokensToJsonFile();
+}
+
+function saveTokensToJsonFile() {
+  try {
+    const dir = path.dirname(TOKENS_JSON_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tokens = queryAll('SELECT * FROM tokens');
+    fs.writeFileSync(TOKENS_JSON_PATH, JSON.stringify(tokens, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[DB] Error saving tokens.json:', e.message);
+  }
+}
+
+function restoreTokensFromJsonFile() {
+  try {
+    if (fs.existsSync(TOKENS_JSON_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TOKENS_JSON_PATH, 'utf-8'));
+      data.forEach(t => {
+        runSql('INSERT OR REPLACE INTO tokens (account_id, access_token, refresh_token, expires_at, user_id, seller_id) VALUES (?, ?, ?, ?, ?, ?)',
+          [t.account_id, t.access_token, t.refresh_token, t.expires_at, t.user_id, t.seller_id]);
+        if (t.seller_id || t.user_id) {
+          runSql('UPDATE accounts SET seller_id = ?, user_id = ? WHERE id = ?',
+            [t.seller_id || null, t.user_id || null, t.account_id]);
+        }
+      });
+      console.log(`[DB] Restored ${data.length} tokens from tokens.json`);
+    }
+  } catch (e) {
+    console.error('[DB] Error restoring tokens.json:', e.message);
+  }
 }
 
 function getToken(accountId) {
@@ -1592,7 +1627,39 @@ function updateMlItemSales30d(mlItemId, sales30d) {
      WHERE ml_item_id = ?`,
     [sales, coverageDays, mlItemId]
   );
+  saveMlSalesToJsonFile();
   saveDbToFile();
+}
+
+function saveMlSalesToJsonFile() {
+  try {
+    const dir = path.dirname(ML_SALES_JSON_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const items = queryAll('SELECT ml_item_id, sales_last_30d, sales_last_7d FROM ml_full_inventory WHERE sales_last_30d > 0');
+    const salesMap = {};
+    items.forEach(i => { salesMap[i.ml_item_id] = { sales_last_30d: i.sales_last_30d, sales_last_7d: i.sales_last_7d || 0 }; });
+    fs.writeFileSync(ML_SALES_JSON_PATH, JSON.stringify(salesMap, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[DB] Error saving ml_sales.json:', e.message);
+  }
+}
+
+function restoreMlSalesFromJsonFile() {
+  try {
+    if (fs.existsSync(ML_SALES_JSON_PATH)) {
+      const salesMap = JSON.parse(fs.readFileSync(ML_SALES_JSON_PATH, 'utf-8'));
+      for (const [mlItemId, s] of Object.entries(salesMap)) {
+        // Only overwrite if the DB has 0 (don't overwrite fresh API data)
+        runSql(
+          `UPDATE ml_full_inventory SET sales_last_30d = ?, sales_last_7d = ? WHERE ml_item_id = ? AND sales_last_30d = 0`,
+          [s.sales_last_30d || 0, s.sales_last_7d || 0, mlItemId]
+        );
+      }
+      console.log('[DB] Restored ML sales data from ml_sales.json');
+    }
+  } catch (e) {
+    console.error('[DB] Error restoring ml_sales.json:', e.message);
+  }
 }
 
 function deleteProductPromotion(id) {
@@ -1600,7 +1667,7 @@ function deleteProductPromotion(id) {
 }
 
 module.exports = {
-  initDb, getDb, saveDbToFile, reloadDbFromFile,
+  initDb, getDb, saveDbToFile, reloadDbFromFile, queryOne, queryAll,
   // Accounts
   saveAccount, getAccounts, getAccountById, getAccountByName, updateAccountSellerInfo, deleteAccount,
   // Tokens
@@ -1625,7 +1692,7 @@ module.exports = {
   // Local Inventory (Fase 2)
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
   // Stock Full ML (Fase 3) & Planning Intelligence
-  getMlFullInventory, saveMlFullInventoryItem, updateMlItemSales30d, getReorderAlerts, getInventoryPlanningIntelligence, isProductDiscontinued, seedActiveMlListings,
+  getMlFullInventory, saveMlFullInventoryItem, updateMlItemSales30d, saveMlSalesToJsonFile, getReorderAlerts, getInventoryPlanningIntelligence, isProductDiscontinued, seedActiveMlListings,
   saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
