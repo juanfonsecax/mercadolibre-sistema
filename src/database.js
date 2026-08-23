@@ -999,13 +999,23 @@ function deleteChinaShipment(id) {
 // ── Fase 2: Stock Casa / Bodega Local Operations ──
 
 function getLocalInventory(accountId = null) {
-  let sql = 'SELECT i.*, a.name as account_name FROM local_inventory i LEFT JOIN accounts a ON i.account_id = a.id WHERE 1=1';
+  let sql = `
+    SELECT i.*, 
+           a.name as account_name,
+           COUNT(DISTINCT m.ml_item_id) as linked_ml_count,
+           COALESCE(SUM(f.units_full), 0) as total_full_stock
+    FROM local_inventory i 
+    LEFT JOIN accounts a ON i.account_id = a.id 
+    LEFT JOIN product_mappings m ON i.title = m.master_product_title
+    LEFT JOIN ml_full_inventory f ON m.ml_item_id = f.ml_item_id
+    WHERE 1=1
+  `;
   const params = [];
   if (accountId) {
     sql += ' AND i.account_id = ?';
     params.push(accountId);
   }
-  sql += ' ORDER BY i.sku ASC';
+  sql += ' GROUP BY i.id ORDER BY i.title ASC';
   const items = queryAll(sql, params);
   return items.filter(i => !isProductDiscontinued(i.title));
 }

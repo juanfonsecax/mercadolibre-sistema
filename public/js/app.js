@@ -1621,20 +1621,24 @@ async function loadLocalInventory() {
 
     let html = '';
     if (items.length === 0) {
-      html = '<tr><td colspan="7" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
+      html = '<tr><td colspan="8" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
     } else {
       items.forEach(i => {
-        const totalValueCop = (i.units_house * i.unit_cost_cop).toLocaleString('es-CO');
         const isLowStock = i.units_house <= i.min_stock_alert;
         const stockClass = isLowStock ? (i.units_house === 0 ? 'badge-critical' : 'badge-warning') : 'badge-success';
 
+        const linkedBadge = i.linked_ml_count > 0 
+          ? `<span class="badge-primary" style="font-weight:600;">🛍️ ${i.linked_ml_count} vinculada(s)</span>`
+          : `<span class="badge-secondary" style="font-style:italic;">Sin vincular</span>`;
+
         html += `
           <tr>
-            <td><strong>${escapeHtml(i.title)}</strong></td>
+            <td><strong>📦 ${escapeHtml(i.title)}</strong></td>
             <td><span class="${stockClass}">${i.units_house} unds</span></td>
+            <td><strong>${i.total_full_stock || 0} unds</strong></td>
+            <td>${linkedBadge}</td>
             <td>${i.min_stock_alert} unds</td>
             <td>$${(i.unit_cost_cop || 0).toLocaleString('es-CO')} COP</td>
-            <td><strong>$${totalValueCop} COP</strong></td>
             <td><small class="text-muted">${escapeHtml(i.location || 'Bodega Principal')}</small></td>
             <td>
               <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(i.sku)}', '${escapeAttr(i.title)}')">📦 Transferir a Full</button>
