@@ -376,6 +376,8 @@ function initSchema() {
       last_sync_at TEXT DEFAULT (datetime('now')),
       UNIQUE(account_id, ml_item_id)
     )
+  `);
+
   // ── Modulo de Vinculación Multi-Publicaciones <-> Producto Físico Padre ──
   db.run(`
     CREATE TABLE IF NOT EXISTS product_mappings (
