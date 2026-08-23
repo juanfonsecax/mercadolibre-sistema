@@ -599,9 +599,9 @@ app.get('/api/inventory/debug/orders30d', async (req, res) => {
     let totalOrders = Infinity;
     let pagesRead = 0;
 
-    // Paginate ALL orders
-    while (offset < totalOrders) {
-      const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&sort=date_asc&limit=${limit}&offset=${offset}`;
+    // Paginate ALL orders (max 1000 offset)
+    while (offset < totalOrders && offset < 1000) {
+      const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
       const ordersRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (!ordersRes.ok) break;
       const ordersData = await ordersRes.json();
@@ -610,12 +610,12 @@ app.get('/api/inventory/debug/orders30d', async (req, res) => {
       pagesRead++;
 
       orders.forEach(ord => {
-        if (ord.status !== 'cancelled' && ord.order_items) {
+        if (ord.status !== 'cancelled' && ord.status !== 'invalid' && ord.order_items) {
           ord.order_items.forEach(oi => {
             const itemId = oi.item && oi.item.id;
             if (!itemId) return;
             if (!salesMap[itemId]) salesMap[itemId] = { title: oi.item.title || '', qty: 0 };
-            salesMap[itemId].qty += (oi.quantity || 1);
+            salesMap[itemId].qty += (parseInt(oi.quantity, 10) || 1);
           });
         }
       });
