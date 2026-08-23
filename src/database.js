@@ -1304,31 +1304,44 @@ function restoreLocalInventoryFromJsonFile() {
 }
 
 const ACTIVE_ML_LISTINGS = [
-  { ml_item_id: 'MCO5914426965804815', sku: 'ENCHUFE-WIFI-SMART', title: 'Enchufe Inteligente Toma Wifi Smart Echo Alexa Google Y Siri', units_full: 34, sales_last_30d: 14, sales_last_7d: 5, account_id: 2 },
-  { ml_item_id: 'MCO1360887164', sku: 'INTERRUPTOR-SWITCH-10A-BLANCO', title: 'Interruptor Inteligente Switch Wifi Tuya *equivalente Sonoff 10 A 110v Blanco', units_full: 100, sales_last_30d: 2, sales_last_7d: 0, account_id: 2 },
-  { ml_item_id: 'MCO2953532088', sku: 'TOMACORRIENTE-MEDIDOR-TUYA', title: 'Tomacorriente Inteligente Wifi Con Medidor De Energía - Tuya Blanco', units_full: 109, sales_last_30d: 13, sales_last_7d: 6, account_id: 2 },
-  { ml_item_id: 'MCO1531049217', sku: 'VII-CAPACITOR-SIN-NEUTRO', title: 'Vii Capacitor Condensador Interruptor Inteligente Sin Neutro', units_full: 15, sales_last_30d: 1, sales_last_7d: 0, account_id: 2 },
-  { ml_item_id: 'MCO1412283655', sku: 'BOMBILLO-GU10-RGB-VII', title: 'Bombillo Gu10 Inteligente Wifi Led Rgb Vii Alexa Siri Google 110v Rgb', units_full: 9, sales_last_30d: 4, sales_last_7d: 3, account_id: 2 },
-  { ml_item_id: 'MCO1538098653', sku: 'SMART-SWITCH-10A-BLANCO-VII', title: 'Interruptor Inteligente Smart Switch Wifi Alexa Google Vii 10 A 110v Blanco', units_full: 12, sales_last_30d: 2, sales_last_7d: 0, account_id: 2 },
-  { ml_item_id: 'MCO1538015011', sku: 'VII-SMART-SWITCH-10A-BLANCO', title: 'Vii Interruptor Inteligente Smart Switch Wifi Alexa Google.. 10 A 110v Blanco', units_full: 43, sales_last_30d: 1, sales_last_7d: 0, account_id: 2 },
-  { ml_item_id: 'MCO2908323420', sku: '2-BOMBILLOS-WIFI-15W', title: '2 Bombillos Wifi Inteligente Rgb Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 4, sales_last_30d: 5, sales_last_7d: 5, account_id: 2 },
-  { ml_item_id: 'MCO2627945884', sku: 'VALVULA-CONTROLADOR-WIFI', title: 'Valvula Inteligente Controlador Wifi Alexa Google Agua Gas', units_full: 2, sales_last_30d: 2, sales_last_7d: 4, account_id: 2 },
-  { ml_item_id: 'MCO2628604956', sku: '4-BOMBILLOS-WIFI-15W', title: '4 Bombillos Wifi Inteligentes Led Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 1, sales_last_30d: 0, sales_last_7d: 0, account_id: 2 },
-  { ml_item_id: 'MCO608309396', sku: 'JUEGO-CASHFLOW-COMPUTADOR', title: 'Juego Cashflow Para Computador E Imprimible Nueva Version 20', units_full: 147, sales_last_30d: 1, sales_last_7d: 1, account_id: 1 },
-  { ml_item_id: 'MCO2875994304', sku: 'HOMEKIT-ENCHUFE-APPLE-SIRI', title: 'Homekit Casa Enchufe Toma Inteligente Siri Apple Alexa Wifi Blanco', units_full: 5, sales_last_30d: 1, sales_last_7d: 1, account_id: 2 },
-  { ml_item_id: 'MCO2843711932', sku: 'MODULO-MATTER-HOMEKIT-VII', title: 'Modulo Interruptor Wifi Inteligente Matter Apple Homekit Vii 16 A 110v Blanco', units_full: 4, sales_last_30d: 0, sales_last_7d: 0, account_id: 2 },
-  { ml_item_id: 'MCO2843698210', sku: 'LAMPARA-PANEL-LED-10W', title: 'Lampara Inteligente Panel Led Rgb Wifi Alexa Google Siri 10w 110v Blanco', units_full: 6, sales_last_30d: 0, sales_last_7d: 0, account_id: 2 }
+  // ── Tomacorrientes ──
+  { ml_item_id: 'MCO2953532088', sku: 'TOMACORRIENTE-MEDIDOR-TUYA', title: 'Tomacorriente Inteligente Wifi Con Medidor De Energía - Tuya Blanco', units_full: 109, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO1538085843', sku: 'TOMACORRIENTE-VII-BLANCO', title: 'Tomacorriente Inteligente Wifi Enchufe Alexa Google Tuya Vii Blanco', units_full: 0, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Enchufes / Tomas ──
+  { ml_item_id: 'MCO5914426965804815', sku: 'ENCHUFE-WIFI-SMART', title: 'Enchufe Inteligente Toma Wifi Smart Echo Alexa Google Y Siri', units_full: 34, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO1553357964', sku: 'ENCHUFE-WIFI-BLANCO', title: 'Enchufe Inteligente Toma Wifi Smart Echo Alexa Google Y Siri Blanco', units_full: 0, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO2875994304', sku: 'HOMEKIT-ENCHUFE-APPLE-SIRI', title: 'Homekit Casa Enchufe Toma Inteligente Siri Apple Alexa Wifi Blanco', units_full: 5, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Interruptores ──
+  { ml_item_id: 'MCO1360887164', sku: 'INTERRUPTOR-SWITCH-10A-BLANCO', title: 'Interruptor Inteligente Switch Wifi Tuya *equivalente Sonoff 10 A 110v Blanco', units_full: 100, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO1538098653', sku: 'SMART-SWITCH-10A-BLANCO-VII', title: 'Interruptor Inteligente Smart Switch Wifi Alexa Google Vii 10 A 110v Blanco', units_full: 12, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO1538015011', sku: 'VII-SMART-SWITCH-10A-BLANCO', title: 'Vii Interruptor Inteligente Smart Switch Wifi Alexa Google.. 10 A 110v Blanco', units_full: 43, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO1531049217', sku: 'VII-CAPACITOR-SIN-NEUTRO', title: 'Vii Capacitor Condensador Interruptor Inteligente Sin Neutro', units_full: 15, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Bombillos ──
+  { ml_item_id: 'MCO1412283655', sku: 'BOMBILLO-GU10-RGB-VII', title: 'Bombillo Gu10 Inteligente Wifi Led Rgb Vii Alexa Siri Google 110v Rgb', units_full: 9, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO2908323420', sku: '2-BOMBILLOS-WIFI-15W', title: '2 Bombillos Wifi Inteligente Rgb Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 4, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO2628604956', sku: '4-BOMBILLOS-WIFI-15W', title: '4 Bombillos Wifi Inteligentes Led Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 1, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO2628838616', sku: 'BOMBILLO-WIFI-15W-UNO', title: 'Bombillo Wifi Inteligente Rgb Led Google Home Siri Alexa 15w 110/220v Multicolor/rgb', units_full: 0, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  { ml_item_id: 'MCO608502811', sku: 'BOMBILLA-12W-ALEXA', title: 'Bombilla Inteligente Wifi 12w Alexa Google Home Control Voz 110/220v Rgb + Blanco Frio+ Blanco Calido', units_full: 0, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Lámparas / Paneles ──
+  { ml_item_id: 'MCO2843698210', sku: 'LAMPARA-PANEL-LED-10W', title: 'Lampara Inteligente Panel Led Rgb Wifi Alexa Google Siri 10w 110v Blanco', units_full: 6, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Módulos ──
+  { ml_item_id: 'MCO2843711932', sku: 'MODULO-MATTER-HOMEKIT-VII', title: 'Modulo Interruptor Wifi Inteligente Matter Apple Homekit Vii 16 A 110v Blanco', units_full: 4, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Válvulas ──
+  { ml_item_id: 'MCO2627945884', sku: 'VALVULA-CONTROLADOR-WIFI', title: 'Valvula Inteligente Controlador Wifi Alexa Google Agua Gas', units_full: 2, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Chapas ──
+  { ml_item_id: 'MCO2901744030', sku: 'CHAPA-ELECTRONICA-WIFI', title: 'Chapa Inteligente Electrónica Wifi Domotica Alexa Google Siri', units_full: 0, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
+  // ── Otros ──
+  { ml_item_id: 'MCO608309396', sku: 'JUEGO-CASHFLOW-COMPUTADOR', title: 'Juego Cashflow Para Computador E Imprimible Nueva Version 20', units_full: 147, sales_last_30d: 0, sales_last_7d: 0, account_id: 1 },
 ];
 
 function seedActiveMlListings() {
-  const existing = queryOne('SELECT COUNT(*) as count FROM ml_full_inventory');
-  if (!existing || existing.count === 0) {
-    ACTIVE_ML_LISTINGS.forEach(item => {
+  // Always ensure all known seed items exist in DB (upsert missing ones only)
+  ACTIVE_ML_LISTINGS.forEach(item => {
+    const existing = queryOne('SELECT ml_item_id FROM ml_full_inventory WHERE ml_item_id = ?', [item.ml_item_id]);
+    if (!existing) {
       saveMlFullInventoryItem(item);
-    });
-  }
-  // Ensure Enchufe Inteligente has 14 sales in 30d
-  runSql('UPDATE ml_full_inventory SET sales_last_30d = 14 WHERE ml_item_id = ?', ['MCO5914426965804815']);
+    }
+  });
   saveDbToFile();
 }
 

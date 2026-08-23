@@ -572,12 +572,11 @@ app.post('/api/inventory/full/sync', async (req, res) => {
   }
 });
 
-// Debug endpoint: shows raw orders from ML API for diagnosis
+// Debug endpoint: shows raw orders from ML API for diagnosis (PAGINATED - all orders)
 app.get('/api/inventory/debug/orders30d', async (req, res) => {
   try {
     const { accountId } = req.query;
     const accId = accountId ? parseInt(accountId) : 1;
-    const auth = require('./src/mercadolibre/auth');
     const accessToken = await auth.getValidToken(accId);
 
     const tokenObj = db.getToken(accId);
@@ -594,38 +593,54 @@ app.get('/api/inventory/debug/orders30d', async (req, res) => {
     }
 
     const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=50&offset=0`;
-
-    const ordersRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    const ordersData = await ordersRes.json();
-
-    // Build sales per item
     const salesMap = {};
-    const orders = ordersData.results || [];
-    orders.forEach(ord => {
-      if (ord.status !== 'cancelled' && ord.order_items) {
-        ord.order_items.forEach(oi => {
-          const itemId = oi.item && oi.item.id;
-          if (!itemId) return;
-          salesMap[itemId] = {
-            title: oi.item.title,
-            qty: (salesMap[itemId] ? salesMap[itemId].qty : 0) + (oi.quantity || 1)
-          };
-        });
-      }
-    });
+    let offset = 0;
+    const limit = 50;
+    let totalOrders = Infinity;
+    let pagesRead = 0;
+
+    // Paginate ALL orders
+    while (offset < totalOrders) {
+      const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&sort=date_asc&limit=${limit}&offset=${offset}`;
+      const ordersRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!ordersRes.ok) break;
+      const ordersData = await ordersRes.json();
+      totalOrders = (ordersData.paging && ordersData.paging.total) || 0;
+      const orders = ordersData.results || [];
+      pagesRead++;
+
+      orders.forEach(ord => {
+        if (ord.status !== 'cancelled' && ord.order_items) {
+          ord.order_items.forEach(oi => {
+            const itemId = oi.item && oi.item.id;
+            if (!itemId) return;
+            if (!salesMap[itemId]) salesMap[itemId] = { title: oi.item.title || '', qty: 0 };
+            salesMap[itemId].qty += (oi.quantity || 1);
+          });
+        }
+      });
+
+      offset += orders.length;
+      if (orders.length < limit) break;
+    }
+
+    // Find items that appear in orders but NOT tracked in DB
+    const knownItems = db.getMlFullInventory();
+    const knownIds = new Set(knownItems.map(i => i.ml_item_id));
+    const newDiscoveredItems = Object.entries(salesMap)
+      .filter(([id]) => !knownIds.has(id))
+      .map(([id, s]) => ({ ml_item_id: id, title: s.title, sales_30d: s.qty }));
 
     res.json({
       seller_id: sellerId,
       date_from: date30Ago,
-      api_url: url,
-      total_orders_returned: orders.length,
-      paging: ordersData.paging,
-      sales_per_item: salesMap,
-      raw_orders_sample: orders.slice(0, 3).map(o => ({
-        id: o.id, status: o.status, date: o.date_created,
-        items: o.order_items && o.order_items.map(oi => ({ id: oi.item && oi.item.id, title: oi.item && oi.item.title, qty: oi.quantity }))
-      }))
+      total_orders: totalOrders,
+      pages_read: pagesRead,
+      total_products_with_sales: Object.keys(salesMap).length,
+      sales_per_item: Object.entries(salesMap)
+        .sort((a, b) => b[1].qty - a[1].qty)
+        .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {}),
+      new_publications_not_in_db: newDiscoveredItems
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
