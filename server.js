@@ -572,6 +572,67 @@ app.post('/api/inventory/full/sync', async (req, res) => {
   }
 });
 
+// Debug endpoint: shows raw orders from ML API for diagnosis
+app.get('/api/inventory/debug/orders30d', async (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : 1;
+    const auth = require('./src/mercadolibre/auth');
+    const accessToken = await auth.getValidToken(accId);
+
+    const tokenObj = db.getToken(accId);
+    let sellerId = tokenObj && (tokenObj.user_id || tokenObj.seller_id);
+
+    if (!sellerId) {
+      const meRes = await fetch('https://api.mercadolibre.com/users/me', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        sellerId = me.id;
+      }
+    }
+
+    const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=50&offset=0`;
+
+    const ordersRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const ordersData = await ordersRes.json();
+
+    // Build sales per item
+    const salesMap = {};
+    const orders = ordersData.results || [];
+    orders.forEach(ord => {
+      if (ord.status !== 'cancelled' && ord.order_items) {
+        ord.order_items.forEach(oi => {
+          const itemId = oi.item && oi.item.id;
+          if (!itemId) return;
+          salesMap[itemId] = {
+            title: oi.item.title,
+            qty: (salesMap[itemId] ? salesMap[itemId].qty : 0) + (oi.quantity || 1)
+          };
+        });
+      }
+    });
+
+    res.json({
+      seller_id: sellerId,
+      date_from: date30Ago,
+      api_url: url,
+      total_orders_returned: orders.length,
+      paging: ordersData.paging,
+      sales_per_item: salesMap,
+      raw_orders_sample: orders.slice(0, 3).map(o => ({
+        id: o.id, status: o.status, date: o.date_created,
+        items: o.order_items && o.order_items.map(oi => ({ id: oi.item && oi.item.id, title: oi.item && oi.item.title, qty: oi.quantity }))
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 app.post('/api/inventory/full/sales30d', (req, res) => {
   try {
     const { ml_item_id, sales_last_30d } = req.body;
