@@ -19,9 +19,11 @@ Tu único objetivo es responder a los compradores potenciales con ALTA PERCEPCI�
 
 PRINCIPIOS DE NEUROCIENCIA Y MARKETING EMOCIONAL:
 1. NUNCA DES RESPUESTAS EVASIVAS: Prohibido decir "voy a verificar", "déjame consultar" o "después te aviso". Responde con total seguridad, solvencia y claridad a la duda exacta del cliente.
-2. CONECTA CON LO QUE EL COMPRADOR QUIERE ESCUCHAR Y SENTIR: Háblale de la comodidad de controlar su hogar, la seguridad de su inversión, la calidad superior de grado industrial (+100.000 clics) y el respaldo del producto.
-3. ELEVA LA PERCEPCIÓN DE VALOR: Enmarca la respuesta destacando las ventajas únicas del producto (protección de voltaje certificada, vidrio templado de lujo, estabilizador de luz anti-parpadeo incluido gratis, asesoría técnica completa).
-4. CIERRA SIEMPRE CON UN CTA ENERGÉTICO A LA COMPRA: Concluye invitando entusiastamente al comprador a realizar su pedido ya mismo (ej: "¡Anímate a realizar tu compra ahora y te lo despachamos hoy mismo con envío prioritario!").
+2. PREGUNTAS CLAVE DE POLO A TIERRA / CABLE NEUTRO: Si el comprador pregunta si "funciona sin polo a tierra", "sin neutro" o "requiere neutro", aclara con total seguridad que ¡SÍ FUNCIONA PERFECTAMENTE! Explica que es Tecnología Híbrida Universal e INCLUYE GRATIS en la caja el Capacitor / Estabilizador de Luz. El capacitor se instala fácilmente en el bombillo (L1) y cumple la función de la línea neutra para alimentar el módulo WiFi sin necesidad de pasar cables adicionales ni romper paredes, evitando el parpadeo de las luces.
+3. DISPONIBILIDAD DE VARIANTES Y COLORES (1, 2 Y 3 BOTONES EN BLANCO Y NEGRO): Contamos con las 6 variantes activas (1, 2 y 3 botones tanto en Blanco como en Negro). Si el comprador pregunta por disponibilidad de algún color o cantidad de botones, responde SIEMPRE que ¡SÍ TENEMOS DISPONIBILIDAD INMEDIATA! Explícale que puede seleccionar el color o modelo directamente en el desplegable de variantes de la publicación. Si en la publicación actual no le aparece activa esa variante específica, indícale amablemente que haga clic en "Ver más publicaciones del vendedor" donde encontrará la publicación de ese color/modelo con stock listo para despacho.
+4. CONECTA CON LO QUE EL COMPRADOR QUIERE ESCUCHAR Y SENTIR: Háblale de la comodidad de controlar su hogar, la seguridad de su inversión, la calidad superior de grado industrial (+100.000 clics) y el respaldo del producto.
+5. ELEVA LA PERCEPCIÓN DE VALOR: Enmarca la respuesta destacando las ventajas únicas del producto (protección de voltaje certificada, vidrio templado de lujo, estabilizador de luz anti-parpadeo incluido gratis, asesoría técnica completa).
+6. CIERRA SIEMPRE CON UN CTA ENERGÉTICO A LA COMPRA: Concluye invitando entusiastamente al comprador a realizar su pedido ya mismo (ej: "¡Anímate a realizar tu compra ahora y te lo despachamos hoy mismo con envío prioritario!").
 
 REGLAS DE POLÍTICA Y FORMATO:
 - NUNCA reveles que eres un bot o IA. Responde como el vendedor experto.
@@ -54,6 +56,31 @@ REGLAS ESTRICTAS:
 9. Respuestas de máximo 500 caracteres.
 10. Responde en español colombiano natural.
 11. NUNCA uses markdown, HTML, ni formato especial — solo texto plano.`;
+
+/**
+ * Safely generate content with automatic model fallback if quota (429) is hit
+ */
+async function safeGenerateContent(promptOrContents) {
+  if (!model) {
+    if (!initGemini()) return null;
+  }
+  try {
+    return await model.generateContent(promptOrContents);
+  } catch (error) {
+    if (error.message && (error.message.includes('429') || error.message.includes('quota') || error.message.includes('Quota'))) {
+      console.log('[Gemini] ⚠️ Cuota alcanzada en modelo principal. Probando alternativo (Lite)...');
+      const testRes = await testConnection();
+      if (testRes.ok && model) {
+        try {
+          return await model.generateContent(promptOrContents);
+        } catch (err2) {
+          console.error('[Gemini] Fallback model error:', err2.message);
+        }
+      }
+    }
+    throw error;
+  }
+}
 
 /**
  * Generate an AI-powered answer for a buyer's question
@@ -91,7 +118,7 @@ PREGUNTA DEL COMPRADOR:
 Genera una respuesta natural, concisa y amigable para esta pregunta. Solo devuelve la respuesta, sin explicaciones adicionales.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await safeGenerateContent(prompt);
     const response = result.response.text().trim();
     return response.replace(/^["']|["']$/g, '');
   } catch (error) {
@@ -139,7 +166,7 @@ ${contextParts.join('\n\n')}
 Genera una respuesta amigable, clara y soluciónalos rápido. Solo devuelve la respuesta, sin explicaciones adicionales.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await safeGenerateContent(prompt);
     const response = result.response.text().trim();
     return response.replace(/^["']|["']$/g, '');
   } catch (error) {
@@ -188,7 +215,7 @@ ${contextParts.join('\n\n')}
 Genera una respuesta empática y orientada a resolver el problema. Solo devuelve la respuesta, sin explicaciones adicionales.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await safeGenerateContent(prompt);
     const response = result.response.text().trim();
     return response.replace(/^["']|["']$/g, '');
   } catch (error) {
@@ -213,8 +240,16 @@ async function testConnection() {
   }
 
   const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
-  const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']));
+  const modelsToTry = Array.from(new Set([
+    preferredModel,
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+  ]));
   const errors = [];
+  let isQuotaExceeded = false;
 
   for (const mName of modelsToTry) {
     try {
@@ -224,8 +259,18 @@ async function testConnection() {
       return { ok: true, model: mName, response: result.response.text().trim() };
     } catch (err) {
       console.warn(`[Gemini] Model ${mName} failed:`, err.message);
+      if (err.message && (err.message.includes('429') || err.message.includes('Quota exceeded') || err.message.includes('quota'))) {
+        isQuotaExceeded = true;
+      }
       errors.push(`${mName}: ${err.message}`);
     }
+  }
+
+  if (isQuotaExceeded) {
+    return {
+      ok: false,
+      error: `Has superado la cuota gratuita de tu GEMINI_API_KEY en Google AI Studio (Límite de peticiones alcanzado). Espera unos segundos o genera una nueva API Key en aistudio.google.com/apikey`
+    };
   }
 
   return {
@@ -266,7 +311,7 @@ INSTRUCCIONES:
 3. Responde en texto plano, en español de Colombia, máximo 280 caracteres.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await safeGenerateContent(prompt);
     return result.response.text().trim();
   } catch (error) {
     console.error('[Gemini] Error evaluating promotion strategy:', error.message);
@@ -338,7 +383,7 @@ Responde en texto claro en español de Colombia, estructurado y muy completo.`;
 
   try {
     const contents = [textPrompt, ...imageParts];
-    const result = await model.generateContent(contents);
+    const result = await safeGenerateContent(contents);
     return result.response.text().trim();
   } catch (error) {
     console.error('[Gemini] Error generating product AI context:', error.message);

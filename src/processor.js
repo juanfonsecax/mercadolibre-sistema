@@ -59,9 +59,19 @@ async function processQuestion(questionId, accountId = null) {
         }, accountId);
         db.updateDailyStats('questions_answered', accountId);
       } catch (error) {
-        console.error(`[Processor] Error auto-replying:`, error.message);
-        status = 'error';
-        db.logActivity('auto_answer_error', `Error al responder pregunta ${questionId}`, { error: error.message }, accountId);
+        const isAlreadyAnswered = error.message && (
+          error.message.includes('not_unanswered_question') ||
+          error.message.includes('is not unanswered')
+        );
+        if (isAlreadyAnswered) {
+          status = 'answered';
+          console.log(`[Processor] ℹ️ Pregunta ${questionId} ya estaba respondida en Mercado Libre`);
+          db.logActivity('auto_answer_already_answered', `Pregunta ${questionId} ya estaba respondida previamente en Mercado Libre`, null, accountId);
+        } else {
+          console.error(`[Processor] Error auto-replying:`, error.message);
+          status = 'error';
+          db.logActivity('auto_answer_error', `Error al responder pregunta ${questionId}`, { error: error.message }, accountId);
+        }
       }
     } else {
       console.log(`[Processor] 📋 Question ${questionId} queued for review`);
@@ -301,6 +311,19 @@ async function approveQuestion(questionDbId, editedAnswer = null) {
     db.logActivity('question_approved', `Pregunta ${question.ml_question_id} aprobada y enviada`, { answer: answerText }, question.account_id);
     return { success: true };
   } catch (error) {
+    const isAlreadyAnswered = error.message && (
+      error.message.includes('not_unanswered_question') ||
+      error.message.includes('is not unanswered')
+    );
+    if (isAlreadyAnswered) {
+      db.updateQuestionStatus(questionDbId, 'answered', answerText);
+      db.logActivity('question_already_answered', `La pregunta ${question.ml_question_id} ya fue respondida previamente en Mercado Libre. Se actualizó el estado en el sistema.`, { answer: answerText }, question.account_id);
+      return {
+        success: true,
+        alreadyAnswered: true,
+        message: 'La pregunta ya había sido respondida previamente en Mercado Libre. Se actualizó el estado en el sistema.'
+      };
+    }
     db.logActivity('approve_error', `Error al aprobar pregunta ${question.ml_question_id}`, { error: error.message }, question.account_id);
     throw error;
   }

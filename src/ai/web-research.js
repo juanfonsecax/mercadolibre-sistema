@@ -42,11 +42,20 @@ Certificación oficial de seguridad eléctrica en Colombia No. co.9019129. Vida 
   },
   {
     category: 'faq',
-    title: '🌐 [Web Research] ¿Es compatible con Polo a Tierra, Dimerización y Luz Guía Nocturna?',
-    content: `ESPECIFICACIONES ADICIONALES:
-1. Polo a Tierra: Funciona perfectamente en cajas con o sin polo a tierra. El circuito electrónico interno está aislado dieléctricamente tras el panel de vidrio templado ignífugo.
-2. Dimerización / Atenuación: Este modelo es un interruptor ON/OFF táctil de alta potencia. Enciende y apaga cualquier tipo de bombilla (LED, ahorradora, incandescente o halógena). Para regular la intensidad de la luz (dimmer), se recomienda usar bombillos inteligentes RGB+CW compatibles con Tuya/Smart Life.
-3. Luz Guía Nocturna: Cuenta con un indicador LED suave que permite ubicar el interruptor en la oscuridad. Se puede personalizar o apagar desde la app Smart Life / Tuya.`
+    title: '🌐 [Web Research] ¿Tienen disponible en color Blanco / Negro de 1, 2 o 3 botones?',
+    content: `DISPONIBILIDAD DE TODAS LAS VARIANTES (1, 2 Y 3 BOTONES EN BLANCO Y NEGRO):
+1. Disponibilidad Completa: Contamos con las 6 variantes en stock (1 Botón Blanco/Negro, 2 Botones Blanco/Negro, 3 Botones Blanco/Negro).
+2. Dónde elegirla: Puedes seleccionar el color y cantidad de botones directamente en el menú de variantes de la publicación.
+3. Si no ves la variante deseada en esta publicación: Significa que esa opción tiene su propia publicación dedicada con stock activo. Simplemente haz clic en "Ver más publicaciones del vendedor" para encontrar la versión exacta de 1, 2 o 3 botones en Blanco o Negro lista para envío prioritario.`
+  },
+  {
+    category: 'faq',
+    title: '🌐 [Web Research] ¿Funciona sin Polo a Tierra o sin Cable Neutro?',
+    content: `ESPECIFICACIONES DE INSTALACIÓN (POLO A TIERRA Y NEUTRO):
+1. Funciona 100% sin Polo a Tierra ni Cable Neutro en la caja del interruptor: Es Tecnología Híbrida Universal.
+2. ¿Cómo funciona sin neutro/tierra?: Incluye GRATIS un Capacitor / Estabilizador de luz en la caja. El capacitor se conecta fácilmente junto a la bombilla principal (L1) y cumple la función de cerrar el circuito/línea neutra para alimentar la electrónica WiFi del interruptor, evitando que la luz parpadee.
+3. Dimerización / Atenuación: Es un interruptor táctil ON/OFF de alta potencia. Para graduar la intensidad de la luz (dimmer), la función la realiza un bombillo inteligente dimerizable desde la app.
+4. Luz Guía Nocturna: Indicador LED suave personalizable desde la app Tuya / Smart Life.`
   },
 
   // --- ENCHUFES INTELIGENTES (SMART PLUGS 15A/16A) ---

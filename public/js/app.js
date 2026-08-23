@@ -455,11 +455,15 @@ async function regenerateAllPendingAnswers() {
 async function approveQuestion(id) {
   try {
     const editedAnswer = document.getElementById(`answer-${id}`)?.value;
-    await apiFetch(`/api/questions/${id}/approve`, {
+    const res = await apiFetch(`/api/questions/${id}/approve`, {
       method: 'POST',
       body: JSON.stringify({ editedAnswer }),
     });
-    showToast('¡Respuesta enviada exitosamente!', 'success');
+    if (res && res.alreadyAnswered) {
+      showToast(res.message || 'ℹ️ La pregunta ya había sido respondida previamente en Mercado Libre.', 'info');
+    } else {
+      showToast('¡Respuesta enviada exitosamente!', 'success');
+    }
     loadQuestions();
     refreshOverview();
   } catch (error) {
