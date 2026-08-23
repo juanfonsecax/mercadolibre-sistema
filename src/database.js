@@ -1488,6 +1488,7 @@ function getInventoryPlanningIntelligence(accountId = null) {
         full_stock: 0,
         transit_stock: 0,
         sales_30d: 0,
+        sales_7d: 0,
         linked_listings_count: 0,
         linked_listings: []
       };
@@ -1507,12 +1508,14 @@ function getInventoryPlanningIntelligence(accountId = null) {
         full_stock: 0,
         transit_stock: 0,
         sales_30d: 0,
+        sales_7d: 0,
         linked_listings_count: 0,
         linked_listings: []
       };
     }
     planningMap[masterTitle].full_stock += (f.units_full || 0);
     planningMap[masterTitle].sales_30d += (f.sales_last_30d || 0);
+    planningMap[masterTitle].sales_7d += (f.sales_last_7d || 0);
     planningMap[masterTitle].linked_listings_count += 1;
     planningMap[masterTitle].linked_listings.push({
       ml_item_id: f.ml_item_id,
@@ -1549,25 +1552,38 @@ function getInventoryPlanningIntelligence(accountId = null) {
       const totalCurrentStock = p.house_stock + p.full_stock;
       const totalAvailablePosition = totalCurrentStock + p.transit_stock;
 
-      // Stockout-Adjusted Sales Velocity
-      let adjustedVelocity = 0;
+      // Multi-Period Sales Velocity Tracking (30d vs 7d Recent Trend)
+      let velocity30d = 0;
       if (p.sales_30d > 0) {
         let activeDays = 30;
         if (totalCurrentStock === 0) {
           activeDays = Math.max(7, Math.min(25, p.sales_30d));
         }
-        adjustedVelocity = p.sales_30d / activeDays;
+        velocity30d = p.sales_30d / activeDays;
       }
 
-      if (adjustedVelocity === 0) {
+      let velocity7d = 0;
+      if (p.sales_7d > 0) {
+        velocity7d = p.sales_7d / 7;
+      }
+
+      // Effective Velocity: Uses the higher of 30d baseline vs 7d acceleration
+      const effectiveVelocity = Math.max(velocity30d, velocity7d);
+      const isTrendingUp = velocity7d > (velocity30d * 1.15) && p.sales_7d >= 3;
+
+      if (effectiveVelocity === 0) {
         return {
           ...p,
           total_current_stock: totalCurrentStock,
           total_available_position: totalAvailablePosition,
           adjusted_velocity_daily: 0,
+          velocity_30d: 0,
+          velocity_7d: 0,
+          is_trending_up: false,
           reorder_point_units: 0,
           target_inventory_level: 0,
           suggested_po_quantity: 0,
+          raw_suggested_po: 0,
           days_coverage_remaining: totalAvailablePosition > 0 ? 999 : 0,
           days_until_po_trigger: 999,
           status: 'NO_DEMAND',
@@ -1576,17 +1592,24 @@ function getInventoryPlanningIntelligence(accountId = null) {
         };
       }
 
-      // Reorder Point (ROP)
-      const reorderPointUnits = Math.ceil((adjustedVelocity * LEAD_TIME_DAYS) + (adjustedVelocity * SAFETY_STOCK_DAYS));
+      // Reorder Point (ROP) based on Effective Velocity
+      const reorderPointUnits = Math.ceil((effectiveVelocity * LEAD_TIME_DAYS) + (effectiveVelocity * SAFETY_STOCK_DAYS));
 
-      // Target Inventory Level
-      const targetInventoryLevel = Math.ceil(adjustedVelocity * (LEAD_TIME_DAYS + COVERAGE_CYCLE_DAYS));
+      // Target Inventory Level (225 days coverage)
+      const targetInventoryLevel = Math.ceil(effectiveVelocity * (LEAD_TIME_DAYS + COVERAGE_CYCLE_DAYS));
 
-      // Suggested PO Quantity
-      const suggestedPoQuantity = Math.max(0, Math.ceil(targetInventoryLevel - totalAvailablePosition));
+      // Raw Suggested PO Quantity
+      const rawSuggestedPo = Math.max(0, Math.ceil(targetInventoryLevel - totalAvailablePosition));
 
-      // Coverage Days Remaining
-      const daysCoverageRemaining = adjustedVelocity > 0 ? (totalAvailablePosition / adjustedVelocity) : 999;
+      // Commercial Box Rounding (Multiples of 50 units, minimum 50)
+      let suggestedPoQuantity = 0;
+      if (rawSuggestedPo > 0) {
+        if (rawSuggestedPo <= 50) suggestedPoQuantity = 50;
+        else suggestedPoQuantity = Math.ceil(rawSuggestedPo / 50) * 50;
+      }
+
+      // Coverage Days Remaining based on Effective Velocity
+      const daysCoverageRemaining = effectiveVelocity > 0 ? (totalAvailablePosition / effectiveVelocity) : 999;
 
       // Days Until PO Trigger
       const daysUntilPoTrigger = Math.max(0, Math.round(daysCoverageRemaining - LEAD_TIME_DAYS));
@@ -1597,7 +1620,7 @@ function getInventoryPlanningIntelligence(accountId = null) {
 
       if (totalAvailablePosition < reorderPointUnits || daysCoverageRemaining <= LEAD_TIME_DAYS) {
         status = 'CRITICAL_ORDER_NOW';
-        statusLabel = '🚨 PEDIR A CHINA HOY';
+        statusLabel = isTrendingUp ? '🚨 PEDIR A CHINA HOY (🔥 ALTA TENDENCIA)' : '🚨 PEDIR A CHINA HOY';
         badgeClass = 'badge-critical';
       } else if (daysUntilPoTrigger <= 30) {
         status = 'WARNING_ORDER_SOON';
@@ -1609,10 +1632,14 @@ function getInventoryPlanningIntelligence(accountId = null) {
         ...p,
         total_current_stock: totalCurrentStock,
         total_available_position: totalAvailablePosition,
-        adjusted_velocity_daily: parseFloat(adjustedVelocity.toFixed(2)),
+        adjusted_velocity_daily: parseFloat(effectiveVelocity.toFixed(2)),
+        velocity_30d: parseFloat(velocity30d.toFixed(2)),
+        velocity_7d: parseFloat(velocity7d.toFixed(2)),
+        is_trending_up: isTrendingUp,
         reorder_point_units: reorderPointUnits,
         target_inventory_level: targetInventoryLevel,
         suggested_po_quantity: suggestedPoQuantity,
+        raw_suggested_po: rawSuggestedPo,
         days_coverage_remaining: parseFloat(daysCoverageRemaining.toFixed(1)),
         days_until_po_trigger: daysUntilPoTrigger,
         status,

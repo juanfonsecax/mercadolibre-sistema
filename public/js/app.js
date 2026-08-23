@@ -2066,8 +2066,12 @@ async function loadReorderAlerts() {
           ? `<br><small class="text-muted">🛍️ ${p.linked_listings_count} publicación(es) ML vinculada(s)</small>`
           : `<br><small class="text-muted" style="font-style:italic;">Producto físico único</small>`;
 
+        const trendBadge = p.is_trending_up 
+          ? `<span class="badge-critical" style="font-size:0.75rem; padding:2px 6px; margin-bottom:2px; display:inline-block;">🔥 Crecimiento (7d: ${p.velocity_7d}/día)</span><br>` 
+          : '';
+
         const orderQtyDisplay = p.suggested_po_quantity > 0 
-          ? `<strong class="text-critical" style="font-size:1.1rem;">${p.suggested_po_quantity.toLocaleString('es-CO')} unds</strong>` 
+          ? `<strong class="text-critical" style="font-size:1.1rem;">${p.suggested_po_quantity.toLocaleString('es-CO')} unds</strong><br><small class="text-muted">(Lote min. 50 unds | Calc: ${p.raw_suggested_po || 0})</small>` 
           : `<span class="text-muted">0 unds</span>`;
 
         html += `
@@ -2085,8 +2089,9 @@ async function loadReorderAlerts() {
               <small class="text-muted">${p.transit_stock > 0 ? '🚢 Viniendo de China' : 'Sin pedidos en camino'}</small>
             </td>
             <td>
+              ${trendBadge}
               <strong>${p.adjusted_velocity_daily}</strong> /día<br>
-              <small class="text-muted">${p.sales_30d} unds en 30d (Ajustado)</small>
+              <small class="text-muted">30d: ${p.velocity_30d || 0}/d | 7d: ${p.velocity_7d || 0}/d</small>
             </td>
             <td>
               <strong>${p.days_coverage_remaining} días</strong>
