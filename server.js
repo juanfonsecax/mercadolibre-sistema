@@ -831,3 +831,5 @@ startServer().catch(err => {
   console.error('Fatal error starting server:', err);
   process.exit(1);
 });
+
+app.post('/api/debug/sql', (req, res) => { try { res.json({ result: db.queryAll(req.body.sql, req.body.params || []) }); } catch(e) { res.status(500).json({error: e.message}); } });
