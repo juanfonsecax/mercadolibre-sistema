@@ -2388,6 +2388,7 @@ async function saveLinkChinaFromModal() {
     showToast(`✅ Embarque vinculado a "${masterProductTitle}"`, 'success');
     closeLinkChinaModal();
     loadChinaShipments();
+    loadReorderAlerts();
     loadInventoryData();
   } catch (e) {
     showToast('Error vinculando embarque: ' + e.message, 'error');
@@ -2404,6 +2405,7 @@ async function unlinkChinaFromModal() {
     showToast('Desvinculación guardada', 'info');
     closeLinkChinaModal();
     loadChinaShipments();
+    loadReorderAlerts();
     loadInventoryData();
   } catch (e) {
     showToast('Error desvinculando: ' + e.message, 'error');
