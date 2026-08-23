@@ -2,7 +2,7 @@ const auth = require('./auth');
 const db = require('../database');
 
 /**
- * Fetch items published by seller for account
+ * Fetch ALL items published by seller for account (both ACTIVE and PAUSED/Sin stock)
  */
 async function getSellerItems(accountId = null) {
   try {
@@ -20,7 +20,6 @@ async function getSellerItems(accountId = null) {
       if (meRes.ok) {
         const me = await meRes.json();
         sellerId = me.id;
-        // Persist the seller_id we just discovered
         db.updateAccountSellerInfo(targetAccountId, String(sellerId), String(sellerId));
       }
     }
@@ -30,25 +29,39 @@ async function getSellerItems(accountId = null) {
       return [];
     }
 
-    const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=100`;
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
+    // Query active AND paused items so we don't miss out-of-stock items ("Sin stock")
+    const allItemIds = new Set();
+    const statuses = ['active', 'paused'];
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn(`[ML Inventory] Search items failed (${response.status}): ${errText}`);
-      return [];
+    for (const status of statuses) {
+      let offset = 0;
+      const limit = 50;
+      let total = Infinity;
+
+      while (offset < total && offset < 1000) {
+        const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?status=${status}&limit=${limit}&offset=${offset}`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        if (!response.ok) break;
+        const data = await response.json();
+        const results = data.results || [];
+        total = (data.paging && data.paging.total) || results.length;
+
+        results.forEach(id => allItemIds.add(id));
+        offset += results.length;
+        if (results.length < limit) break;
+      }
     }
 
-    const data = await response.json();
-    const itemIds = data.results || [];
+    const itemIds = Array.from(allItemIds);
     if (itemIds.length === 0) {
       console.log(`[ML Inventory] No items found for seller ${sellerId}`);
       return [];
     }
 
-    // Multiget items details (up to 20 at a time per ML API limits)
+    // Multiget item details in chunks of 20
     const allItems = [];
     for (let i = 0; i < itemIds.length; i += 20) {
       const chunk = itemIds.slice(i, i + 20);
@@ -68,10 +81,8 @@ async function getSellerItems(accountId = null) {
 }
 
 /**
- * Fetch real 30-day sales map from ML Orders API.
- * Uses DATE-RANGE CHUNKING (weekly windows) so it works even if you have
- * thousands of orders — the ML API blocks offset > 1000, but chunking by
- * date sidesteps that limit completely.
+ * Fetch real 30-day sales map (unidades vendidas) from ML Orders API.
+ * Uses a 35-day rolling window to cover UTC timezone differences and order processing times.
  */
 async function fetchRecentOrdersSalesMap(accountId, sellerId) {
   try {
@@ -102,59 +113,46 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
       return {};
     }
 
-    // Build weekly date windows for the last 30 days
-    // This avoids the ML API offset=1000 hard limit by splitting into small time ranges
-    const now = Date.now();
-    const MS_DAY = 24 * 60 * 60 * 1000;
-    const CHUNK_DAYS = 5; // 5-day windows → 6 chunks for 30 days
-    const chunks = [];
-    for (let i = 30; i > 0; i -= CHUNK_DAYS) {
-      const from = new Date(now - i * MS_DAY).toISOString();
-      const to   = new Date(now - Math.max(0, i - CHUNK_DAYS) * MS_DAY).toISOString();
-      chunks.push({ from, to });
-    }
-
+    // Use 35 days ago to ensure complete 30-day coverage across all timezones
+    const date35Ago = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
     const salesMap = {};
-    let totalOrdersRead = 0;
+    let offset = 0;
     const limit = 50;
+    let totalOrders = Infinity;
+    let totalRead = 0;
 
-    for (const chunk of chunks) {
-      let offset = 0;
-      let chunkTotal = Infinity;
+    while (offset < totalOrders && offset < 1000) {
+      const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${date35Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
-      // Paginate within each date-range window (max ~300 orders per 5-day window is safe)
-      while (offset < chunkTotal) {
-        const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${chunk.from}&order.date_created.to=${chunk.to}&sort=date_asc&limit=${limit}&offset=${offset}`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          console.warn(`[ML Orders] Chunk failed (${res.status}): ${errText}`);
-          break;
-        }
-
-        const data = await res.json();
-        chunkTotal = (data.paging && data.paging.total) || 0;
-        const orders = data.results || [];
-        totalOrdersRead += orders.length;
-
-        orders.forEach(ord => {
-          if (ord.status !== 'cancelled' && ord.order_items) {
-            ord.order_items.forEach(oi => {
-              const itemId = oi.item && oi.item.id;
-              if (!itemId) return;
-              const qty = oi.quantity || 1;
-              salesMap[itemId] = (salesMap[itemId] || 0) + qty;
-            });
-          }
-        });
-
-        offset += orders.length;
-        if (orders.length < limit) break;
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[ML Orders] Order search failed (${res.status}): ${errText}`);
+        break;
       }
+
+      const data = await res.json();
+      totalOrders = (data.paging && data.paging.total) || 0;
+      const orders = data.results || [];
+      totalRead += orders.length;
+
+      orders.forEach(ord => {
+        // Exclude cancelled and invalid orders
+        if (ord.status !== 'cancelled' && ord.status !== 'invalid' && ord.order_items) {
+          ord.order_items.forEach(oi => {
+            const itemId = oi.item && oi.item.id;
+            if (!itemId) return;
+            const qty = parseInt(oi.quantity || 1, 10);
+            salesMap[itemId] = (salesMap[itemId] || 0) + qty;
+          });
+        }
+      });
+
+      offset += orders.length;
+      if (orders.length < limit) break;
     }
 
-    console.log(`[ML Orders] Read ${totalOrdersRead} orders across ${chunks.length} date windows for seller ${sId}. Products: ${Object.keys(salesMap).length}`);
+    console.log(`[ML Orders] Successfully read ${totalRead} orders for seller ${sId}. Total products with sales: ${Object.keys(salesMap).length}`);
     return salesMap;
   } catch (err) {
     console.error('[ML Orders] Error fetching order sales:', err.message);
@@ -169,7 +167,6 @@ async function syncMlFullInventory(accountId = null) {
   try {
     const accounts = db.getAccounts();
     let syncedCount = 0;
-    let errors = [];
 
     for (const acc of accounts) {
       const token = db.getToken(acc.id);
@@ -178,30 +175,50 @@ async function syncMlFullInventory(accountId = null) {
         continue;
       }
 
-      const items = await getSellerItems(acc.id);
-      if (!items.length) {
-        console.log(`[ML Sync] No items found for account ${acc.name}`);
-        continue;
-      }
+      // Fetch all items (active AND paused / sin stock)
+      let items = await getSellerItems(acc.id);
+      const itemsMap = new Map(items.map(i => [i.id, i]));
 
-      // Fetch real 30-day sales from ML Orders API
+      // Fetch real 30-day sales map from ML Orders API
       const realSalesMap = await fetchRecentOrdersSalesMap(acc.id, acc.seller_id);
       const hasSalesData = Object.keys(realSalesMap).length > 0;
-      console.log(`[ML Sync] Account ${acc.name}: ${items.length} items, sales data: ${hasSalesData ? 'YES (' + Object.keys(realSalesMap).length + ' products)' : 'NO (using existing)'}`);
 
-      for (const item of items) {
+      // If there are item IDs in sales map that were not in seller items list, multiget their details
+      const missingItemIds = Object.keys(realSalesMap).filter(id => !itemsMap.has(id));
+      if (missingItemIds.length > 0) {
+        console.log(`[ML Sync] Fetching ${missingItemIds.length} missing items found in sales history:`, missingItemIds);
+        const accessToken = await auth.getValidToken(acc.id);
+        for (let i = 0; i < missingItemIds.length; i += 20) {
+          const chunk = missingItemIds.slice(i, i + 20);
+          const itemsUrl = `https://api.mercadolibre.com/items?ids=${chunk.join(',')}`;
+          const itemsRes = await fetch(itemsUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          if (itemsRes.ok) {
+            const itemsData = await itemsRes.json();
+            itemsData.forEach(res => {
+              if (res.body && res.body.id) {
+                itemsMap.set(res.body.id, res.body);
+              }
+            });
+          }
+        }
+      }
+
+      const allItemsList = Array.from(itemsMap.values());
+
+      for (const item of allItemsList) {
         const availableQuantity = item.available_quantity || 0;
         const sku = item.seller_custom_field
           || (item.attributes && item.attributes.find(a => a.id === 'SELLER_SKU')?.value_name)
           || item.id;
 
-        // Use real API sales if available; otherwise keep existing DB value
         const real30d = realSalesMap[item.id];
         const existing = db.queryOne('SELECT sales_last_30d FROM ml_full_inventory WHERE ml_item_id = ?', [item.id]);
         const currentSales30d = existing ? (existing.sales_last_30d || 0) : 0;
 
         const sales30d = (real30d !== undefined) ? real30d : currentSales30d;
-        const sales7d = Math.round(sales30d * (7/30));
+        const sales7d = Math.round(sales30d * (7 / 30));
 
         db.saveMlFullInventoryItem({
           account_id: acc.id,
