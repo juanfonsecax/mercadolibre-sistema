@@ -112,30 +112,6 @@ app.delete('/api/accounts/:id', (req, res) => {
   }
 });
 
-app.post('/api/accounts/:id/token', (req, res) => {
-  try {
-    const accountId = parseInt(req.params.id);
-    const { access_token, refresh_token, expires_in, seller_id } = req.body;
-    if (!access_token) return res.status(400).json({ error: 'access_token es requerido' });
-
-    const expires_at = Date.now() + ((parseInt(expires_in) || 21600) * 1000);
-    const tokenData = {
-      access_token: access_token.trim(),
-      refresh_token: (refresh_token || access_token).trim(),
-      expires_at,
-      user_id: String(seller_id || ''),
-      seller_id: String(seller_id || '')
-    };
-
-    db.saveToken(accountId, tokenData);
-    if (seller_id) db.updateAccountSellerInfo(accountId, String(seller_id), String(seller_id));
-    db.logActivity('auth', `Token guardado manualmente para cuenta #${accountId}`, { seller_id }, accountId);
-    res.json({ success: true, message: 'Token guardado correctamente' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // --- Overview ---
 app.get('/api/overview', (req, res) => {
   try {
@@ -468,14 +444,8 @@ app.post('/api/inventory/import-csv', (req, res) => {
 
 app.post('/api/inventory/local', (req, res) => {
   try {
-    let { id, account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location } = req.body;
-    if (!title) return res.status(400).json({ error: 'El nombre del producto es requerido' });
-    
-    if (!sku || !sku.trim()) {
-      sku = title.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40) || ('PROD-' + Date.now());
-    } else {
-      sku = sku.trim();
-    }
+    const { id, account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location } = req.body;
+    if (!sku || !title) return res.status(400).json({ error: 'SKU y Título son requeridos' });
 
     const itemId = db.saveLocalInventoryItem({
       id: id ? parseInt(id) : null,
@@ -487,7 +457,7 @@ app.post('/api/inventory/local', (req, res) => {
       location
     });
 
-    db.logActivity('inventory_local', `Producto "${title}" en Bodega Casa actualizado`, null, account_id);
+    db.logActivity('inventory_local', `Producto "${sku} - ${title}" en Bodega Casa actualizado`, null, account_id);
     res.json({ success: true, id: itemId });
   } catch (error) {
     res.status(500).json({ error: error.message });
