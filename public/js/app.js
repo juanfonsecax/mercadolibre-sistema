@@ -1018,14 +1018,50 @@ function renderSettingsAccountsList(accounts) {
         <strong>🏪 ${escapeHtml(acc.name)} ${acc.connected ? '🟢 Conectada' : '🔴 Desconectada'}</strong>
         <span>App ID: <code>${escapeHtml(acc.app_id)}</code></span>
         <span>Seller ID: <code>${escapeHtml(acc.seller_id || 'No vinculado')}</code></span>
+        <small class="text-muted">Redirect URI: <code>${escapeHtml(acc.redirect_uri || 'http://localhost:3000/auth/callback')}</code></small>
       </div>
-      <div class="account-card-actions">
-        <a href="/auth/login/${acc.id}" class="btn btn-primary btn-sm">🔗 ${acc.connected ? 'Reconectar' : 'Conectar ML'}</a>
+      <div class="account-card-actions" style="display:flex; gap:6px; flex-wrap:wrap;">
+        <a href="/auth/login/${acc.id}" target="_blank" class="btn btn-primary btn-sm">🔗 Conectar ML (OAuth)</a>
+        <button class="btn btn-secondary btn-sm" onclick="openTokenModal(${acc.id}, '${escapeAttr(acc.name)}')">🔑 Pegar Token Directo</button>
         <button class="btn btn-secondary btn-sm" onclick="editAccount(${acc.id}, '${escapeAttr(acc.name)}', '${escapeAttr(acc.app_id)}', '${escapeAttr(acc.secret_key)}', '${escapeAttr(acc.redirect_uri)}')">✏️ Editar</button>
         <button class="btn btn-danger btn-sm" onclick="deleteAccount(${acc.id})">🗑️</button>
       </div>
     </div>
   `).join('');
+}
+
+function openTokenModal(accountId, accountName) {
+  document.getElementById('tokenAccountId').value = accountId;
+  document.getElementById('tokenModalTitle').innerText = `🔑 Pegar Access Token Directo — ${accountName}`;
+  document.getElementById('directAccessToken').value = '';
+  document.getElementById('directSellerId').value = '';
+  document.getElementById('tokenModal').style.display = 'flex';
+}
+
+function closeTokenModal() {
+  document.getElementById('tokenModal').style.display = 'none';
+}
+
+async function saveDirectTokenFromModal() {
+  const accountId = document.getElementById('tokenAccountId').value;
+  const access_token = document.getElementById('directAccessToken').value.trim();
+  const seller_id = document.getElementById('directSellerId').value.trim();
+
+  if (!access_token) return showToast('Ingresa un Access Token válido', 'warning');
+
+  try {
+    await apiFetch(`/api/accounts/${accountId}/token`, {
+      method: 'POST',
+      body: JSON.stringify({ access_token, seller_id })
+    });
+
+    showToast('¡Token de acceso guardado! Cuenta Conectada 🟢', 'success');
+    closeTokenModal();
+    loadSettings();
+    loadAccountSelector();
+  } catch (error) {
+    showToast('Error guardando token: ' + error.message, 'error');
+  }
 }
 
 function showAddAccountModal() {
@@ -1621,7 +1657,7 @@ async function loadLocalInventory() {
 
     let html = '';
     if (items.length === 0) {
-      html = '<tr><td colspan="10" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
+      html = '<tr><td colspan="7" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
     } else {
       items.forEach(i => {
         const totalValueCop = (i.units_house * i.unit_cost_cop).toLocaleString('es-CO');
@@ -1630,17 +1666,14 @@ async function loadLocalInventory() {
 
         html += `
           <tr>
-            <td><code>${escapeHtml(i.sku)}</code></td>
             <td><strong>${escapeHtml(i.title)}</strong></td>
-            <td>${escapeHtml(i.category || 'General')}</td>
-            <td><span class="badge-secondary">${escapeHtml(i.account_name || 'Ambas')}</span></td>
             <td><span class="${stockClass}">${i.units_house} unds</span></td>
             <td>${i.min_stock_alert} unds</td>
             <td>$${(i.unit_cost_cop || 0).toLocaleString('es-CO')} COP</td>
             <td><strong>$${totalValueCop} COP</strong></td>
             <td><small class="text-muted">${escapeHtml(i.location || 'Bodega Principal')}</small></td>
             <td>
-              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(i.sku)}')">📦 Transferir a Full</button>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(i.sku)}', '${escapeAttr(i.title)}')">📦 Transferir a Full</button>
               <button class="btn btn-sm btn-secondary" onclick="editLocalItem(${i.id})">✏️</button>
               <button class="btn btn-sm btn-danger" onclick="deleteLocalItem(${i.id})">🗑️</button>
             </td>
@@ -1673,9 +1706,12 @@ async function populateAccountSelects() {
 async function openLocalItemModal(item = null) {
   await populateAccountSelects();
   document.getElementById('localItemId').value = item ? item.id : '';
-  document.getElementById('localAccountSelect').value = item ? item.account_id || '' : '';
-  document.getElementById('localSku').value = item ? item.sku : '';
-  document.getElementById('localCategory').value = item ? item.category : 'Suplementos';
+  const localAccElem = document.getElementById('localAccountSelect');
+  if (localAccElem) localAccElem.value = item ? item.account_id || '' : '';
+  const localSkuElem = document.getElementById('localSku');
+  if (localSkuElem) localSkuElem.value = item ? item.sku : '';
+  const localCatElem = document.getElementById('localCategory');
+  if (localCatElem) localCatElem.value = item ? item.category : 'General';
   document.getElementById('localTitle').value = item ? item.title : '';
   document.getElementById('localUnitsHouse').value = item ? item.units_house : 50;
   document.getElementById('localUnitCostCop').value = item ? item.unit_cost_cop : 25000;
@@ -1692,9 +1728,13 @@ function closeLocalItemModal() {
 
 async function saveLocalItemFromModal() {
   const id = document.getElementById('localItemId').value;
-  const sku = document.getElementById('localSku').value.trim();
+  const localSkuElem = document.getElementById('localSku');
+  let sku = localSkuElem ? localSkuElem.value.trim() : '';
   const title = document.getElementById('localTitle').value.trim();
-  if (!sku || !title) return showToast('SKU y Título son requeridos', 'error');
+  if (!title) return showToast('El nombre del producto es requerido', 'error');
+  if (!sku) {
+    sku = title.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40) || ('PROD-' + Date.now());
+  }
 
   const payload = {
     id: id || null,
@@ -1737,7 +1777,7 @@ async function loadMlFullInventory() {
 
     let html = '';
     if (items.length === 0) {
-      html = '<tr><td colspan="9" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
+      html = '<tr><td colspan="8" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
     } else {
       items.forEach(f => {
         const cov = parseFloat(f.coverage_days || 0);
@@ -1747,19 +1787,15 @@ async function loadMlFullInventory() {
 
         html += `
           <tr>
-            <td>
-              <code>${escapeHtml(f.ml_item_id)}</code><br>
-              <small class="text-muted">SKU: ${escapeHtml(f.sku || 'N/A')}</small>
-            </td>
+            <td><code>${escapeHtml(f.ml_item_id)}</code></td>
             <td><strong>${escapeHtml(f.title)}</strong></td>
-            <td><span class="badge-secondary">${escapeHtml(f.account_name || 'Tienda')}</span></td>
             <td><strong>${f.units_full}</strong> unds</td>
             <td>${f.stock_casa !== undefined ? f.stock_casa : 'N/A'} unds</td>
             <td>${f.sales_last_30d || 0} unds</td>
             <td><strong>${cov.toFixed(1)} días</strong></td>
             <td>${covStatus}</td>
             <td>
-              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}')">📦 Transferir desde Casa</button>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}', '${escapeAttr(f.title)}')">📦 Transferir desde Casa</button>
             </td>
           </tr>
         `;
@@ -1788,10 +1824,11 @@ async function syncMlFullInventory() {
 }
 
 // Transfer Casa -> Full Modal
-function openTransferFullModal(sku) {
-  document.getElementById('transferSku').value = sku;
+function openTransferFullModal(sku, title) {
+  const displayVal = title || sku;
+  document.getElementById('transferSku').value = displayVal;
   document.getElementById('transferUnits').value = 20;
-  document.getElementById('transferNotes').value = `Transferencia hacia Mercado Libre Full — ${sku}`;
+  document.getElementById('transferNotes').value = `Transferencia hacia Mercado Libre Full — ${displayVal}`;
   document.getElementById('transferFullModal').style.display = 'flex';
 }
 
@@ -1841,7 +1878,7 @@ async function loadReorderAlerts() {
         html += `
           <div class="alert-card ${isCrit ? 'critical' : ''}">
             <div>
-              <strong>${isCrit ? '🚨 CRÍTICO' : '⚠️ ALERTA'}: ${escapeHtml(a.title)}</strong> (SKU: <code>${escapeHtml(a.sku)}</code>)<br>
+              <strong>${isCrit ? '🚨 CRÍTICO' : '⚠️ ALERTA'}: ${escapeHtml(a.title)}</strong><br>
               <span class="text-secondary">${escapeHtml(a.message)}</span>
             </div>
             <div>

@@ -6,12 +6,20 @@ const db = require('../database');
  */
 async function getSellerItems(accountId = null) {
   try {
-    const token = auth.getValidToken(accountId);
-    if (!token || !token.seller_id) return [];
+    const account = db.getAccountById(accountId);
+    const tokenObj = db.getToken(accountId);
+    const sellerId = (account && account.seller_id) || (tokenObj && tokenObj.seller_id);
+    if (!sellerId) {
+      console.warn('[ML Inventory] No seller_id found for account:', accountId);
+      return [];
+    }
 
-    const url = `https://api.mercadolibre.com/users/${token.seller_id}/items/search?limit=50`;
+    const accessToken = await auth.getValidToken(accountId);
+    if (!accessToken) return [];
+
+    const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=50`;
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token.access_token}` }
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
 
     if (!response.ok) {
@@ -24,9 +32,9 @@ async function getSellerItems(accountId = null) {
     if (itemIds.length === 0) return [];
 
     // Multiget items details
-    const itemsUrl = `https://api.mercadolibre.com/items?ids=${itemIds.slice(0, 20).join(',')}`;
+    const itemsUrl = `https://api.mercadolibre.com/items?ids=${itemIds.slice(0, 50).join(',')}`;
     const itemsRes = await fetch(itemsUrl, {
-      headers: { Authorization: `Bearer ${token.access_token}` }
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
 
     if (!itemsRes.ok) return [];

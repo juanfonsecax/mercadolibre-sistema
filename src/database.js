@@ -84,21 +84,20 @@ function initSchema() {
   if (!countObj || countObj.count === 0) {
     db.run(
       'INSERT INTO accounts (name, app_id, secret_key, redirect_uri) VALUES (?, ?, ?, ?)',
-      ['Tienda Juan', process.env.ACCOUNT1_APP_ID || 'COMPLETAR_APP_ID', process.env.ACCOUNT1_SECRET_KEY || 'COMPLETAR_SECRET_KEY', defaultRedirectUri]
+      ['Tienda Juan', process.env.ACCOUNT1_APP_ID || '1428386906648009', process.env.ACCOUNT1_SECRET_KEY || 'y1gOus1BPPnhkI23taSOyddMJw9F4u9G', defaultRedirectUri]
     );
     db.run(
       'INSERT INTO accounts (name, app_id, secret_key, redirect_uri) VALUES (?, ?, ?, ?)',
       ['Tienda Carlos', process.env.ACCOUNT2_APP_ID || 'COMPLETAR_APP_ID', process.env.ACCOUNT2_SECRET_KEY || 'COMPLETAR_SECRET_KEY', defaultRedirectUri]
     );
   } else {
-    // If Env Vars are present, update account credentials automatically
     if (process.env.ACCOUNT1_APP_ID && process.env.ACCOUNT1_SECRET_KEY) {
-      runSql('UPDATE accounts SET app_id = ?, secret_key = ?, redirect_uri = ? WHERE name = ? OR id = 1',
-        [process.env.ACCOUNT1_APP_ID, process.env.ACCOUNT1_SECRET_KEY, defaultRedirectUri, 'Tienda Juan']);
+      runSql('UPDATE accounts SET app_id = ?, secret_key = ? WHERE id = 1 OR name = ?',
+        [process.env.ACCOUNT1_APP_ID, process.env.ACCOUNT1_SECRET_KEY, 'Tienda Juan']);
     }
     if (process.env.ACCOUNT2_APP_ID && process.env.ACCOUNT2_SECRET_KEY) {
-      runSql('UPDATE accounts SET app_id = ?, secret_key = ?, redirect_uri = ? WHERE name = ? OR id = 2',
-        [process.env.ACCOUNT2_APP_ID, process.env.ACCOUNT2_SECRET_KEY, defaultRedirectUri, 'Tienda Carlos']);
+      runSql('UPDATE accounts SET app_id = ?, secret_key = ? WHERE id = 2 OR name = ?',
+        [process.env.ACCOUNT2_APP_ID, process.env.ACCOUNT2_SECRET_KEY, 'Tienda Carlos']);
     }
   }
 
