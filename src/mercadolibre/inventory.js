@@ -68,7 +68,10 @@ async function getSellerItems(accountId = null) {
 }
 
 /**
- * Fetch real 30-day sales map from ML Orders API with pagination
+ * Fetch real 30-day sales map from ML Orders API.
+ * Uses DATE-RANGE CHUNKING (weekly windows) so it works even if you have
+ * thousands of orders — the ML API blocks offset > 1000, but chunking by
+ * date sidesteps that limit completely.
  */
 async function fetchRecentOrdersSalesMap(accountId, sellerId) {
   try {
@@ -99,45 +102,59 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
       return {};
     }
 
-    const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('.')[0] + '.000-00:00';
-    const salesMap = {};
-    let offset = 0;
-    const limit = 50;
-    let total = Infinity;
-
-    // Paginate through all orders in the last 30 days
-    while (offset < total) {
-      const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`[ML Orders] Order search failed (${res.status}) for seller ${sId}: ${errText}`);
-        break;
-      }
-
-      const data = await res.json();
-      const orders = data.results || [];
-      total = (data.paging && data.paging.total) || orders.length;
-
-      orders.forEach(ord => {
-        if (ord.status !== 'cancelled' && ord.order_items) {
-          ord.order_items.forEach(oi => {
-            const itemId = oi.item && oi.item.id;
-            if (!itemId) return;
-            const qty = oi.quantity || 1;
-            salesMap[itemId] = (salesMap[itemId] || 0) + qty;
-          });
-        }
-      });
-
-      offset += orders.length;
-      if (orders.length < limit) break; // No more pages
+    // Build weekly date windows for the last 30 days
+    // This avoids the ML API offset=1000 hard limit by splitting into small time ranges
+    const now = Date.now();
+    const MS_DAY = 24 * 60 * 60 * 1000;
+    const CHUNK_DAYS = 5; // 5-day windows → 6 chunks for 30 days
+    const chunks = [];
+    for (let i = 30; i > 0; i -= CHUNK_DAYS) {
+      const from = new Date(now - i * MS_DAY).toISOString();
+      const to   = new Date(now - Math.max(0, i - CHUNK_DAYS) * MS_DAY).toISOString();
+      chunks.push({ from, to });
     }
 
-    console.log(`[ML Orders] Fetched ${Object.keys(salesMap).length} products with sales in last 30d for seller ${sId}`);
+    const salesMap = {};
+    let totalOrdersRead = 0;
+    const limit = 50;
+
+    for (const chunk of chunks) {
+      let offset = 0;
+      let chunkTotal = Infinity;
+
+      // Paginate within each date-range window (max ~300 orders per 5-day window is safe)
+      while (offset < chunkTotal) {
+        const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${chunk.from}&order.date_created.to=${chunk.to}&sort=date_asc&limit=${limit}&offset=${offset}`;
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          console.warn(`[ML Orders] Chunk failed (${res.status}): ${errText}`);
+          break;
+        }
+
+        const data = await res.json();
+        chunkTotal = (data.paging && data.paging.total) || 0;
+        const orders = data.results || [];
+        totalOrdersRead += orders.length;
+
+        orders.forEach(ord => {
+          if (ord.status !== 'cancelled' && ord.order_items) {
+            ord.order_items.forEach(oi => {
+              const itemId = oi.item && oi.item.id;
+              if (!itemId) return;
+              const qty = oi.quantity || 1;
+              salesMap[itemId] = (salesMap[itemId] || 0) + qty;
+            });
+          }
+        });
+
+        offset += orders.length;
+        if (orders.length < limit) break;
+      }
+    }
+
+    console.log(`[ML Orders] Read ${totalOrdersRead} orders across ${chunks.length} date windows for seller ${sId}. Products: ${Object.keys(salesMap).length}`);
     return salesMap;
   } catch (err) {
     console.error('[ML Orders] Error fetching order sales:', err.message);
