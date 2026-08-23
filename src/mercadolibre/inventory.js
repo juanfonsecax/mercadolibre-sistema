@@ -6,13 +6,27 @@ const db = require('../database');
  */
 async function getSellerItems(accountId = null) {
   try {
-    const account = db.getAccountById(accountId);
-    const tokenObj = db.getToken(accountId);
-    const sellerId = (account && account.seller_id) || (tokenObj && tokenObj.seller_id);
-    if (!sellerId) return [];
-
-    const accessToken = await auth.getValidToken(accountId);
+    const targetAccountId = accountId || 1;
+    const accessToken = await auth.getValidToken(targetAccountId);
     if (!accessToken) return [];
+
+    let tokenObj = db.getToken(targetAccountId);
+    let sellerId = tokenObj && (tokenObj.user_id || tokenObj.seller_id);
+
+    if (!sellerId) {
+      const meRes = await fetch('https://api.mercadolibre.com/users/me', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        sellerId = me.id;
+      }
+    }
+
+    if (!sellerId) {
+      console.warn(`[ML Inventory] Could not determine seller_id for account ${targetAccountId}`);
+      return [];
+    }
 
     const url = `https://api.mercadolibre.com/users/${sellerId}/items/search?limit=50`;
     const response = await fetch(url, {
@@ -49,24 +63,41 @@ async function getSellerItems(accountId = null) {
 
 async function fetchRecentOrdersSalesMap(accountId, sellerId) {
   try {
-    const accessToken = await auth.getValidToken(accountId);
-    if (!accessToken || !sellerId) return {};
+    const targetAccountId = accountId || 1;
+    const accessToken = await auth.getValidToken(targetAccountId);
+    if (!accessToken) return {};
+
+    let sId = sellerId;
+    if (!sId) {
+      const meRes = await fetch('https://api.mercadolibre.com/users/me', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        sId = me.id;
+      }
+    }
+
+    if (!sId) return {};
 
     const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&limit=50`;
+    const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${date30Ago}&limit=50`;
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
 
-    if (!res.ok) return {};
+    if (!res.ok) {
+      console.warn(`[ML Orders] Order search failed (${res.status}) for seller ${sId}`);
+      return {};
+    }
 
     const data = await res.json();
     const orders = data.results || [];
     const salesMap = {};
 
     orders.forEach(ord => {
-      if (ord.order_items) {
+      if (ord.status !== 'cancelled' && ord.order_items) {
         ord.order_items.forEach(oi => {
           const itemId = oi.item.id;
           const qty = oi.quantity || 1;
@@ -75,6 +106,7 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
       }
     });
 
+    console.log(`[ML Orders] Calculated 30d sales map for seller ${sId}:`, salesMap);
     return salesMap;
   } catch (err) {
     console.error('[ML Orders] Error fetching order sales:', err.message);
@@ -87,10 +119,13 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
  */
 async function syncMlFullInventory(accountId = null) {
   try {
-    const accounts = accountId ? [db.getAccountById(accountId)].filter(Boolean) : db.getAccounts();
+    const accounts = db.getAccounts();
     let syncedCount = 0;
 
     for (const acc of accounts) {
+      const token = db.getToken(acc.id);
+      if (!token || !token.access_token) continue;
+
       const items = await getSellerItems(acc.id);
       const realSalesMap = await fetchRecentOrdersSalesMap(acc.id, acc.seller_id);
 
@@ -99,7 +134,10 @@ async function syncMlFullInventory(accountId = null) {
         const sku = item.seller_custom_field || (item.attributes && item.attributes.find(a => a.id === 'SELLER_SKU')?.value_name) || item.id;
         
         const real30d = realSalesMap[item.id];
-        const sales30d = real30d !== undefined ? real30d : Math.max(0, Math.round((item.sold_quantity || 0) * 0.05));
+        const existingItem = db.queryOne('SELECT sales_last_30d FROM ml_full_inventory WHERE ml_item_id = ?', [item.id]);
+        const currentSales30d = existingItem ? existingItem.sales_last_30d : 0;
+        
+        const sales30d = real30d !== undefined ? real30d : (currentSales30d || 0);
         const sales7d = Math.round(sales30d * 0.25);
 
         db.saveMlFullInventoryItem({
