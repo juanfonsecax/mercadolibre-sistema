@@ -2320,18 +2320,25 @@ async function triggerImportCsv() {
 // --- Modulo de Vinculacion China <-> Producto Maestro (Fase 1 ↔ Fase 2 ↔ Fase 3) ---
 async function getOrFetchMasterProductTitles() {
   try {
-    const localData = await apiFetch(`/api/inventory/local?accountId=${activeAccountId}`);
-    const fullData = await apiFetch(`/api/inventory/full?accountId=${activeAccountId}`);
+    const [localData, fullData, planningData] = await Promise.all([
+      apiFetch(`/api/inventory/local?accountId=${activeAccountId}`),
+      apiFetch(`/api/inventory/full?accountId=${activeAccountId}`),
+      apiFetch(`/api/inventory/planning?accountId=${activeAccountId}`)
+    ]);
     
     const titlesSet = new Set();
-    (localData.items || []).forEach(i => { if (i.title) titlesSet.add(i.title.trim()); });
-    (fullData.items || []).forEach(f => {
+    ((localData && localData.inventory) || []).forEach(i => { if (i.title) titlesSet.add(i.title.trim()); });
+    ((fullData && fullData.fullInventory) || []).forEach(f => {
       if (f.master_product_title) titlesSet.add(f.master_product_title.trim());
       else if (f.title) titlesSet.add(f.title.trim());
+    });
+    ((planningData && planningData.planning) || []).forEach(p => {
+      if (p.master_title) titlesSet.add(p.master_title.trim());
     });
     
     return Array.from(titlesSet).sort();
   } catch (e) {
+    console.error('Error fetching master titles:', e);
     return [];
   }
 }
