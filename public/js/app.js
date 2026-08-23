@@ -1848,7 +1848,8 @@ function toggleInactiveTable() {
 // --- Subtab 3: Stock Full Mercado Libre ---
 async function loadMlFullInventory() {
   try {
-    const data = await apiFetch(`/api/inventory/full?accountId=${activeAccountId}`);
+    const query = activeAccountId ? `?accountId=${activeAccountId}` : '';
+    const data = await apiFetch(`/api/inventory/full${query}`);
     const allItems = data.fullInventory || [];
 
     // Separate active/relevant items from inactive 0-sales items

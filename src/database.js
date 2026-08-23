@@ -1163,6 +1163,7 @@ function getMlFullInventory(accountId = null) {
     params.push(accountId);
   }
   sql += ' GROUP BY f.ml_item_id ORDER BY f.units_full ASC';
+  console.log('[DB DEBUG] getMlFullInventory Executing SQL:', sql, 'params:', params);
   const items = queryAll(sql, params);
   return items.filter(f => !isProductDiscontinued(f.title));
 }
