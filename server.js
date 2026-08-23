@@ -397,6 +397,17 @@ app.post('/api/settings/mode', (req, res) => {
   res.json({ success: true, mode });
 });
 
+app.post('/api/settings/gemini-key', (req, res) => {
+  const { apiKey } = req.body;
+  if (!apiKey || !apiKey.trim()) {
+    return res.status(400).json({ error: 'La API Key de Gemini es requerida' });
+  }
+  process.env.GEMINI_API_KEY = apiKey.trim();
+  gemini.initGemini();
+  db.logActivity('settings', 'API Key de Gemini configurada/actualizada');
+  res.json({ success: true, message: 'API Key de Gemini guardada activamente en el servidor' });
+});
+
 app.post('/api/test-ai', async (req, res) => {
   try {
     const result = await gemini.testConnection();

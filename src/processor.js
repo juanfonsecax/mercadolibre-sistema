@@ -478,6 +478,8 @@ async function regenerateQuestionAnswer(questionId) {
 
   if (generatedAnswer) {
     db.updateQuestionAnswer(questionId, generatedAnswer);
+  } else {
+    throw new Error('No se pudo generar la respuesta de la IA. Verifica que tu GEMINI_API_KEY esté configurada en el menú de Configuración.');
   }
 
   return db.getQuestionById(questionId);

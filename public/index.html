@@ -450,14 +450,21 @@
         <!-- AI Test -->
         <div class="card settings-card">
           <div class="card-header">
-            <h3>🧠 Inteligencia Artificial (Gemini)</h3>
+            <h3>🤖 Configuración de IA (Google Gemini 3.6 Flash)</h3>
           </div>
           <div class="card-body">
-            <div class="ai-status" id="aiStatus">
+            <div class="ai-status" id="aiStatus" style="margin-bottom:12px;">
               <span class="status-dot disconnected"></span>
               <span>No verificado</span>
             </div>
-            <p class="settings-hint">Verifica que la conexión con Google Gemini funciona correctamente.</p>
+            <div class="form-group" style="margin-bottom:14px;">
+              <label for="geminiApiKeyInput">Clave de API de Google Gemini (API Key):</label>
+              <div style="display:flex; gap:8px;">
+                <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="Ingresa tu Gemini API Key..." style="flex:1;">
+                <button class="btn btn-primary" onclick="saveGeminiApiKeyFromUI()">💾 Guardar Key</button>
+              </div>
+              <p class="settings-hint" style="margin-top:6px;">Obtén tu API Key en <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color, #2b6cb0); font-weight:600;">Google AI Studio ↗</a>. Requerida para generar respuestas automáticas y análisis de fotos.</p>
+            </div>
             <button class="btn btn-secondary" id="btnTestAI" onclick="testAI()">🧪 Probar conexión IA</button>
           </div>
         </div>

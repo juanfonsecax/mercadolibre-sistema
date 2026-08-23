@@ -1062,12 +1062,31 @@ async function loadSettings() {
 
     const aiStatus = document.getElementById('aiStatus');
     if (data.gemini_configured) {
-      aiStatus.innerHTML = `<span class="status-dot connected"></span><span>Configurado ✅</span>`;
+      aiStatus.innerHTML = `<span class="status-dot connected"></span><span>Configurado ✅ (Gemini listo)</span>`;
     } else {
-      aiStatus.innerHTML = `<span class="status-dot disconnected"></span><span>Clave Gemini requerida en .env</span>`;
+      aiStatus.innerHTML = `<span class="status-dot disconnected"></span><span>⚠️ Ingresa tu API Key de Gemini a continuación</span>`;
     }
   } catch (error) {
     console.error('Error loading settings:', error);
+  }
+}
+
+async function saveGeminiApiKeyFromUI() {
+  const apiKey = document.getElementById('geminiApiKeyInput')?.value;
+  if (!apiKey || !apiKey.trim()) {
+    return showToast('Ingresa una API Key válida de Gemini', 'error');
+  }
+
+  try {
+    showToast('Guardando API Key de Gemini...', 'info');
+    await apiFetch('/api/settings/gemini-key', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    });
+    showToast('✅ Clave API de Gemini configurada e inicializada correctamente', 'success');
+    loadSettings();
+  } catch (error) {
+    showToast('Error guardando API Key: ' + error.message, 'error');
   }
 }
 
