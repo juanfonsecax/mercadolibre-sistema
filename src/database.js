@@ -1489,6 +1489,7 @@ function getInventoryPlanningIntelligence(accountId = null) {
         transit_stock: 0,
         sales_30d: 0,
         sales_7d: 0,
+        china_shipments_list: [],
         linked_listings_count: 0,
         linked_listings: []
       };
@@ -1509,6 +1510,7 @@ function getInventoryPlanningIntelligence(accountId = null) {
         transit_stock: 0,
         sales_30d: 0,
         sales_7d: 0,
+        china_shipments_list: [],
         linked_listings_count: 0,
         linked_listings: []
       };
@@ -1534,7 +1536,16 @@ function getInventoryPlanningIntelligence(accountId = null) {
     for (const key of Object.keys(planningMap)) {
       const kLower = key.trim().toLowerCase();
       if (kLower === cName) {
-        planningMap[key].transit_stock += (c.quantity || c.active_transit_units || 0);
+        const qty = c.quantity || c.active_transit_units || 0;
+        planningMap[key].transit_stock += qty;
+        planningMap[key].china_shipments_list.push({
+          id: c.id,
+          product_name: c.product_name,
+          quantity: qty,
+          eta_date: c.eta_date || c.chinese_winery_date || null,
+          days_to_arrive: c.days_to_arrive || 90,
+          delivery_status: c.delivery_status || c.status
+        });
       }
     }
   });
@@ -1608,6 +1619,36 @@ function getInventoryPlanningIntelligence(accountId = null) {
         else suggestedPoQuantity = Math.ceil(rawSuggestedPo / 50) * 50;
       }
 
+      // Time-Phased MRP Analysis (Stockout Date & Late Arrival Detection)
+      const daysOnHouseStock = effectiveVelocity > 0 ? (totalCurrentStock / effectiveVelocity) : 999;
+      
+      const today = new Date();
+      const stockoutDate = new Date(today.getTime() + daysOnHouseStock * 86400000);
+      const stockoutDateStr = daysOnHouseStock < 365 
+        ? stockoutDate.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) 
+        : 'Indefinido (+1 año)';
+
+      let lateShipmentsCount = 0;
+      const transitArrivalsDetail = (p.china_shipments_list || []).map(s => {
+        let arrivalDays = s.days_to_arrive || 90;
+        if (s.eta_date) {
+          const parsedTs = Date.parse(s.eta_date);
+          if (!isNaN(parsedTs)) {
+            arrivalDays = Math.max(0, Math.round((parsedTs - today.getTime()) / 86400000));
+          }
+        }
+
+        const isLate = arrivalDays > daysOnHouseStock;
+        if (isLate) lateShipmentsCount++;
+
+        return {
+          ...s,
+          arrival_days: arrivalDays,
+          is_late: isLate,
+          gap_days: isLate ? Math.round(arrivalDays - daysOnHouseStock) : 0
+        };
+      });
+
       // Coverage Days Remaining based on Effective Velocity
       const daysCoverageRemaining = effectiveVelocity > 0 ? (totalAvailablePosition / effectiveVelocity) : 999;
 
@@ -1615,17 +1656,31 @@ function getInventoryPlanningIntelligence(accountId = null) {
       const daysUntilPoTrigger = Math.max(0, Math.round(daysCoverageRemaining - LEAD_TIME_DAYS));
 
       let status = 'OPTIMAL';
-      let statusLabel = '🟢 STOCK SUFICIENTE';
+      let statusLabel = '🟢 STOCK & TRÁNSITO AL DÍA';
       let badgeClass = 'badge-success';
+      let mrpDiagnostic = `Stock en bodega para ${daysOnHouseStock.toFixed(0)}d (Agotamiento: ${stockoutDateStr})`;
 
-      if (totalAvailablePosition < reorderPointUnits || daysCoverageRemaining <= LEAD_TIME_DAYS) {
-        status = 'CRITICAL_ORDER_NOW';
-        statusLabel = isTrendingUp ? '🚨 PEDIR A CHINA HOY (🔥 ALTA TENDENCIA)' : '🚨 PEDIR A CHINA HOY';
+      if (daysOnHouseStock <= 30 && (transitArrivalsDetail.length === 0 || lateShipmentsCount > 0)) {
+        status = 'CRITICAL_STOCKOUT_IMMINENT';
         badgeClass = 'badge-critical';
+        if (lateShipmentsCount > 0) {
+          const lateItem = transitArrivalsDetail.find(t => t.is_late);
+          statusLabel = '🚨 PEDIR HOY (TRÁNSITO LLEGA TARDE)';
+          mrpDiagnostic = `🚨 Stock en Colombia dura ${daysOnHouseStock.toFixed(0)}d (se agota el ${stockoutDateStr}). El embarque llega en ${lateItem.arrival_days}d (¡${lateItem.gap_days} días de quiebre sin producto!).`;
+        } else {
+          statusLabel = isTrendingUp ? '🚨 PEDIR A CHINA HOY (🔥 ALTA TENDENCIA)' : '🚨 PEDIR A CHINA HOY';
+          mrpDiagnostic = `🚨 Stock en bodega se agota en ${daysOnHouseStock.toFixed(0)} días (el ${stockoutDateStr}). No hay pedidos de China en camino.`;
+        }
+      } else if (lateShipmentsCount > 0) {
+        status = 'WARNING_GAP_DETECTED';
+        statusLabel = `⚠️ BRECHA EN TRÁNSITO (${lateShipmentsCount} embarque tardío)`;
+        badgeClass = 'badge-warning';
+        mrpDiagnostic = `⚠️ Tienes mercancía viajando pero llegará desfasada respecto al consumo de bodega.`;
       } else if (daysUntilPoTrigger <= 30) {
         status = 'WARNING_ORDER_SOON';
-        statusLabel = `🟡 PEDIR EN ${daysUntilPoTrigger} DÍAS`;
+        statusLabel = `🟡 PEDIR A CHINA EN ${daysUntilPoTrigger} DÍAS`;
         badgeClass = 'badge-warning';
+        mrpDiagnostic = `🟡 Cobertura saludable por ahora. Próximo pedido sugerido en ${daysUntilPoTrigger} días.`;
       }
 
       return {
@@ -1640,11 +1695,16 @@ function getInventoryPlanningIntelligence(accountId = null) {
         target_inventory_level: targetInventoryLevel,
         suggested_po_quantity: suggestedPoQuantity,
         raw_suggested_po: rawSuggestedPo,
+        days_on_house_stock: parseFloat(daysOnHouseStock.toFixed(1)),
+        stockout_date_str: stockoutDateStr,
+        transit_arrivals_detail: transitArrivalsDetail,
+        late_shipments_count: lateShipmentsCount,
         days_coverage_remaining: parseFloat(daysCoverageRemaining.toFixed(1)),
         days_until_po_trigger: daysUntilPoTrigger,
         status,
         status_label: statusLabel,
-        badge_class: badgeClass
+        badge_class: badgeClass,
+        mrp_diagnostic: mrpDiagnostic
       };
     });
 

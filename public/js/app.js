@@ -2074,6 +2074,28 @@ async function loadReorderAlerts() {
           ? `<strong class="text-critical" style="font-size:1.1rem;">${p.suggested_po_quantity.toLocaleString('es-CO')} unds</strong><br><small class="text-muted">(Lote min. 50 unds | Calc: ${p.raw_suggested_po || 0})</small>` 
           : `<span class="text-muted">0 unds</span>`;
 
+        let transitHtml = '';
+        if (p.transit_stock > 0 && p.transit_arrivals_detail && p.transit_arrivals_detail.length > 0) {
+          transitHtml = `<strong>🚢 ${p.transit_stock} unds</strong><br>`;
+          p.transit_arrivals_detail.forEach(t => {
+            const dateStr = t.eta_date ? escapeHtml(t.eta_date) : `${t.arrival_days}d`;
+            if (t.is_late) {
+              transitHtml += `<span class="badge-critical" style="font-size:0.7rem; padding:1px 4px; display:inline-block; margin-top:2px;">⚠️ ETA ${dateStr} (${t.gap_days}d TARDE)</span><br>`;
+            } else {
+              transitHtml += `<span class="badge-success" style="font-size:0.7rem; padding:1px 4px; display:inline-block; margin-top:2px;">✅ ETA ${dateStr} (A tiempo)</span><br>`;
+            }
+          });
+        } else if (p.transit_stock > 0) {
+          transitHtml = `<strong>🚢 ${p.transit_stock} unds</strong><br><small class="text-muted">En tránsito</small>`;
+        } else {
+          transitHtml = `<span class="text-muted">0 unds (Sin tránsito)</span>`;
+        }
+
+        const stockoutHtml = `
+          <strong>📅 ${escapeHtml(p.stockout_date_str || 'N/A')}</strong><br>
+          <small class="text-muted">Dura ~${p.days_on_house_stock || 0} días en bodega</small>
+        `;
+
         html += `
           <tr>
             <td>
@@ -2085,8 +2107,7 @@ async function loadReorderAlerts() {
               <small class="text-muted">(Casa: ${p.house_stock} | Full: ${p.full_stock})</small>
             </td>
             <td>
-              <strong>${p.transit_stock}</strong> unds<br>
-              <small class="text-muted">${p.transit_stock > 0 ? '🚢 Viniendo de China' : 'Sin pedidos en camino'}</small>
+              ${transitHtml}
             </td>
             <td>
               ${trendBadge}
@@ -2094,17 +2115,14 @@ async function loadReorderAlerts() {
               <small class="text-muted">30d: ${p.velocity_30d || 0}/d | 7d: ${p.velocity_7d || 0}/d</small>
             </td>
             <td>
-              <strong>${p.days_coverage_remaining} días</strong>
-            </td>
-            <td>
-              <strong>${p.reorder_point_units} unds</strong><br>
-              <small class="text-muted">(Garantiza 105d tránsito)</small>
+              ${stockoutHtml}
             </td>
             <td>
               ${orderQtyDisplay}
             </td>
             <td>
               <span class="${p.badge_class}" style="font-size:0.85rem; padding:4px 8px; display:inline-block; margin-bottom:4px;">${p.status_label}</span><br>
+              <small class="text-muted" style="display:block; margin-bottom:6px; font-size:0.78rem; max-width:280px;">${escapeHtml(p.mrp_diagnostic || '')}</small>
               <button class="btn btn-sm btn-primary" onclick="openChinaShipmentModal({ product_name: '${escapeAttr(p.master_title)}', quantity: ${p.suggested_po_quantity || 100} })">🚢 Crear Pedido a China</button>
             </td>
           </tr>
