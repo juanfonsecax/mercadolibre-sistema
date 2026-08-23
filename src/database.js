@@ -1,4 +1,5 @@
 const initSqlJs = require('sql.js');
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 
@@ -12,12 +13,34 @@ const ML_SALES_JSON_PATH = path.join(__dirname, '..', 'data', 'ml_sales.json');
 let db = null;
 let SQL = null;
 
+const { Pool } = require('pg');
+let pgPool = null;
+if (process.env.DATABASE_URL) {
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+}
+
 async function initDb() {
   if (db) return db;
   SQL = await initSqlJs();
 
-  // Load existing database if exists
-  if (fs.existsSync(DB_PATH)) {
+  // Load existing database from Supabase or Local
+  if (pgPool) {
+    try {
+      const res = await pgPool.query('SELECT db_data FROM sqlite_backup WHERE id = 1');
+      if (res.rows.length > 0 && res.rows[0].db_data) {
+        db = new SQL.Database(res.rows[0].db_data);
+        console.log('[DB] Reloaded database from Supabase cloud!');
+      } else {
+        db = new SQL.Database();
+      }
+    } catch(e) {
+      console.error('[DB] Error loading from Supabase, creating empty DB:', e.message);
+      db = new SQL.Database();
+    }
+  } else if (fs.existsSync(DB_PATH)) {
     const buffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(buffer);
   } else {
@@ -34,15 +57,43 @@ function getDb() {
   return db;
 }
 
-function saveDbToFile() {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
+let isSaving = false;
+async function saveDbToFile() {
+  if (!db || isSaving) return;
+  
+  if (pgPool) {
+    isSaving = true;
+    try {
+      const data = db.export();
+      const buffer = Buffer.from(data);
+      await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
+    } catch(e) {
+      console.error('[DB] Error saving DB to Supabase:', e.message);
+    } finally {
+      isSaving = false;
+    }
+  } else {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+  }
 }
 
-function reloadDbFromFile() {
-  if (fs.existsSync(DB_PATH) && SQL) {
+async function reloadDbFromFile() {
+  if (!SQL) return;
+  if (pgPool) {
+    try {
+      const res = await pgPool.query('SELECT db_data FROM sqlite_backup WHERE id = 1');
+      if (res.rows.length > 0 && res.rows[0].db_data) {
+        db = new SQL.Database(res.rows[0].db_data);
+        db.run('PRAGMA foreign_keys = ON');
+        initSchema();
+        console.log('[DB] Reloaded database from Supabase cloud');
+      }
+    } catch(e) {
+      console.error('[DB] Error reloading from Supabase:', e.message);
+    }
+  } else if (fs.existsSync(DB_PATH)) {
     const buffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(buffer);
     db.run('PRAGMA foreign_keys = ON');
