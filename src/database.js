@@ -1259,7 +1259,7 @@ function restoreLocalInventoryFromJsonFile() {
 }
 
 const ACTIVE_ML_LISTINGS = [
-  { ml_item_id: 'MCO5914426965804815', sku: 'ENCHUFE-WIFI-SMART', title: 'Enchufe Inteligente Toma Wifi Smart Echo Alexa Google Y Siri', units_full: 34, sales_last_30d: 5, sales_last_7d: 2, account_id: 2 },
+  { ml_item_id: 'MCO5914426965804815', sku: 'ENCHUFE-WIFI-SMART', title: 'Enchufe Inteligente Toma Wifi Smart Echo Alexa Google Y Siri', units_full: 34, sales_last_30d: 14, sales_last_7d: 5, account_id: 2 },
   { ml_item_id: 'MCO1360887164', sku: 'INTERRUPTOR-SWITCH-10A-BLANCO', title: 'Interruptor Inteligente Switch Wifi Tuya *equivalente Sonoff 10 A 110v Blanco', units_full: 100, sales_last_30d: 2, sales_last_7d: 0, account_id: 2 },
   { ml_item_id: 'MCO2953532088', sku: 'TOMACORRIENTE-MEDIDOR-TUYA', title: 'Tomacorriente Inteligente Wifi Con Medidor De Energía - Tuya Blanco', units_full: 109, sales_last_30d: 13, sales_last_7d: 6, account_id: 2 },
   { ml_item_id: 'MCO1531049217', sku: 'VII-CAPACITOR-SIN-NEUTRO', title: 'Vii Capacitor Condensador Interruptor Inteligente Sin Neutro', units_full: 15, sales_last_30d: 1, sales_last_7d: 0, account_id: 2 },

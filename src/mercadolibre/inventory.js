@@ -47,6 +47,41 @@ async function getSellerItems(accountId = null) {
   }
 }
 
+async function fetchRecentOrdersSalesMap(accountId, sellerId) {
+  try {
+    const accessToken = await auth.getValidToken(accountId);
+    if (!accessToken || !sellerId) return {};
+
+    const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&limit=50`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    if (!res.ok) return {};
+
+    const data = await res.json();
+    const orders = data.results || [];
+    const salesMap = {};
+
+    orders.forEach(ord => {
+      if (ord.order_items) {
+        ord.order_items.forEach(oi => {
+          const itemId = oi.item.id;
+          const qty = oi.quantity || 1;
+          salesMap[itemId] = (salesMap[itemId] || 0) + qty;
+        });
+      }
+    });
+
+    return salesMap;
+  } catch (err) {
+    console.error('[ML Orders] Error fetching order sales:', err.message);
+    return {};
+  }
+}
+
 /**
  * Sync Full Inventory from Mercado Libre API into local DB
  */
@@ -57,13 +92,14 @@ async function syncMlFullInventory(accountId = null) {
 
     for (const acc of accounts) {
       const items = await getSellerItems(acc.id);
+      const realSalesMap = await fetchRecentOrdersSalesMap(acc.id, acc.seller_id);
+
       for (const item of items) {
-        // Check if fulfillment / Full or standard stock
         const availableQuantity = item.available_quantity || 0;
         const sku = item.seller_custom_field || (item.attributes && item.attributes.find(a => a.id === 'SELLER_SKU')?.value_name) || item.id;
         
-        // Estimated last 30d sales
-        const sales30d = Math.max(5, Math.round((item.sold_quantity || 0) * 0.2));
+        const real30d = realSalesMap[item.id];
+        const sales30d = real30d !== undefined ? real30d : Math.max(0, Math.round((item.sold_quantity || 0) * 0.05));
         const sales7d = Math.round(sales30d * 0.25);
 
         db.saveMlFullInventoryItem({
