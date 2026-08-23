@@ -1832,17 +1832,50 @@ async function unlinkProductFromModal() {
   }
 }
 
+function toggleInactiveTable() {
+  const wrapper = document.getElementById('inactiveTableWrapper');
+  const icon = document.getElementById('inactiveToggleIcon');
+  if (!wrapper) return;
+  if (wrapper.style.display === 'none') {
+    wrapper.style.display = 'block';
+    if (icon) icon.textContent = '▼ Ocultar';
+  } else {
+    wrapper.style.display = 'none';
+    if (icon) icon.textContent = '▶ Mostrar';
+  }
+}
+
 // --- Subtab 3: Stock Full Mercado Libre ---
 async function loadMlFullInventory() {
   try {
     const data = await apiFetch(`/api/inventory/full?accountId=${activeAccountId}`);
-    const items = data.fullInventory || [];
+    const allItems = data.fullInventory || [];
 
-    let html = '';
-    if (items.length === 0) {
-      html = '<tr><td colspan="9" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
+    // Separate active/relevant items from inactive 0-sales items
+    const activeOrSalesItems = [];
+    const inactiveZeroSalesItems = [];
+
+    allItems.forEach(f => {
+      const sales30d = parseInt(f.sales_last_30d || 0, 10);
+      const unitsFull = parseInt(f.units_full || 0, 10);
+      const houseStockVal = f.master_stock_casa !== null && f.master_stock_casa !== undefined
+        ? parseInt(f.master_stock_casa, 10)
+        : (f.stock_casa !== undefined && f.stock_casa !== null ? parseInt(f.stock_casa, 10) : 0);
+
+      // Main table: has sales > 0 OR has Full stock > 0 OR has House stock > 0
+      if (sales30d > 0 || unitsFull > 0 || houseStockVal > 0) {
+        activeOrSalesItems.push(f);
+      } else {
+        inactiveZeroSalesItems.push(f);
+      }
+    });
+
+    // 1. Render Main Table
+    let htmlActive = '';
+    if (activeOrSalesItems.length === 0) {
+      htmlActive = '<tr><td colspan="9" class="empty-cell">No hay publicaciones activas o con ventas en los últimos 30 días</td></tr>';
     } else {
-      items.forEach(f => {
+      activeOrSalesItems.forEach(f => {
         const cov = parseFloat(f.coverage_days || 0);
         let covStatus = '<span class="badge-success">🟢 Cobertura Óptima</span>';
         if (cov < 5) covStatus = '<span class="badge-critical">🔴 Reabastecer Urgente</span>';
@@ -1857,7 +1890,7 @@ async function loadMlFullInventory() {
           ? f.master_stock_casa
           : (f.stock_casa !== undefined && f.stock_casa !== null ? f.stock_casa : 'N/A');
 
-        html += `
+        htmlActive += `
           <tr>
             <td><code>${escapeHtml(f.ml_item_id)}</code></td>
             <td><strong>${escapeHtml(f.title)}</strong></td>
@@ -1879,11 +1912,50 @@ async function loadMlFullInventory() {
       });
     }
 
-    document.getElementById('mlFullInventoryTable').innerHTML = html;
+    const activeTableEl = document.getElementById('mlFullInventoryTable');
+    if (activeTableEl) activeTableEl.innerHTML = htmlActive;
+
+    const activeBadgeEl = document.getElementById('activeListingsCount');
+    if (activeBadgeEl) activeBadgeEl.textContent = `${activeOrSalesItems.length} publicaciones principales`;
+
+    // 2. Render Secondary Table (Inactive / Zero Sales)
+    let htmlInactive = '';
+    if (inactiveZeroSalesItems.length === 0) {
+      htmlInactive = '<tr><td colspan="7" class="empty-cell">No hay publicaciones inactivas sin ventas</td></tr>';
+    } else {
+      inactiveZeroSalesItems.forEach(f => {
+        const masterTitle = f.master_product_title || '';
+        const masterCell = masterTitle 
+          ? `<span class="badge-primary">📦 ${escapeHtml(masterTitle)}</span>`
+          : `<span class="badge-secondary">Sin vincular</span>`;
+
+        htmlInactive += `
+          <tr style="opacity: 0.7;">
+            <td><code>${escapeHtml(f.ml_item_id)}</code></td>
+            <td>${escapeHtml(f.title)}</td>
+            <td>${masterCell}</td>
+            <td>0 unds</td>
+            <td>N/A</td>
+            <td>0 unds</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" onclick="openLinkProductModal('${f.ml_item_id}', '${escapeAttr(f.title)}', '${escapeAttr(masterTitle)}')">🔗 Vincular</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    const inactiveTableEl = document.getElementById('mlInactiveInventoryTable');
+    if (inactiveTableEl) inactiveTableEl.innerHTML = htmlInactive;
+
+    const inactiveBadgeEl = document.getElementById('inactiveCountBadge');
+    if (inactiveBadgeEl) inactiveBadgeEl.textContent = `${inactiveZeroSalesItems.length}`;
+
   } catch (error) {
     showToast('Error cargando stock Full Mercado Libre: ' + error.message, 'error');
   }
 }
+
 
 async function promptEditSales30d(mlItemId, currentSales) {
   const newVal = prompt(`Modificar ventas de los últimos 30 días para la publicación ${mlItemId}:`, currentSales);

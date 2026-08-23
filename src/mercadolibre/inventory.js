@@ -113,8 +113,8 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
       return {};
     }
 
-    // Use 35 days ago to ensure complete 30-day coverage across all timezones
-    const date35Ago = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
+    // Use exact 30 rolling calendar days to match Mercado Libre Panel
+    const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const salesMap = {};
     let offset = 0;
     const limit = 50;
@@ -122,7 +122,7 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
     let totalRead = 0;
 
     while (offset < totalOrders && offset < 1000) {
-      const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${date35Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
+      const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
       if (!res.ok) {

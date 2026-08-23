@@ -659,6 +659,10 @@
         </div>
 
         <div class="table-container card">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+            <h3 style="margin:0; font-size:1.1rem; color:var(--primary-color, #2b6cb0);">📦 Publicaciones Activas y con Ventas en 30 Días</h3>
+            <span class="badge-primary" id="activeListingsCount">0 publicaciones</span>
+          </div>
           <table class="data-table">
             <thead>
               <tr>
@@ -677,6 +681,34 @@
               <tr><td colspan="9" class="empty-cell">Cargando stock Full Mercado Libre...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Secondary Section: Inactive / Zero-Sales Publications -->
+        <div class="card mt-4" id="mlInactiveSection" style="margin-top: 1.5rem;">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding: 12px 16px; background: rgba(0,0,0,0.03);" onclick="toggleInactiveTable()">
+            <h4 style="margin:0; font-size:0.95rem; color:#6c757d; font-weight:600;">
+              📁 Otras Publicaciones Inactivas / Sin Ventas (0 Stock, 0 Ventas) <span id="inactiveCountBadge" class="badge-secondary" style="margin-left:6px;">0</span>
+            </h4>
+            <span id="inactiveToggleIcon" style="font-size:0.85rem; color:#6c757d;">▶ Mostrar</span>
+          </div>
+          <div id="inactiveTableWrapper" style="display:none; margin-top:10px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Item ML</th>
+                  <th>Producto Publicado ML</th>
+                  <th>Producto Físico (Bodega)</th>
+                  <th>Stock Full ML</th>
+                  <th>Stock Casa</th>
+                  <th>Ventas (30d)</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="mlInactiveInventoryTable">
+                <tr><td colspan="7" class="empty-cell">No hay publicaciones inactivas sin ventas.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

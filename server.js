@@ -754,6 +754,30 @@ function startPolling() {
   console.log(`[Cron] Polling active accounts every ${pollingInterval} minutes`);
 }
 
+function startAutoInventorySync() {
+  // Sync ML Full inventory & 30d sales automatically every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('[Cron] Running 24/7 automatic ML inventory & sales background sync...');
+    try {
+      await inventoryApi.syncMlFullInventory();
+    } catch (err) {
+      console.error('[Cron] Auto inventory sync error:', err.message || err);
+    }
+  });
+
+  // Also trigger initial background sync 15 seconds after server startup
+  setTimeout(async () => {
+    console.log('[Startup] Running initial automatic ML inventory & sales sync...');
+    try {
+      await inventoryApi.syncMlFullInventory();
+    } catch (err) {
+      console.error('[Startup] Initial sync error:', err.message || err);
+    }
+  }, 15000);
+
+  console.log('[Cron] 24/7 Auto inventory & sales sync scheduled (every 30m)');
+}
+
 // ══════════════════════════════════════════
 // ── Start Server ──
 // ══════════════════════════════════════════
@@ -786,7 +810,9 @@ async function startServer() {
     console.log('');
 
     startPolling();
+    startAutoInventorySync();
   });
+
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
