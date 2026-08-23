@@ -461,6 +461,8 @@ async function approveQuestion(id) {
     });
     if (res && res.alreadyAnswered) {
       showToast(res.message || 'ℹ️ La pregunta ya había sido respondida previamente en Mercado Libre.', 'info');
+    } else if (res && res.itemClosed) {
+      showToast(res.message || '⚠️ La publicación está pausada o finalizada en Mercado Libre. Se retiró de pendientes.', 'warning');
     } else {
       showToast('¡Respuesta enviada exitosamente!', 'success');
     }

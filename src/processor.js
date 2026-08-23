@@ -63,10 +63,18 @@ async function processQuestion(questionId, accountId = null) {
           error.message.includes('not_unanswered_question') ||
           error.message.includes('is not unanswered')
         );
+        const isItemInactive = error.message && (
+          error.message.includes('not_active_item') ||
+          error.message.includes('Item must be active')
+        );
         if (isAlreadyAnswered) {
           status = 'answered';
           console.log(`[Processor] ℹ️ Pregunta ${questionId} ya estaba respondida en Mercado Libre`);
           db.logActivity('auto_answer_already_answered', `Pregunta ${questionId} ya estaba respondida previamente en Mercado Libre`, null, accountId);
+        } else if (isItemInactive) {
+          status = 'closed_item';
+          console.log(`[Processor] ⚠️ Publicación de pregunta ${questionId} está inactiva/pausada en Mercado Libre`);
+          db.logActivity('auto_answer_item_inactive', `No se pudo responder pregunta ${questionId} porque la publicación está inactiva en Mercado Libre`, null, accountId);
         } else {
           console.error(`[Processor] Error auto-replying:`, error.message);
           status = 'error';
@@ -315,6 +323,10 @@ async function approveQuestion(questionDbId, editedAnswer = null) {
       error.message.includes('not_unanswered_question') ||
       error.message.includes('is not unanswered')
     );
+    const isItemInactive = error.message && (
+      error.message.includes('not_active_item') ||
+      error.message.includes('Item must be active')
+    );
     if (isAlreadyAnswered) {
       db.updateQuestionStatus(questionDbId, 'answered', answerText);
       db.logActivity('question_already_answered', `La pregunta ${question.ml_question_id} ya fue respondida previamente en Mercado Libre. Se actualizó el estado en el sistema.`, { answer: answerText }, question.account_id);
@@ -322,6 +334,15 @@ async function approveQuestion(questionDbId, editedAnswer = null) {
         success: true,
         alreadyAnswered: true,
         message: 'La pregunta ya había sido respondida previamente en Mercado Libre. Se actualizó el estado en el sistema.'
+      };
+    }
+    if (isItemInactive) {
+      db.updateQuestionStatus(questionDbId, 'closed_item', answerText);
+      db.logActivity('question_item_closed', `La pregunta ${question.ml_question_id} pertenece a una publicación pausada o finalizada en Mercado Libre.`, null, question.account_id);
+      return {
+        success: true,
+        itemClosed: true,
+        message: 'La publicación en Mercado Libre está pausada o cerrada. La pregunta se ha marcado como no disponible.'
       };
     }
     db.logActivity('approve_error', `Error al aprobar pregunta ${question.ml_question_id}`, { error: error.message }, question.account_id);
