@@ -384,14 +384,15 @@ function initSchema() {
 
   // Clean up duplicate ml_item_id rows (keep the one with highest sales or most recent)
   try {
-    const dupes = db.exec(`
+    const dupes = queryAll(`
       SELECT ml_item_id, COUNT(*) as cnt FROM ml_full_inventory
       GROUP BY ml_item_id HAVING cnt > 1
     `);
-    if (dupes && dupes.length > 0 && dupes[0].values) {
-      dupes[0].values.forEach(([mlItemId]) => {
+    if (dupes && dupes.length > 0) {
+      dupes.forEach(row => {
+        const mlItemId = row.ml_item_id;
         // Keep the row with the highest sales_last_30d, delete others
-        db.run(`
+        runSql(`
           DELETE FROM ml_full_inventory WHERE ml_item_id = ? AND id NOT IN (
             SELECT id FROM ml_full_inventory WHERE ml_item_id = ?
             ORDER BY sales_last_30d DESC, last_sync_at DESC LIMIT 1
@@ -401,7 +402,7 @@ function initSchema() {
       console.log('[DB] Cleaned up duplicate ml_full_inventory entries');
     }
   } catch (e) {
-    // Ignore if no dupes
+    console.error('[DB] Error cleaning up dupes:', e.message);
   }
 
   // Ensure UNIQUE index exists on ml_item_id (for databases created before this fix)
