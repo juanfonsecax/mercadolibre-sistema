@@ -71,7 +71,18 @@ async function getSellerItems(accountId = null) {
       });
       if (!itemsRes.ok) continue;
       const itemsData = await itemsRes.json();
-      allItems.push(...itemsData.map(res => res.body).filter(Boolean));
+      allItems.push(...itemsData.map(res => res.body).filter(item => {
+        if (!item) return false;
+        if (item.status === 'paused') {
+          // Keep paused items ONLY if they are paused because of out of stock
+          if (item.sub_status && item.sub_status.includes('out_of_stock')) {
+            return true;
+          }
+          // Ignore items manually paused by the seller
+          return false;
+        }
+        return true;
+      }));
     }
     return allItems;
   } catch (error) {
