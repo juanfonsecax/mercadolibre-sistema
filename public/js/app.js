@@ -1807,7 +1807,7 @@ async function loadMlFullInventory() {
 
     let html = '';
     if (items.length === 0) {
-      html = '<tr><td colspan="8" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
+      html = '<tr><td colspan="9" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
     } else {
       items.forEach(f => {
         const cov = parseFloat(f.coverage_days || 0);
@@ -1816,9 +1816,9 @@ async function loadMlFullInventory() {
         else if (cov < 10) covStatus = '<span class="badge-warning">🟠 Alerta Stock Bajo</span>';
 
         const masterTitle = f.master_product_title || '';
-        const masterBadge = masterTitle 
-          ? `<br><span class="badge-primary" style="font-size:0.75rem; margin-top:3px; display:inline-block;">📦 Físico: ${escapeHtml(masterTitle)}</span>`
-          : `<br><small class="text-muted" style="font-style:italic;">Sin vincular a bodega</small>`;
+        const masterCell = masterTitle 
+          ? `<span class="badge-primary" style="font-weight:600;">📦 ${escapeHtml(masterTitle)}</span>`
+          : `<span class="badge-secondary" style="font-style:italic;">Sin vincular</span>`;
 
         const houseStock = f.master_stock_casa !== null && f.master_stock_casa !== undefined
           ? f.master_stock_casa
@@ -1827,10 +1827,8 @@ async function loadMlFullInventory() {
         html += `
           <tr>
             <td><code>${escapeHtml(f.ml_item_id)}</code></td>
-            <td>
-              <strong>${escapeHtml(f.title)}</strong>
-              ${masterBadge}
-            </td>
+            <td><strong>${escapeHtml(f.title)}</strong></td>
+            <td>${masterCell}</td>
             <td><strong>${f.units_full}</strong> unds</td>
             <td><strong>${houseStock}</strong> unds</td>
             <td>${f.sales_last_30d || 0} unds</td>
