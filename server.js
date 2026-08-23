@@ -14,6 +14,7 @@ const inventoryApi = require('./src/mercadolibre/inventory');
 const processor = require('./src/processor');
 const gemini = require('./src/ai/gemini');
 const kb = require('./src/ai/knowledge-base');
+const productContextApi = require('./src/mercadolibre/product-context');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -587,82 +588,6 @@ app.post('/api/inventory/full/sync', async (req, res) => {
   }
 });
 
-// Debug endpoint: shows raw orders from ML API for diagnosis (PAGINATED - all orders)
-app.get('/api/inventory/debug/orders30d', async (req, res) => {
-  try {
-    const { accountId } = req.query;
-    const accId = accountId ? parseInt(accountId) : 1;
-    const accessToken = await auth.getValidToken(accId);
-
-    const tokenObj = db.getToken(accId);
-    let sellerId = tokenObj && (tokenObj.user_id || tokenObj.seller_id);
-
-    if (!sellerId) {
-      const meRes = await fetch('https://api.mercadolibre.com/users/me', {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      if (meRes.ok) {
-        const me = await meRes.json();
-        sellerId = me.id;
-      }
-    }
-
-    const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const salesMap = {};
-    let offset = 0;
-    const limit = 50;
-    let totalOrders = Infinity;
-    let pagesRead = 0;
-
-    // Paginate ALL orders (max 1000 offset)
-    while (offset < totalOrders && offset < 1000) {
-      const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
-      const ordersRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (!ordersRes.ok) break;
-      const ordersData = await ordersRes.json();
-      totalOrders = (ordersData.paging && ordersData.paging.total) || 0;
-      const orders = ordersData.results || [];
-      pagesRead++;
-
-      orders.forEach(ord => {
-        if (ord.status !== 'cancelled' && ord.status !== 'invalid' && ord.order_items) {
-          ord.order_items.forEach(oi => {
-            const itemId = oi.item && oi.item.id;
-            if (!itemId) return;
-            if (!salesMap[itemId]) salesMap[itemId] = { title: oi.item.title || '', qty: 0 };
-            salesMap[itemId].qty += (parseInt(oi.quantity, 10) || 1);
-          });
-        }
-      });
-
-      offset += orders.length;
-      if (orders.length < limit) break;
-    }
-
-    // Find items that appear in orders but NOT tracked in DB
-    const knownItems = db.getMlFullInventory();
-    const knownIds = new Set(knownItems.map(i => i.ml_item_id));
-    const newDiscoveredItems = Object.entries(salesMap)
-      .filter(([id]) => !knownIds.has(id))
-      .map(([id, s]) => ({ ml_item_id: id, title: s.title, sales_30d: s.qty }));
-
-    res.json({
-      seller_id: sellerId,
-      date_from: date30Ago,
-      total_orders: totalOrders,
-      pages_read: pagesRead,
-      total_products_with_sales: Object.keys(salesMap).length,
-      sales_per_item: Object.entries(salesMap)
-        .sort((a, b) => b[1].qty - a[1].qty)
-        .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {}),
-      new_publications_not_in_db: newDiscoveredItems
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
 app.post('/api/inventory/full/sales30d', (req, res) => {
   try {
     const { ml_item_id, sales_last_30d } = req.body;
@@ -738,6 +663,73 @@ app.post('/api/promotions/ai-evaluate', async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════
+// ── Etapa 1: Contexto de Publicaciones API ──
+// ══════════════════════════════════════════
+
+app.get('/api/product-contexts', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const accId = accountId ? parseInt(accountId) : null;
+    const contexts = db.getProductContexts(accId);
+    res.json({ contexts });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/product-contexts/:itemId', (req, res) => {
+  try {
+    const context = db.getProductContextByItemId(req.params.itemId);
+    if (!context) return res.status(404).json({ error: 'Contexto de producto no encontrado' });
+    res.json({ context });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/product-contexts/sync', async (req, res) => {
+  try {
+    const { accountId } = req.body;
+    const accId = accountId ? parseInt(accountId) : 1;
+    
+    // Launch background sync
+    productContextApi.syncAllProductContexts(accId).catch(err => {
+      console.error('[ProductContext] Error in async syncAllProductContexts:', err.message);
+    });
+
+    res.json({ success: true, message: 'Sincronización y análisis multimodal de contextos en segundo plano iniciada.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/product-contexts/generate/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { accountId, sales30d } = req.body;
+    const accId = accountId ? parseInt(accountId) : 1;
+
+    const record = await productContextApi.extractAndSaveProductContext(itemId, parseInt(sales30d || 0), accId);
+    if (!record) return res.status(400).json({ error: 'No se pudo obtener información del producto desde Mercado Libre' });
+
+    res.json({ success: true, context: record });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/product-contexts/:itemId', (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { title, description_text, ai_generated_context } = req.body;
+    const success = db.updateProductContext(itemId, { title, description_text, ai_generated_context });
+    if (!success) return res.status(404).json({ error: 'Producto no encontrado' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ── SPA Fallback ──
 app.get('*', (req, res) => {
@@ -745,9 +737,8 @@ app.get('*', (req, res) => {
 });
 
 // ══════════════════════════════════════════
-// ── Polling Cron ──
+// ── Polling Cron & Background Services ──
 // ══════════════════════════════════════════
-
 const pollingInterval = parseInt(process.env.POLLING_INTERVAL_MINUTES || '2');
 
 process.on('uncaughtException', (err) => {
@@ -770,7 +761,6 @@ function startPolling() {
 }
 
 function startAutoInventorySync() {
-  // Sync ML Full inventory & 30d sales automatically every 30 minutes
   cron.schedule('*/30 * * * *', async () => {
     console.log('[Cron] Running 24/7 automatic ML inventory & sales background sync...');
     try {
@@ -780,7 +770,6 @@ function startAutoInventorySync() {
     }
   });
 
-  // Also trigger initial background sync 15 seconds after server startup
   setTimeout(async () => {
     console.log('[Startup] Running initial automatic ML inventory & sales sync...');
     try {
@@ -792,10 +781,6 @@ function startAutoInventorySync() {
 
   console.log('[Cron] 24/7 Auto inventory & sales sync scheduled (every 30m)');
 }
-
-// ══════════════════════════════════════════
-// ── Start Server ──
-// ══════════════════════════════════════════
 
 async function startServer() {
   await db.initDb();
@@ -827,7 +812,6 @@ async function startServer() {
     startPolling();
     startAutoInventorySync();
   });
-
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {

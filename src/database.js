@@ -496,6 +496,30 @@ function initSchema() {
     )
   `);
 
+  // ── Etapa 1: Contexto de Publicaciones con IA (Ventas 30 días) ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS product_contexts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER,
+      ml_item_id TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      price REAL DEFAULT 0,
+      sold_quantity_30d INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'active',
+      permalink TEXT,
+      thumbnail TEXT,
+      description_text TEXT,
+      attributes_json TEXT,
+      image_urls_json TEXT,
+      ai_generated_context TEXT,
+      extracted_specs_json TEXT,
+      has_images_analyzed INTEGER DEFAULT 0,
+      last_synced_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Seed default demo inventory if empty
   const localCount = queryOne('SELECT COUNT(*) as count FROM local_inventory');
   if (!localCount || localCount.count === 0) {
@@ -1851,6 +1875,117 @@ function deleteProductPromotion(id) {
   runSql('DELETE FROM product_promotions WHERE id = ?', [id]);
 }
 
+// ── Product Context (Etapa 1) Database Operations ──
+
+function getProductContexts(accountId = null) {
+  let sql = 'SELECT * FROM product_contexts WHERE 1=1';
+  const params = [];
+  if (accountId) {
+    sql += ' AND account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY sold_quantity_30d DESC, updated_at DESC';
+  return queryAll(sql, params);
+}
+
+function getProductContextByItemId(mlItemId) {
+  if (!mlItemId) return null;
+  return queryOne('SELECT * FROM product_contexts WHERE ml_item_id = ?', [mlItemId]);
+}
+
+function saveProductContext(ctx) {
+  const existing = getProductContextByItemId(ctx.ml_item_id);
+  const attributesJson = typeof ctx.attributes === 'object' ? JSON.stringify(ctx.attributes) : (ctx.attributes_json || '[]');
+  const imageUrlsJson = typeof ctx.image_urls === 'object' ? JSON.stringify(ctx.image_urls) : (ctx.image_urls_json || '[]');
+  const specsJson = typeof ctx.extracted_specs === 'object' ? JSON.stringify(ctx.extracted_specs) : (ctx.extracted_specs_json || '{}');
+
+  if (existing) {
+    runSql(
+      `UPDATE product_contexts SET
+        account_id = ?,
+        title = ?,
+        price = ?,
+        sold_quantity_30d = ?,
+        status = ?,
+        permalink = ?,
+        thumbnail = ?,
+        description_text = ?,
+        attributes_json = ?,
+        image_urls_json = ?,
+        ai_generated_context = COALESCE(?, ai_generated_context),
+        extracted_specs_json = COALESCE(?, extracted_specs_json),
+        has_images_analyzed = ?,
+        last_synced_at = datetime('now'),
+        updated_at = datetime('now')
+       WHERE ml_item_id = ?`,
+      [
+        ctx.account_id || existing.account_id || 1,
+        ctx.title || existing.title,
+        ctx.price || existing.price || 0,
+        ctx.sold_quantity_30d !== undefined ? ctx.sold_quantity_30d : existing.sold_quantity_30d,
+        ctx.status || existing.status || 'active',
+        ctx.permalink || existing.permalink,
+        ctx.thumbnail || existing.thumbnail,
+        ctx.description_text || existing.description_text || '',
+        attributesJson,
+        imageUrlsJson,
+        ctx.ai_generated_context || null,
+        specsJson,
+        ctx.has_images_analyzed !== undefined ? ctx.has_images_analyzed : existing.has_images_analyzed,
+        ctx.ml_item_id
+      ]
+    );
+    return existing.id;
+  } else {
+    runSql(
+      `INSERT INTO product_contexts (
+        account_id, ml_item_id, title, price, sold_quantity_30d, status, permalink, thumbnail,
+        description_text, attributes_json, image_urls_json, ai_generated_context, extracted_specs_json, has_images_analyzed
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ctx.account_id || 1,
+        ctx.ml_item_id,
+        ctx.title || 'Producto Sin Título',
+        ctx.price || 0,
+        ctx.sold_quantity_30d || 0,
+        ctx.status || 'active',
+        ctx.permalink || '',
+        ctx.thumbnail || '',
+        ctx.description_text || '',
+        attributesJson,
+        imageUrlsJson,
+        ctx.ai_generated_context || '',
+        specsJson,
+        ctx.has_images_analyzed || 0
+      ]
+    );
+    const created = getProductContextByItemId(ctx.ml_item_id);
+    return created ? created.id : null;
+  }
+}
+
+function updateProductContext(mlItemId, updates) {
+  const existing = getProductContextByItemId(mlItemId);
+  if (!existing) return false;
+
+  const title = updates.title !== undefined ? updates.title : existing.title;
+  const descriptionText = updates.description_text !== undefined ? updates.description_text : existing.description_text;
+  const aiGeneratedContext = updates.ai_generated_context !== undefined ? updates.ai_generated_context : existing.ai_generated_context;
+  const hasImagesAnalyzed = updates.has_images_analyzed !== undefined ? updates.has_images_analyzed : existing.has_images_analyzed;
+
+  runSql(
+    `UPDATE product_contexts SET
+      title = ?,
+      description_text = ?,
+      ai_generated_context = ?,
+      has_images_analyzed = ?,
+      updated_at = datetime('now')
+     WHERE ml_item_id = ?`,
+    [title, descriptionText, aiGeneratedContext, hasImagesAnalyzed, mlItemId]
+  );
+  return true;
+}
+
 module.exports = {
   initDb, getDb, saveDbToFile, reloadDbFromFile, queryOne, queryAll,
   // Accounts
@@ -1881,4 +2016,6 @@ module.exports = {
   saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
+  // Product Contexts (Etapa 1)
+  getProductContexts, getProductContextByItemId, saveProductContext, updateProductContext,
 };

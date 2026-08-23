@@ -40,6 +40,7 @@ function navigateTo(section) {
     case 'claims': loadClaims(); break;
     case 'inventory': loadInventoryData(); break;
     case 'promotions': loadPromotions(); break;
+    case 'product-context': loadProductContexts(); break;
     case 'knowledge': loadKnowledge(); break;
     case 'stats': loadStats(); break;
     case 'settings': loadSettings(); break;
@@ -2432,6 +2433,183 @@ async function unlinkChinaFromModal() {
     loadInventoryData();
   } catch (e) {
     showToast('Error desvinculando: ' + e.message, 'error');
+  }
+}
+
+// ══════════════════════════════════════════
+// ── Etapa 1: Contexto de Publicaciones con IA ──
+// ══════════════════════════════════════════
+
+let currentProductContexts = [];
+
+async function loadProductContexts() {
+  try {
+    const accountId = activeAccountId || '';
+    const res = await apiFetch(`/api/product-contexts?accountId=${accountId}`);
+    currentProductContexts = res.contexts || [];
+    renderProductContextsTable(currentProductContexts);
+  } catch (error) {
+    console.error('Error loading product contexts:', error);
+    showToast('Error cargando contextos de publicaciones: ' + error.message, 'error');
+  }
+}
+
+function renderProductContextsTable(contexts) {
+  const tbody = document.getElementById('productContextsTable');
+  const countBadge = document.getElementById('contextListingsCount');
+
+  if (countBadge) countBadge.textContent = `${contexts.length} publicaciones`;
+
+  if (!tbody) return;
+
+  if (contexts.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="empty-cell" style="padding: 40px 20px; text-align: center;">
+          <div style="font-size: 2rem; margin-bottom: 10px;">🤖</div>
+          <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 6px;">No hay contextos de publicaciones generados todavía</div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">Haz clic en el botón para consultar Mercado Libre y analizar las publicaciones activas vendidas en los últimos 30 días.</div>
+          <button class="btn btn-primary" onclick="syncAllProductContexts()">⚡ Sincronizar Contextos con Gemini IA</button>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = '';
+  contexts.forEach(ctx => {
+    const thumbHtml = ctx.thumbnail
+      ? `<img src="${escapeHtml(ctx.thumbnail)}" style="width:44px; height:44px; object-fit:cover; border-radius:6px; border:1px solid rgba(0,0,0,0.1);" />`
+      : `<div style="width:44px; height:44px; background:rgba(0,0,0,0.05); border-radius:6px; display:flex; align-items:center; justify-content:center;">📦</div>`;
+
+    const aiStatusBadge = ctx.has_images_analyzed
+      ? `<span class="badge-success">📷 Analizado (Fotos + Texto)</span>`
+      : (ctx.ai_generated_context ? `<span class="badge-primary">📝 Solo Texto</span>` : `<span class="badge-secondary">⏳ Pendiente</span>`);
+
+    const permalink = ctx.permalink ? `<a href="${escapeHtml(ctx.permalink)}" target="_blank" style="color: var(--primary-color, #2b6cb0); font-weight:600;">${escapeHtml(ctx.ml_item_id)} ↗</a>` : escapeHtml(ctx.ml_item_id);
+
+    const updatedDate = ctx.last_synced_at || ctx.updated_at
+      ? new Date(ctx.last_synced_at || ctx.updated_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
+      : 'N/A';
+
+    html += `
+      <tr>
+        <td style="width: 50px;">${thumbHtml}</td>
+        <td style="font-weight: 600; font-family: monospace;">${permalink}</td>
+        <td>
+          <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(ctx.title)}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">${ctx.description_text ? escapeHtml(ctx.description_text.substring(0, 70)) + '...' : 'Sin descripción'}</div>
+        </td>
+        <td style="font-weight: 600;">$${(ctx.price || 0).toLocaleString('es-CO')} COP</td>
+        <td><span class="badge-primary" style="font-size:0.85rem; font-weight:700;">${ctx.sold_quantity_30d || 0} unds</span></td>
+        <td>${aiStatusBadge}</td>
+        <td style="font-size: 0.85rem; color: var(--text-secondary);">${updatedDate}</td>
+        <td>
+          <div style="display:flex; gap: 6px;">
+            <button class="btn btn-secondary btn-sm" onclick="openProductContextModal('${escapeHtml(ctx.ml_item_id)}')">👁️ Ver/Editar Contexto</button>
+            <button class="btn btn-primary btn-sm" onclick="generateSingleProductContext('${escapeHtml(ctx.ml_item_id)}', ${ctx.sold_quantity_30d || 0})">⚡ Re-analizar</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+
+async function syncAllProductContexts() {
+  try {
+    showToast('⚡ Iniciando análisis de fotos y descripciones con Gemini 3.6 Flash...', 'info');
+    const accountId = activeAccountId || 1;
+    const res = await apiFetch('/api/product-contexts/sync', {
+      method: 'POST',
+      body: JSON.stringify({ accountId })
+    });
+    showToast('🚀 ' + res.message, 'success');
+
+    setTimeout(() => {
+      loadProductContexts();
+    }, 3000);
+  } catch (error) {
+    showToast('Error al sincronizar contextos: ' + error.message, 'error');
+  }
+}
+
+async function generateSingleProductContext(itemId, sales30d = 0) {
+  try {
+    showToast(`⚡ Analizando fotos y descripción de ${itemId}...`, 'info');
+    const accountId = activeAccountId || 1;
+    const res = await apiFetch(`/api/product-contexts/generate/${itemId}`, {
+      method: 'POST',
+      body: JSON.stringify({ accountId, sales30d })
+    });
+    if (res.success) {
+      showToast(`✅ Contexto generado para ${itemId}`, 'success');
+      loadProductContexts();
+    }
+  } catch (error) {
+    showToast('Error generando contexto: ' + error.message, 'error');
+  }
+}
+
+async function openProductContextModal(itemId) {
+  try {
+    const res = await apiFetch(`/api/product-contexts/${itemId}`);
+    const ctx = res.context;
+    if (!ctx) return showToast('Contexto no encontrado', 'error');
+
+    document.getElementById('ctxMlItemId').value = ctx.ml_item_id;
+    document.getElementById('ctxTitle').value = ctx.title || '';
+    document.getElementById('ctxAiText').value = ctx.ai_generated_context || '';
+    document.getElementById('ctxDescriptionText').value = ctx.description_text || '';
+
+    const imgContainer = document.getElementById('ctxImagesContainer');
+    if (imgContainer) {
+      let imageUrls = [];
+      try { imageUrls = JSON.parse(ctx.image_urls_json || '[]'); } catch(e) {}
+      if (ctx.thumbnail && !imageUrls.includes(ctx.thumbnail)) imageUrls.unshift(ctx.thumbnail);
+
+      if (imageUrls.length > 0) {
+        let imgsHtml = '<strong style="font-size:0.85rem; color:var(--text-secondary);">Fotos analizadas:</strong>';
+        imageUrls.slice(0, 4).forEach(url => {
+          imgsHtml += `<img src="${escapeHtml(url)}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid rgba(0,0,0,0.15);" />`;
+        });
+        imgContainer.innerHTML = imgsHtml;
+      } else {
+        imgContainer.innerHTML = '';
+      }
+    }
+
+    document.getElementById('productContextModal').style.display = 'flex';
+  } catch (error) {
+    showToast('Error al abrir contexto: ' + error.message, 'error');
+  }
+}
+
+function closeProductContextModal() {
+  document.getElementById('productContextModal').style.display = 'none';
+}
+
+async function saveProductContextModal() {
+  const itemId = document.getElementById('ctxMlItemId').value;
+  const title = document.getElementById('ctxTitle').value;
+  const aiGeneratedContext = document.getElementById('ctxAiText').value;
+  const descriptionText = document.getElementById('ctxDescriptionText').value;
+
+  try {
+    await apiFetch(`/api/product-contexts/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title,
+        ai_generated_context: aiGeneratedContext,
+        description_text: descriptionText
+      })
+    });
+    showToast('💾 Contexto actualizado correctamente', 'success');
+    closeProductContextModal();
+    loadProductContexts();
+  } catch (error) {
+    showToast('Error al guardar contexto: ' + error.message, 'error');
   }
 }
 

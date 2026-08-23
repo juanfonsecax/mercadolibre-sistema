@@ -60,10 +60,36 @@ function loadFromFiles(knowledge) {
 function getKnowledgeForItem(itemId) {
   const allKnowledge = loadKnowledgeBase();
 
-  // Get product-specific knowledge
+  // Get product-specific knowledge from standard knowledge base
   const productKnowledge = allKnowledge.filter(k =>
     k.ml_item_id === itemId || k.category === 'faq' || k.category === 'policy'
   );
+
+  // Check if we have an AI-synthesized product context (Etapa 1)
+  if (itemId && db.getProductContextByItemId) {
+    try {
+      const pContext = db.getProductContextByItemId(itemId);
+      if (pContext) {
+        if (pContext.ai_generated_context) {
+          productKnowledge.unshift({
+            category: 'product_ai_context',
+            title: `Contexto Avanzado IA: ${pContext.title}`,
+            content: pContext.ai_generated_context,
+            ml_item_id: itemId,
+          });
+        } else if (pContext.description_text) {
+          productKnowledge.unshift({
+            category: 'product_description',
+            title: `Descripción Oficial: ${pContext.title}`,
+            content: pContext.description_text,
+            ml_item_id: itemId,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[KnowledgeBase] Error loading product_context for ${itemId}:`, e.message);
+    }
+  }
 
   return productKnowledge;
 }

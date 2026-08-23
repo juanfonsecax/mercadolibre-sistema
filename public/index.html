@@ -58,6 +58,10 @@
         <span class="nav-icon">🏷️</span>
         <span class="nav-label">Ofertas & Márgenes</span>
       </a>
+      <a href="#" class="nav-item" data-section="product-context" id="nav-product-context">
+        <span class="nav-icon">🤖</span>
+        <span class="nav-label">Contexto Publicaciones</span>
+      </a>
       <a href="#" class="nav-item" data-section="knowledge" id="nav-knowledge">
         <span class="nav-icon">📚</span>
         <span class="nav-label">Conocimiento</span>
@@ -873,6 +877,59 @@
         </div>
       </div>
     </section>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- Etapa 1: Contexto de Publicaciones IA -->
+    <!-- ══════════════════════════════════════ -->
+    <section class="content-section" id="section-product-context">
+      <div class="section-header">
+        <h1>Contexto Inteligente de Publicaciones (Últimos 30 Días)</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="loadProductContexts()">🔄 Actualizar</button>
+          <button class="btn btn-primary" onclick="syncAllProductContexts()">⚡ Sincronizar Contextos con Gemini IA</button>
+        </div>
+      </div>
+
+      <div class="card mb-4" style="background: linear-gradient(135deg, rgba(43, 108, 176, 0.08) 0%, rgba(99, 179, 237, 0.05) 100%); border-left: 4px solid var(--primary-color, #2b6cb0);">
+        <div class="card-body">
+          <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--primary-color, #2b6cb0); display: flex; align-items: center; gap: 8px;">
+            🤖 Base de Conocimiento de Productos y Publicaciones Vendidas
+          </h3>
+          <p style="margin-bottom: 0; font-size: 0.9rem; color: var(--text-secondary);">
+            Gemini 3.6 Flash inspecciona las descripciones oficiales y analiza las <strong>fotos en alta resolución</strong> de tus publicaciones con ventas en los últimos 30 días para extraer especificaciones técnicas, compatibilidades, contenido de la caja y respuestas frecuentes. Este conocimiento se usa automáticamente para responder preguntas y mensajes post-venta.
+          </p>
+        </div>
+      </div>
+
+      <!-- Active Top Selling Publications Table -->
+      <div class="card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>📦 Publicaciones Activas con Ventas (Últimos 30 días)</h3>
+          <span class="badge-primary" id="contextListingsCount">0 publicaciones</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Foto</th>
+                  <th>Item ML</th>
+                  <th>Título de la Publicación</th>
+                  <th>Precio (COP)</th>
+                  <th>Ventas (30d)</th>
+                  <th>Estado Análisis IA</th>
+                  <th>Última Sincronización</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="productContextsTable">
+                <tr><td colspan="8" class="empty-cell">Cargando contexto de publicaciones...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- ══════════════════════════════════════ -->
@@ -1231,6 +1288,42 @@
           <button class="btn btn-secondary" onclick="closeLinkChinaModal()">Cancelar</button>
           <button class="btn btn-danger" onclick="unlinkChinaFromModal()">Desvincular</button>
           <button class="btn btn-primary" onclick="saveLinkChinaFromModal()">Guardar Vinculación</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: View / Edit AI Product Context -->
+  <div class="modal-overlay" id="productContextModal" style="display:none">
+    <div class="modal modal-lg" style="max-width: 820px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 id="ctxModalTitle">Contexto Inteligente del Producto (Gemini Flash Multimodal)</h3>
+        <button class="modal-close" onclick="closeProductContextModal()">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y: auto; flex: 1;">
+        <input type="hidden" id="ctxMlItemId">
+        <div class="form-group">
+          <label>Título de la Publicación:</label>
+          <input type="text" id="ctxTitle" class="form-input" style="font-weight: 600;">
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 15px; align-items: center;" id="ctxImagesContainer">
+          <!-- Thumbnail & photos rendered dynamically -->
+        </div>
+
+        <div class="form-group">
+          <label>🤖 Contexto Enriquecido por Gemini Flash (Síntesis de Texto + Fotos):</label>
+          <textarea id="ctxAiText" class="form-input" rows="12" style="font-family: monospace; font-size: 0.88rem; line-height: 1.5;" placeholder="Análisis generado por la IA sobre imágenes, empaque, puertos, compatibilidad Tuya/SmartLife y especificaciones..."></textarea>
+          <small class="form-hint" style="color: var(--primary-color, #2b6cb0);">💡 Este contexto alimentará a Gemini para responder preguntas pre-venta y mensajes post-venta con máxima precisión.</small>
+        </div>
+
+        <div class="form-group">
+          <label>📝 Descripción Oficial en Mercado Libre:</label>
+          <textarea id="ctxDescriptionText" class="form-input" rows="6" placeholder="Texto de la descripción en ML..."></textarea>
+        </div>
+        <div class="form-actions" style="margin-top: 16px;">
+          <button class="btn btn-secondary" onclick="closeProductContextModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveProductContextModal()">💾 Guardar Contexto</button>
         </div>
       </div>
     </div>

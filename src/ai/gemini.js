@@ -280,12 +280,72 @@ INSTRUCCIONES:
   }
 }
 
+/**
+ * Analyze product listing description and pictures to generate a rich AI product context
+ */
+async function generateMultimodalProductContext(itemData, descriptionText, imageParts = []) {
+  if (!model) {
+    if (!initGemini()) return null;
+  }
+
+  const attributesFormatted = Array.isArray(itemData.attributes)
+    ? itemData.attributes.map(a => `- ${a.name}: ${a.value_name || (a.value_struct ? a.value_struct.number : '') || 'N/A'}`).join('\n')
+    : 'No especificados';
+
+  const textPrompt = `Eres un experto especialista en productos de comercio electrónico y atención al cliente en Mercado Libre Colombia.
+Analiza la siguiente publicación de producto, incluyendo su descripción textual, especificaciones y las imágenes adjuntas del producto.
+
+INFORMACIÓN DE LA PUBLICACIÓN:
+- Título: ${itemData.title || 'Sin título'}
+- Precio: $${(itemData.price || 0).toLocaleString('es-CO')} COP
+- Condición: ${itemData.condition === 'new' ? 'Nuevo' : 'Usado'}
+- Atributos / Especificaciones:
+${attributesFormatted}
+
+DESCRIPCIÓN COMPLETA DE LA PUBLICACIÓN:
+"""
+${descriptionText || 'Sin descripción textual.'}
+"""
+
+INSTRUCCIONES DE ANÁLISIS:
+Sintetiza y genera un CONTEXTO DE CONOCIMIENTO PROFUNDO sobre este producto para ser usado por una IA de ventas y soporte post-venta de Mercado Libre.
+
+Devuelve una síntesis estructurada clara con las siguientes secciones:
+
+1. 📌 RESUMEN DEL PRODUCTO Y FUNCIÓN PRINCIPAL
+   (En qué consiste el producto y cuál es su utilidad clave).
+
+2. ⚙️ ESPECIFICACIONES TÉCNICAS Y COMPATIBILIDAD
+   (Dimensiones, voltajes, conectores, peso, materiales, compatibilidad con apps como Tuya, Smart Life, Alexa, Google Home, iOS, Android si aplica).
+
+3. 📷 DETALLES VISUALES Y CONTENIDO DE LA CAJA (DE LAS FOTOS Y TEXTO)
+   (Qué elementos físicos se observan en las fotos, botones, indicadores LED, puertos, qué viene en el empaque/caja).
+
+4. ❓ PREGUNTAS FRECUENTES Y RESPUESTAS RECOMENDADAS
+   (Respuestas concretas a preguntas probables de compradores: instalación, vincular app, garantía, requerimientos).
+
+5. ⚠️ NOTAS IMPORTANTES Y ADVERTENCIAS
+   (Lo que el comprador debe saber antes de comprar o al recibir el producto).
+
+Responde en texto claro en español de Colombia, estructurado y directo.`;
+
+  try {
+    const contents = [textPrompt, ...imageParts];
+    const result = await model.generateContent(contents);
+    return result.response.text().trim();
+  } catch (error) {
+    console.error('[Gemini] Error generating product AI context:', error.message);
+    return null;
+  }
+}
+
 module.exports = {
   initGemini,
   generateQuestionAnswer,
   generateMessageAnswer,
   generateClaimResponse,
   evaluatePromotionStrategy,
+  generateMultimodalProductContext,
   testConnection,
 };
 
