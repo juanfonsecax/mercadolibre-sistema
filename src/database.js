@@ -376,6 +376,14 @@ function initSchema() {
       last_sync_at TEXT DEFAULT (datetime('now')),
       UNIQUE(account_id, ml_item_id)
     )
+  // ── Modulo de Vinculación Multi-Publicaciones <-> Producto Físico Padre ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS product_mappings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ml_item_id TEXT UNIQUE NOT NULL,
+      master_product_title TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
   `);
 
   // ── Modulo de Ofertas & Margen ──
@@ -1052,7 +1060,20 @@ function getInventoryMovements(sku = null, limit = 50) {
 // ── Fase 3: Stock Full ML Operations ──
 
 function getMlFullInventory(accountId = null) {
-  let sql = 'SELECT f.*, a.name as account_name, l.units_house as stock_casa, l.unit_cost_cop FROM ml_full_inventory f LEFT JOIN accounts a ON f.account_id = a.id LEFT JOIN local_inventory l ON f.sku = l.sku WHERE 1=1';
+  let sql = `
+    SELECT f.*, 
+           a.name as account_name, 
+           l.units_house as stock_casa, 
+           l.unit_cost_cop,
+           m.master_product_title,
+           lm.units_house as master_stock_casa
+    FROM ml_full_inventory f 
+    LEFT JOIN accounts a ON f.account_id = a.id 
+    LEFT JOIN local_inventory l ON f.sku = l.sku 
+    LEFT JOIN product_mappings m ON f.ml_item_id = m.ml_item_id
+    LEFT JOIN local_inventory lm ON m.master_product_title = lm.title
+    WHERE 1=1
+  `;
   const params = [];
   if (accountId) {
     sql += ' AND f.account_id = ?';
@@ -1061,6 +1082,25 @@ function getMlFullInventory(accountId = null) {
   sql += ' ORDER BY f.units_full ASC';
   const items = queryAll(sql, params);
   return items.filter(f => !isProductDiscontinued(f.title));
+}
+
+function saveProductMapping(mlItemId, masterProductTitle) {
+  runSql(
+    `INSERT INTO product_mappings (ml_item_id, master_product_title)
+     VALUES (?, ?)
+     ON CONFLICT(ml_item_id) DO UPDATE SET
+       master_product_title = excluded.master_product_title,
+       created_at = datetime('now')`,
+    [mlItemId, masterProductTitle]
+  );
+}
+
+function deleteProductMapping(mlItemId) {
+  runSql('DELETE FROM product_mappings WHERE ml_item_id = ?', [mlItemId]);
+}
+
+function getProductMappings() {
+  return queryAll('SELECT * FROM product_mappings');
 }
 
 const ACTIVE_ML_LISTINGS = [
@@ -1234,6 +1274,7 @@ module.exports = {
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
   // Stock Full ML (Fase 3)
   getMlFullInventory, saveMlFullInventoryItem, getReorderAlerts, isProductDiscontinued, seedActiveMlListings,
+  saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
 };

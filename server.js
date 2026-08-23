@@ -504,6 +504,40 @@ app.get('/api/inventory/movements', (req, res) => {
   }
 });
 
+// --- Product Mappings (Multi-Publicación <-> Producto Físico) ---
+app.get('/api/inventory/mappings', (req, res) => {
+  try {
+    const mappings = db.getProductMappings();
+    res.json({ mappings });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/inventory/mappings', (req, res) => {
+  try {
+    const { ml_item_id, master_product_title } = req.body;
+    if (!ml_item_id || !master_product_title) {
+      return res.status(400).json({ error: 'ml_item_id y master_product_title son requeridos' });
+    }
+    db.saveProductMapping(ml_item_id, master_product_title.trim());
+    db.logActivity('inventory_mapping', `Publicación ${ml_item_id} vinculada a "${master_product_title.trim()}"`, null, null);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/inventory/mappings/:ml_item_id', (req, res) => {
+  try {
+    db.deleteProductMapping(req.params.ml_item_id);
+    db.logActivity('inventory_mapping', `Vinculación eliminada para ${req.params.ml_item_id}`, null, null);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Fase 3: Stock Full Mercado Libre & Alertas ---
 app.get('/api/inventory/full', (req, res) => {
   try {

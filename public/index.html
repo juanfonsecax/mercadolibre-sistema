@@ -1086,6 +1086,41 @@
     </div>
   </div>
 
+  <!-- Modal 5: Link Publication to Master Physical Product -->
+  <div class="modal-overlay" id="linkProductModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🔗 Vincular Publicación ML a Producto Físico (Bodega Casa)</h3>
+        <button class="modal-close" onclick="closeLinkProductModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="linkMlItemId">
+        <div class="form-group">
+          <label>Publicación de Mercado Libre:</label>
+          <input type="text" id="linkMlTitle" class="form-input" readonly style="background-color: var(--bg-card); font-weight:600;">
+        </div>
+        <div class="form-group">
+          <label>Seleccionar Producto Físico de Bodega Casa (Producto Padre):</label>
+          <select id="linkMasterSelect" class="form-input">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div class="form-group">
+          <label>O escribir Nombre de Producto Físico Nuevo:</label>
+          <input type="text" id="linkMasterCustom" class="form-input" placeholder="Ej: Enchufe Inteligente 10A Tuya">
+        </div>
+        <p class="settings-hint" style="margin-top:8px">
+          💡 <strong>¿Por qué vincular?</strong> Varias publicaciones de ML (con títulos diferentes) pueden abastecerse del mismo producto físico de bodega. La vinculación sincroniza las unidades y ventas para calcular las alertas de reorden en China de forma precisa.
+        </p>
+        <div class="form-actions" style="margin-top:16px;">
+          <button class="btn btn-secondary" onclick="closeLinkProductModal()">Cancelar</button>
+          <button class="btn btn-danger" onclick="unlinkProductFromModal()">Desvincular</button>
+          <button class="btn btn-primary" onclick="saveLinkProductFromModal()">Guardar Vinculación Permanente</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 

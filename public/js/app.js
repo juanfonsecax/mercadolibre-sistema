@@ -1733,6 +1733,72 @@ async function deleteLocalItem(id) {
   }
 }
 
+async function openLinkProductModal(mlItemId, title, currentMasterTitle = '') {
+  document.getElementById('linkMlItemId').value = mlItemId;
+  document.getElementById('linkMlTitle').value = title;
+  document.getElementById('linkMasterCustom').value = '';
+
+  const selectElem = document.getElementById('linkMasterSelect');
+  selectElem.innerHTML = '<option value="">-- Cargando bodega... --</option>';
+
+  try {
+    const data = await apiFetch(`/api/inventory/local?accountId=${activeAccountId}`);
+    const localItems = data.inventory || [];
+    let options = '<option value="">-- Seleccionar de Bodega Casa --</option>';
+    localItems.forEach(i => {
+      const selected = i.title === currentMasterTitle ? 'selected' : '';
+      options += `<option value="${escapeAttr(i.title)}" ${selected}>📦 ${escapeHtml(i.title)} (${i.units_house} unds en casa)</option>`;
+    });
+    selectElem.innerHTML = options;
+  } catch (e) {
+    selectElem.innerHTML = '<option value="">-- Error cargando bodega --</option>';
+  }
+
+  document.getElementById('linkProductModal').style.display = 'flex';
+}
+
+function closeLinkProductModal() {
+  document.getElementById('linkProductModal').style.display = 'none';
+}
+
+async function saveLinkProductFromModal() {
+  const ml_item_id = document.getElementById('linkMlItemId').value;
+  const selectVal = document.getElementById('linkMasterSelect').value;
+  const customVal = document.getElementById('linkMasterCustom').value.trim();
+
+  const master_product_title = customVal || selectVal;
+  if (!master_product_title) {
+    return showToast('Selecciona o escribe el nombre del producto físico', 'warning');
+  }
+
+  try {
+    await apiFetch('/api/inventory/mappings', {
+      method: 'POST',
+      body: JSON.stringify({ ml_item_id, master_product_title })
+    });
+
+    showToast('¡Publicación vinculada al producto físico permanentemente! 🔗', 'success');
+    closeLinkProductModal();
+    loadMlFullInventory();
+  } catch (error) {
+    showToast('Error vinculando producto: ' + error.message, 'error');
+  }
+}
+
+async function unlinkProductFromModal() {
+  const ml_item_id = document.getElementById('linkMlItemId').value;
+  if (!confirm('¿Desvincular esta publicación del producto físico?')) return;
+
+  try {
+    await apiFetch(`/api/inventory/mappings/${ml_item_id}`, { method: 'DELETE' });
+    showToast('Vinculación removida', 'info');
+    closeLinkProductModal();
+    loadMlFullInventory();
+  } catch (error) {
+    showToast('Error desvinculando: ' + error.message, 'error');
+  }
+}
+
 // --- Subtab 3: Stock Full Mercado Libre ---
 async function loadMlFullInventory() {
   try {
@@ -1749,17 +1815,30 @@ async function loadMlFullInventory() {
         if (cov < 5) covStatus = '<span class="badge-critical">🔴 Reabastecer Urgente</span>';
         else if (cov < 10) covStatus = '<span class="badge-warning">🟠 Alerta Stock Bajo</span>';
 
+        const masterTitle = f.master_product_title || '';
+        const masterBadge = masterTitle 
+          ? `<br><span class="badge-primary" style="font-size:0.75rem; margin-top:3px; display:inline-block;">📦 Físico: ${escapeHtml(masterTitle)}</span>`
+          : `<br><small class="text-muted" style="font-style:italic;">Sin vincular a bodega</small>`;
+
+        const houseStock = f.master_stock_casa !== null && f.master_stock_casa !== undefined
+          ? f.master_stock_casa
+          : (f.stock_casa !== undefined && f.stock_casa !== null ? f.stock_casa : 'N/A');
+
         html += `
           <tr>
             <td><code>${escapeHtml(f.ml_item_id)}</code></td>
-            <td><strong>${escapeHtml(f.title)}</strong></td>
+            <td>
+              <strong>${escapeHtml(f.title)}</strong>
+              ${masterBadge}
+            </td>
             <td><strong>${f.units_full}</strong> unds</td>
-            <td>${f.stock_casa !== undefined ? f.stock_casa : 'N/A'} unds</td>
+            <td><strong>${houseStock}</strong> unds</td>
             <td>${f.sales_last_30d || 0} unds</td>
             <td><strong>${cov.toFixed(1)} días</strong></td>
             <td>${covStatus}</td>
-            <td>
-              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}', '${escapeAttr(f.title)}')">📦 Transferir desde Casa</button>
+            <td style="display:flex; gap:4px; flex-wrap:wrap;">
+              <button class="btn btn-sm btn-secondary" onclick="openLinkProductModal('${f.ml_item_id}', '${escapeAttr(f.title)}', '${escapeAttr(masterTitle)}')" title="Vincular a producto físico de bodega">🔗 Vincular Físico</button>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}', '${escapeAttr(f.title)}')">📦 Transferir</button>
             </td>
           </tr>
         `;
