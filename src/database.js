@@ -1509,18 +1509,15 @@ function getInventoryPlanningIntelligence(accountId = null) {
     });
   });
 
-  // Next, add active China transit stock matching by title tokens
+  // Next, add active China transit stock matching by STRICT title matching
   chinaShipments.forEach(c => {
     const cName = (c.product_name || '').trim().toLowerCase();
     if (!cName) return;
 
+    // We only map to the EXACT master_title (case-insensitive)
     for (const key of Object.keys(planningMap)) {
-      const kLower = key.toLowerCase();
-      const cTokens = cName.split(/[\s\-_,]+/);
-      const kTokens = kLower.split(/[\s\-_,]+/);
-      const common = cTokens.filter(t => t.length > 2 && kTokens.includes(t));
-
-      if (kLower.includes(cName) || cName.includes(kLower) || common.length >= 1) {
+      const kLower = key.trim().toLowerCase();
+      if (kLower === cName) {
         planningMap[key].transit_stock += (c.quantity || c.active_transit_units || 0);
       }
     }
