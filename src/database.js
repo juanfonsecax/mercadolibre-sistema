@@ -457,22 +457,7 @@ function initSchema() {
     `);
   }
 
-  const shipmentCount = queryOne('SELECT COUNT(*) as count FROM china_shipments');
-  if (!shipmentCount || shipmentCount.count === 0) {
-    db.run(`
-      INSERT INTO china_shipments (tracking_number, supplier_name, status, shipment_type, etd_date, eta_date, trm_cop, total_cost_usd, total_units, notes)
-      VALUES 
-      ('CN-HK-2026-9812', 'Shenzhen Health Biotech Ltd', 'transito_maritimo', 'maritimo', '2026-08-01', '2026-09-10', 4050.0, 3800.0, 1000, 'Contenedor compartido 20ft - Suplementos D3K2 y Magnesio'),
-      ('AIR-CZ-77291', 'Guangzhou BioCare Corp', 'produccion', 'aereo', '2026-08-25', '2026-09-02', 4050.0, 1450.0, 300, 'Envío express por avión para reposición rápida de Colágeno')
-    `);
-    db.run(`
-      INSERT INTO china_shipment_items (shipment_id, sku, title, account_id, units, unit_cost_usd)
-      VALUES 
-      (1, 'VIT-D3K2-60', 'Vitamina D3 5000 IU + K2 MK7 60 Caps', 1, 600, 3.50),
-      (1, 'MAG-GLY-120', 'Glicinato de Magnesio Alta Absorción', 2, 400, 4.25),
-      (2, 'COL-PEP-300', 'Péptidos de Colágeno Hidrolizado', 1, 300, 4.83)
-    `);
-  }
+
 
   const mlFullCount = queryOne('SELECT COUNT(*) as count FROM ml_full_inventory');
   if (!mlFullCount || mlFullCount.count === 0) {
