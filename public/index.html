@@ -635,10 +635,7 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>SKU</th>
                 <th>Producto</th>
-                <th>Categoría</th>
-                <th>Cuenta</th>
                 <th>Stock Casa</th>
                 <th>Stock Mínimo</th>
                 <th>Costo Unit. (COP)</th>
@@ -648,7 +645,7 @@
               </tr>
             </thead>
             <tbody id="localInventoryTable">
-              <tr><td colspan="10" class="empty-cell">Cargando stock local...</td></tr>
+              <tr><td colspan="7" class="empty-cell">Cargando stock local...</td></tr>
             </tbody>
           </table>
         </div>
@@ -664,9 +661,8 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Item ML / SKU</th>
+                <th>Item ML</th>
                 <th>Producto</th>
-                <th>Cuenta</th>
                 <th>Stock Full ML</th>
                 <th>Stock Casa</th>
                 <th>Ventas (30d)</th>
@@ -676,7 +672,7 @@
               </tr>
             </thead>
             <tbody id="mlFullInventoryTable">
-              <tr><td colspan="9" class="empty-cell">Cargando stock Full Mercado Libre...</td></tr>
+              <tr><td colspan="8" class="empty-cell">Cargando stock Full Mercado Libre...</td></tr>
             </tbody>
           </table>
         </div>
@@ -972,22 +968,9 @@
       </div>
       <div class="modal-body">
         <input type="hidden" id="localItemId">
-        <div class="form-group">
-          <label>Cuenta / Tienda Asignada:</label>
-          <select id="localAccountSelect" class="form-input">
-            <!-- Populated via JS -->
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group col">
-            <label>SKU (Código único):</label>
-            <input type="text" id="localSku" class="form-input" placeholder="Ej: VIT-D3K2-60">
-          </div>
-          <div class="form-group col">
-            <label>Categoría:</label>
-            <input type="text" id="localCategory" class="form-input" placeholder="Ej: Suplementos">
-          </div>
-        </div>
+        <input type="hidden" id="localAccountSelect">
+        <input type="hidden" id="localSku">
+        <input type="hidden" id="localCategory" value="General">
         <div class="form-group">
           <label>Nombre del Producto:</label>
           <input type="text" id="localTitle" class="form-input" placeholder="Nombre completo del producto">

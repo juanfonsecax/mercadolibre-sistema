@@ -1621,7 +1621,7 @@ async function loadLocalInventory() {
 
     let html = '';
     if (items.length === 0) {
-      html = '<tr><td colspan="10" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
+      html = '<tr><td colspan="7" class="empty-cell">No hay productos registrados en Bodega Casa</td></tr>';
     } else {
       items.forEach(i => {
         const totalValueCop = (i.units_house * i.unit_cost_cop).toLocaleString('es-CO');
@@ -1630,17 +1630,14 @@ async function loadLocalInventory() {
 
         html += `
           <tr>
-            <td><code>${escapeHtml(i.sku)}</code></td>
             <td><strong>${escapeHtml(i.title)}</strong></td>
-            <td>${escapeHtml(i.category || 'General')}</td>
-            <td><span class="badge-secondary">${escapeHtml(i.account_name || 'Ambas')}</span></td>
             <td><span class="${stockClass}">${i.units_house} unds</span></td>
             <td>${i.min_stock_alert} unds</td>
             <td>$${(i.unit_cost_cop || 0).toLocaleString('es-CO')} COP</td>
             <td><strong>$${totalValueCop} COP</strong></td>
             <td><small class="text-muted">${escapeHtml(i.location || 'Bodega Principal')}</small></td>
             <td>
-              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(i.sku)}')">📦 Transferir a Full</button>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(i.sku)}', '${escapeAttr(i.title)}')">📦 Transferir a Full</button>
               <button class="btn btn-sm btn-secondary" onclick="editLocalItem(${i.id})">✏️</button>
               <button class="btn btn-sm btn-danger" onclick="deleteLocalItem(${i.id})">🗑️</button>
             </td>
@@ -1673,9 +1670,12 @@ async function populateAccountSelects() {
 async function openLocalItemModal(item = null) {
   await populateAccountSelects();
   document.getElementById('localItemId').value = item ? item.id : '';
-  document.getElementById('localAccountSelect').value = item ? item.account_id || '' : '';
-  document.getElementById('localSku').value = item ? item.sku : '';
-  document.getElementById('localCategory').value = item ? item.category : 'Suplementos';
+  const localAccElem = document.getElementById('localAccountSelect');
+  if (localAccElem) localAccElem.value = item ? item.account_id || '' : '';
+  const localSkuElem = document.getElementById('localSku');
+  if (localSkuElem) localSkuElem.value = item ? item.sku : '';
+  const localCatElem = document.getElementById('localCategory');
+  if (localCatElem) localCatElem.value = item ? item.category : 'General';
   document.getElementById('localTitle').value = item ? item.title : '';
   document.getElementById('localUnitsHouse').value = item ? item.units_house : 50;
   document.getElementById('localUnitCostCop').value = item ? item.unit_cost_cop : 25000;
@@ -1692,16 +1692,20 @@ function closeLocalItemModal() {
 
 async function saveLocalItemFromModal() {
   const id = document.getElementById('localItemId').value;
-  const sku = document.getElementById('localSku').value.trim();
+  const localSkuElem = document.getElementById('localSku');
+  let sku = localSkuElem ? localSkuElem.value.trim() : '';
   const title = document.getElementById('localTitle').value.trim();
-  if (!sku || !title) return showToast('SKU y Título son requeridos', 'error');
+  if (!title) return showToast('El nombre del producto es requerido', 'error');
+  if (!sku) {
+    sku = title.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 40) || ('PROD-' + Date.now());
+  }
 
   const payload = {
     id: id || null,
-    account_id: document.getElementById('localAccountSelect').value || null,
+    account_id: document.getElementById('localAccountSelect')?.value || null,
     sku,
     title,
-    category: document.getElementById('localCategory').value.trim(),
+    category: document.getElementById('localCategory')?.value?.trim() || 'General',
     units_house: parseInt(document.getElementById('localUnitsHouse').value || 0),
     unit_cost_cop: parseFloat(document.getElementById('localUnitCostCop').value || 0),
     min_stock_alert: parseInt(document.getElementById('localMinStock').value || 10),
@@ -1737,7 +1741,7 @@ async function loadMlFullInventory() {
 
     let html = '';
     if (items.length === 0) {
-      html = '<tr><td colspan="9" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
+      html = '<tr><td colspan="8" class="empty-cell">No hay items sincronizados en Mercado Libre Full</td></tr>';
     } else {
       items.forEach(f => {
         const cov = parseFloat(f.coverage_days || 0);
@@ -1747,19 +1751,15 @@ async function loadMlFullInventory() {
 
         html += `
           <tr>
-            <td>
-              <code>${escapeHtml(f.ml_item_id)}</code><br>
-              <small class="text-muted">SKU: ${escapeHtml(f.sku || 'N/A')}</small>
-            </td>
+            <td><code>${escapeHtml(f.ml_item_id)}</code></td>
             <td><strong>${escapeHtml(f.title)}</strong></td>
-            <td><span class="badge-secondary">${escapeHtml(f.account_name || 'Tienda')}</span></td>
             <td><strong>${f.units_full}</strong> unds</td>
             <td>${f.stock_casa !== undefined ? f.stock_casa : 'N/A'} unds</td>
             <td>${f.sales_last_30d || 0} unds</td>
             <td><strong>${cov.toFixed(1)} días</strong></td>
             <td>${covStatus}</td>
             <td>
-              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}')">📦 Transferir desde Casa</button>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}', '${escapeAttr(f.title)}')">📦 Transferir desde Casa</button>
             </td>
           </tr>
         `;
