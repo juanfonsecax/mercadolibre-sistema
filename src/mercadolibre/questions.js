@@ -83,8 +83,21 @@ async function getSellerItems(accountId, limit = 50, offset = 0) {
   return items.filter(Boolean);
 }
 
+/**
+ * Get answered questions for a seller account
+ */
+async function getAnsweredQuestionsForSeller(accountId, limit = 50, offset = 0) {
+  const account = db.getAccountById(accountId);
+  const sellerId = account?.seller_id || (db.getToken(accountId) || {}).seller_id;
+  if (!sellerId) throw new Error(`No hay seller_id para la cuenta ${accountId}.`);
+
+  const data = await mlFetch(`/questions/search?seller_id=${sellerId}&status=ANSWERED&sort_fields=date_created&sort_types=DESC&limit=${limit}&offset=${offset}`, accountId);
+  return data.questions || [];
+}
+
 module.exports = {
   getUnansweredQuestions,
+  getAnsweredQuestionsForSeller,
   getQuestionDetails,
   answerQuestion,
   getItemDetails,

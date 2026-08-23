@@ -180,6 +180,7 @@
             <option value="answered">Respondidas</option>
             <option value="rejected">Rechazadas</option>
           </select>
+          <button class="btn btn-secondary" onclick="regenerateAllPendingAnswers()">⚡ Generar Respuestas Pendientes</button>
           <button class="btn btn-primary" id="btnPollQuestions" onclick="pollQuestions()">📡 Buscar nuevas</button>
         </div>
       </div>
@@ -296,7 +297,8 @@
             <option value="faq">FAQs</option>
             <option value="policy">Políticas</option>
           </select>
-          <button class="btn btn-secondary" id="btnImportML" onclick="importFromML()">📥 Importar de ML</button>
+          <button class="btn btn-secondary" id="btnImportML" onclick="importFromML()">📥 Importar Productos</button>
+          <button class="btn btn-secondary" onclick="importPastQuestionsToKnowledge()">📥 Importar Preguntas Históricas</button>
           <button class="btn btn-primary" id="btnAddKnowledge" onclick="showAddKnowledge()">➕ Agregar</button>
         </div>
       </div>

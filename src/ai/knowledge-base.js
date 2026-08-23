@@ -176,10 +176,74 @@ function seedDefaults() {
   console.log('[KnowledgeBase] Default knowledge seeded');
 }
 
+/**
+ * Import past answered questions from Mercado Libre API and convert them into FAQs
+ */
+async function importPastQuestionsToKnowledge(accountId = null) {
+  const questionsApi = require('../mercadolibre/questions');
+
+  let targetAccounts = [];
+  if (accountId && accountId !== 'all') {
+    targetAccounts = [{ id: parseInt(accountId) }];
+  } else {
+    targetAccounts = db.getAccounts();
+    if (!targetAccounts || targetAccounts.length === 0) targetAccounts = [{ id: 1 }];
+  }
+
+  let totalImported = 0;
+
+  for (const acc of targetAccounts) {
+    try {
+      console.log(`[KnowledgeBase] Fetching past answered questions for account ${acc.id}...`);
+      const pastQuestions = await questionsApi.getAnsweredQuestionsForSeller(acc.id, 50, 0);
+
+      if (!pastQuestions || pastQuestions.length === 0) continue;
+
+      const itemGroups = {};
+      pastQuestions.forEach(q => {
+        const itemId = q.item_id;
+        const qText = q.text || '';
+        const aText = q.answer?.text || '';
+
+        if (!qText || qText.length < 5 || !aText || aText.length < 3) return;
+        const lowerQ = qText.toLowerCase();
+        if (lowerQ === 'hola' || lowerQ === 'disponible?' || lowerQ === 'buenos dias' || lowerQ === 'buenas tardes') return;
+
+        if (!itemGroups[itemId]) itemGroups[itemId] = [];
+        itemGroups[itemId].push({ question: qText, answer: aText });
+      });
+
+      for (const [itemId, qaList] of Object.entries(itemGroups)) {
+        if (qaList.length === 0) continue;
+
+        const formattedFaqs = qaList.slice(0, 10).map(qa => `• Pregunta: ${qa.question}\n  Respuesta: ${qa.answer}`).join('\n\n');
+        const title = `Preguntas Frecuentes Reales (${itemId})`;
+        const content = `Historial de preguntas reales y respuestas oficiales de compradores para este producto:\n\n${formattedFaqs}`;
+
+        const existingList = db.getKnowledge('faq');
+        const existing = existingList.find(k => k.ml_item_id === itemId);
+        if (existing) {
+          db.updateKnowledge(existing.id, { title, content, ml_item_id: itemId });
+        } else {
+          db.saveKnowledge({ category: 'faq', title, content, ml_item_id: itemId });
+        }
+
+        totalImported += qaList.length;
+      }
+    } catch (err) {
+      console.error(`[KnowledgeBase] Error importing past questions for account ${acc.id}:`, err.message);
+    }
+  }
+
+  db.logActivity('import_faqs', `${totalImported} preguntas reales importadas a la base de conocimiento`, { count: totalImported });
+  return totalImported;
+}
+
 module.exports = {
   loadKnowledgeBase,
   getKnowledgeForItem,
   getKnowledgeForClaims,
   importProductToKnowledge,
+  importPastQuestionsToKnowledge,
   seedDefaults,
 };

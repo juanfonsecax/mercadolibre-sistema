@@ -709,6 +709,10 @@ function updateQuestionStatus(id, status, finalAnswer = null) {
   }
 }
 
+function updateQuestionAnswer(id, generatedAnswer) {
+  runSql('UPDATE questions SET generated_answer = ? WHERE id = ?', [generatedAnswer, id]);
+}
+
 function getQuestionStats(accountId = null) {
   let where = 'WHERE 1=1';
   const params = [];
@@ -1994,7 +1998,7 @@ module.exports = {
   saveToken, getToken,
   // Questions
   saveQuestion, getQuestions, getQuestionById, getQuestionByMlId,
-  updateQuestionStatus, getQuestionStats,
+  updateQuestionStatus, updateQuestionAnswer, getQuestionStats,
   // Claims
   saveClaim, getClaims, getClaimById, getClaimByMlId,
   updateClaimStatus, getClaimStats, saveClaimMessage, getClaimMessages,

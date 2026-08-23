@@ -451,6 +451,38 @@ async function pollAll() {
   }
 }
 
+async function regenerateQuestionAnswer(questionId) {
+  const question = db.getQuestionById(questionId);
+  if (!question) throw new Error(`Pregunta ${questionId} no encontrada`);
+
+  const itemId = question.ml_item_id;
+  const accountId = question.account_id || 1;
+
+  let productInfo = null;
+  try {
+    productInfo = await questions.getItemDetails(itemId, accountId);
+    const description = await questions.getItemDescription(itemId, accountId);
+    if (description && (description.plain_text || description.text)) {
+      productInfo.description = description.plain_text || description.text;
+    }
+  } catch (error) {
+    console.warn(`[Processor] Could not fetch item ${itemId}:`, error.message);
+  }
+
+  const knowledgeContext = kb.getKnowledgeForItem(itemId);
+  const generatedAnswer = await gemini.generateQuestionAnswer(
+    question.question_text,
+    productInfo,
+    knowledgeContext
+  );
+
+  if (generatedAnswer) {
+    db.updateQuestionAnswer(questionId, generatedAnswer);
+  }
+
+  return db.getQuestionById(questionId);
+}
+
 module.exports = {
   processQuestion,
   processClaim,
@@ -460,6 +492,7 @@ module.exports = {
   approveMessage,
   rejectQuestion,
   rejectMessage,
+  regenerateQuestionAnswer,
   pollQuestionsForAccount,
   pollClaimsForAccount,
   pollMessagesForAccount,

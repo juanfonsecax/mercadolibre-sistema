@@ -395,20 +395,61 @@ function renderQuestions(questions) {
       <div class="answer-section">
         <label>🤖 Respuesta ${q.status === 'answered' ? 'enviada' : 'sugerida por IA'}:</label>
         ${isPending ? `
-          <textarea class="answer-edit-area" id="answer-${q.id}" rows="2">${escapeHtml(q.generated_answer || 'Sin respuesta generada')}</textarea>
+          <textarea class="answer-edit-area" id="answer-${q.id}" rows="2" placeholder="Respuesta de la IA...">${escapeHtml(q.generated_answer || '')}</textarea>
         ` : `
           <div class="answer-text">${escapeHtml(q.final_answer || q.generated_answer || 'Sin respuesta')}</div>
         `}
       </div>
       
       ${isPending ? `
-        <div class="question-actions">
+        <div class="question-actions" style="display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="regenerateQuestionAnswer(${q.id})">⚡ Generar/Re-generar IA</button>
           <button class="btn btn-danger btn-sm" onclick="rejectQuestion(${q.id})">❌ Rechazar</button>
           <button class="btn btn-success btn-sm" onclick="approveQuestion(${q.id})">✅ Aprobar y enviar</button>
         </div>
       ` : ''}
     </div>`;
   }).join('');
+}
+
+async function regenerateQuestionAnswer(id) {
+  try {
+    showToast('⚡ Generando borrador de respuesta con IA y contexto del producto...', 'info');
+    const res = await apiFetch(`/api/questions/${id}/regenerate`, { method: 'POST' });
+    showToast('✅ Respuesta generada con éxito', 'success');
+    loadQuestions();
+  } catch (error) {
+    showToast('Error generando respuesta: ' + error.message, 'error');
+  }
+}
+
+async function regenerateAllPendingAnswers() {
+  try {
+    showToast('⚡ Generando borrador de respuesta para todas las preguntas pendientes...', 'info');
+    const status = 'pending';
+    let query = `status=${status}`;
+    if (activeAccountId) query += `&accountId=${activeAccountId}`;
+
+    const data = await apiFetch(`/api/questions?${query}`);
+    const pendingQuestions = data.questions || [];
+
+    if (pendingQuestions.length === 0) {
+      return showToast('No hay preguntas pendientes por generar', 'info');
+    }
+
+    let generated = 0;
+    for (const q of pendingQuestions) {
+      try {
+        await apiFetch(`/api/questions/${q.id}/regenerate`, { method: 'POST' });
+        generated++;
+      } catch (e) {}
+    }
+
+    showToast(`✅ Se generaron ${generated} respuestas con IA`, 'success');
+    loadQuestions();
+  } catch (error) {
+    showToast('Error al generar respuestas pendientes: ' + error.message, 'error');
+  }
 }
 
 async function approveQuestion(id) {
@@ -845,6 +886,20 @@ async function importFromML() {
     showToast('Error importando: ' + error.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+  }
+}
+
+async function importPastQuestionsToKnowledge() {
+  try {
+    showToast('📥 Consultando e importando preguntas anteriores resueltas de Mercado Libre...', 'info');
+    const data = await apiFetch('/api/knowledge/import-past-questions', {
+      method: 'POST',
+      body: JSON.stringify({ accountId: activeAccountId || null }),
+    });
+    showToast(`🚀 ¡Éxito! Se importaron ${data.imported} preguntas y respuestas históricas a la Base de Conocimiento`, 'success');
+    loadKnowledge();
+  } catch (error) {
+    showToast('Error importando preguntas históricas: ' + error.message, 'error');
   }
 }
 

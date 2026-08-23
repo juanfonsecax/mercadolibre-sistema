@@ -159,6 +159,15 @@ app.post('/api/questions/:id/reject', (req, res) => {
   }
 });
 
+app.post('/api/questions/:id/regenerate', async (req, res) => {
+  try {
+    const updated = await processor.regenerateQuestionAnswer(parseInt(req.params.id));
+    res.json({ success: true, question: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/questions/poll', async (req, res) => {
   try {
     const { accountId } = req.body;
@@ -323,6 +332,16 @@ app.post('/api/knowledge/import-from-ml', async (req, res) => {
     });
     db.logActivity('import', `${imported} productos importados desde Mercado Libre`, null, accId);
     res.json({ success: true, imported });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/knowledge/import-past-questions', async (req, res) => {
+  try {
+    const { accountId } = req.body;
+    const importedCount = await kb.importPastQuestionsToKnowledge(accountId || null);
+    res.json({ success: true, imported: importedCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
