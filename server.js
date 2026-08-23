@@ -665,18 +665,9 @@ async function startServer() {
 
   try {
     const fullRows = db.getMlFullInventory();
-    if (!fullRows || fullRows.length < 14) {
-      console.log('[DB Seed] Seeding active Mercado Libre listings in Full inventory...');
+    if (!fullRows || fullRows.length === 0) {
+      console.log('[DB Seed] Initializing active Mercado Libre listings in Full inventory...');
       db.seedActiveMlListings();
-    }
-
-    const chinaRows = db.getChinaShipments();
-    if (!chinaRows || chinaRows.length < 10) {
-      console.log('[DB Seed] Seeding China shipments & Stock for Cloud Deployment...');
-      const { execSync } = require('child_process');
-      execSync('node scripts/import-china-csv.js');
-      execSync('node scripts/import-stock-csv.js');
-      db.reloadDbFromFile();
     }
   } catch (e) {
     console.error('[DB Seed] Error seeding database:', e.message);

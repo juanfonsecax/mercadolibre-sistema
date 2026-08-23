@@ -1123,7 +1123,8 @@ const ACTIVE_ML_LISTINGS = [
 ];
 
 function seedActiveMlListings() {
-  runSql('DELETE FROM ml_full_inventory');
+  const existing = queryOne('SELECT COUNT(*) as count FROM ml_full_inventory');
+  if (existing && existing.count > 0) return;
   ACTIVE_ML_LISTINGS.forEach(item => {
     saveMlFullInventoryItem(item);
   });
