@@ -538,6 +538,21 @@ app.delete('/api/inventory/mappings/:ml_item_id', (req, res) => {
   }
 });
 
+// --- China Product Mapping (China <-> Producto Maestro) ---
+app.post('/api/inventory/china/map', (req, res) => {
+  try {
+    const { id, master_product_title } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'id del embarque es requerido' });
+    }
+    db.saveChinaProductMapping(parseInt(id), master_product_title ? master_product_title.trim() : null);
+    db.logActivity('inventory_china_map', `Embarque China ${id} vinculado a "${master_product_title || 'Ninguno'}"`, null, null);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Fase 3: Stock Full Mercado Libre & Alertas ---
 app.get('/api/inventory/full', (req, res) => {
   try {

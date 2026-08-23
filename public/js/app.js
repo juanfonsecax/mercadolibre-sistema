@@ -1353,9 +1353,16 @@ function renderChinaShipments() {
     const margin = parseFloat(s.margin_percent || 0);
     const marginBadgeClass = margin >= 100 ? 'badge-success' : (margin >= 50 ? 'badge-warning' : 'badge-critical');
 
+    const masterTitle = s.master_product_title || s.product_name;
+    const isMapped = !!s.master_product_title;
+    const mappedBadge = isMapped
+      ? `<span class="badge-success" title="Vinculado a: ${escapeHtml(s.master_product_title)}">🔗 ${escapeHtml(s.master_product_title)}</span>`
+      : `<span class="badge-secondary" title="No vinculado explícitamente (coincide por defecto)">⚪ ${escapeHtml(s.product_name)}</span>`;
+
     return `
       <tr>
         <td style="font-weight: 600;">${escapeHtml(s.product_name || s.supplier_name)}</td>
+        <td>${mappedBadge}</td>
         <td><strong>${qty.toLocaleString('es-CO')}</strong></td>
         <td>${escapeHtml(s.agency || 'Agente')}</td>
         <td>${m3 > 0 ? m3.toFixed(3) : '0'}</td>
@@ -1367,6 +1374,7 @@ function renderChinaShipments() {
         <td><small>${escapeHtml(s.eta_date || 'N/A')}</small></td>
         <td>${statusBadge}</td>
         <td>
+          <button class="btn btn-sm btn-primary" onclick="openLinkChinaModal(${s.id})" title="Vincular a Producto Maestro (Fase 2/3)">🔗 Vincular</button>
           <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})" title="Editar importación">✏️</button>
           <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})" title="Eliminar">🗑️</button>
         </td>
@@ -2306,6 +2314,91 @@ async function triggerImportCsv() {
     }
   } catch (error) {
     showToast('Error importando CSV: ' + error.message, 'error');
+  }
+}
+
+// --- Modulo de Vinculacion China <-> Producto Maestro (Fase 1 ↔ Fase 2 ↔ Fase 3) ---
+async function getOrFetchMasterProductTitles() {
+  try {
+    const localData = await apiFetch(`/api/inventory/local?accountId=${activeAccountId}`);
+    const fullData = await apiFetch(`/api/inventory/full?accountId=${activeAccountId}`);
+    
+    const titlesSet = new Set();
+    (localData.items || []).forEach(i => { if (i.title) titlesSet.add(i.title.trim()); });
+    (fullData.items || []).forEach(f => {
+      if (f.master_product_title) titlesSet.add(f.master_product_title.trim());
+      else if (f.title) titlesSet.add(f.title.trim());
+    });
+    
+    return Array.from(titlesSet).sort();
+  } catch (e) {
+    return [];
+  }
+}
+
+async function openLinkChinaModal(chinaId) {
+  const shipment = (cachedChinaShipments || []).find(s => s.id == chinaId);
+  if (!shipment) return showToast('Embarque no encontrado', 'error');
+
+  document.getElementById('linkChinaId').value = chinaId;
+  document.getElementById('linkChinaProductName').value = shipment.product_name;
+  document.getElementById('linkChinaMasterCustom').value = '';
+
+  const selectElem = document.getElementById('linkChinaMasterSelect');
+  selectElem.innerHTML = '<option value="">⏳ Cargando Productos Maestros...</option>';
+
+  const titles = await getOrFetchMasterProductTitles();
+  let optionsHtml = '<option value="">-- Seleccionar Producto Maestro Existente --</option>';
+  titles.forEach(t => {
+    const selected = shipment.master_product_title && shipment.master_product_title.trim().toLowerCase() === t.toLowerCase() ? 'selected' : '';
+    optionsHtml += `<option value="${escapeHtml(t)}" ${selected}>${escapeHtml(t)}</option>`;
+  });
+  selectElem.innerHTML = optionsHtml;
+
+  document.getElementById('linkChinaModal').style.display = 'flex';
+}
+
+function closeLinkChinaModal() {
+  document.getElementById('linkChinaModal').style.display = 'none';
+}
+
+async function saveLinkChinaFromModal() {
+  const chinaId = document.getElementById('linkChinaId').value;
+  const selectVal = document.getElementById('linkChinaMasterSelect').value;
+  const customVal = document.getElementById('linkChinaMasterCustom').value.trim();
+
+  const masterProductTitle = customVal || selectVal;
+  if (!masterProductTitle) {
+    return showToast('Selecciona un Producto Maestro o escribe uno nuevo', 'error');
+  }
+
+  try {
+    await apiFetch('/api/inventory/china/map', {
+      method: 'POST',
+      body: JSON.stringify({ id: chinaId, master_product_title: masterProductTitle })
+    });
+    showToast(`✅ Embarque vinculado a "${masterProductTitle}"`, 'success');
+    closeLinkChinaModal();
+    loadChinaShipments();
+    loadInventoryData();
+  } catch (e) {
+    showToast('Error vinculando embarque: ' + e.message, 'error');
+  }
+}
+
+async function unlinkChinaFromModal() {
+  const chinaId = document.getElementById('linkChinaId').value;
+  try {
+    await apiFetch('/api/inventory/china/map', {
+      method: 'POST',
+      body: JSON.stringify({ id: chinaId, master_product_title: null })
+    });
+    showToast('Desvinculación guardada', 'info');
+    closeLinkChinaModal();
+    loadChinaShipments();
+    loadInventoryData();
+  } catch (e) {
+    showToast('Error desvinculando: ' + e.message, 'error');
   }
 }
 

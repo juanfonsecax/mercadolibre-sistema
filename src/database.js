@@ -373,6 +373,7 @@ function initSchema() {
   try { db.run('ALTER TABLE china_shipments ADD COLUMN total_cost_usd REAL'); } catch {}
   try { db.run('ALTER TABLE china_shipments ADD COLUMN total_units INTEGER'); } catch {}
   try { db.run('ALTER TABLE china_shipments ADD COLUMN notes TEXT'); } catch {}
+  try { db.run('ALTER TABLE china_shipments ADD COLUMN master_product_title TEXT'); } catch {}
 
 
   db.run(`
@@ -1043,48 +1044,60 @@ function getChinaShipments() {
   });
 }
 
-function saveChinaShipment(shipment, items = []) {
-  const f = computeShipmentFormulas(shipment);
-  if (f.id) {
+function saveChinaShipment(shipment) {
+  if (shipment.id) {
     runSql(
-      `UPDATE china_shipments SET 
+      `UPDATE china_shipments SET
         product_name = ?, notion_link = ?, quantity = ?, chinese_winery_date = ?, agency = ?, supply = ?, status = ?,
         total_price_cop = ?, boxes = ?, length_m = ?, height_m = ?, width_m = ?, cubic_meter = ?, container_m3_cost = ?,
         import_cost_cop = ?, national_freight_cop = ?, full_cost_cop = ?, extra_expenses_cop = ?, unit_cost_cop = ?,
         total_cost_cop = ?, price_ml_cop = ?, commission_ml_cop = ?, income_cop = ?, margin_percent = ?, total_profit_cop = ?,
         total_money_cop = ?, payment_card = ?, eta_date = ?, days_to_arrive = ?, active_transit_units = ?, delivery_status = ?,
-        updated_at = datetime("now") WHERE id = ?`,
+        tracking_number = ?, supplier_name = ?, shipment_type = ?, etd_date = ?, trm_cop = ?, total_cost_usd = ?, total_units = ?, notes = ?, master_product_title = ?,
+        updated_at = datetime('now')
+      WHERE id = ?`,
       [
-        f.product_name, f.notion_link || '', f.quantity, f.chinese_winery_date || '', f.agency || 'William', f.supply || 'Alibaba', f.status || 'In progress',
-        f.total_price_cop, f.boxes, f.length_m, f.height_m, f.width_m, f.cubic_meter, f.container_m3_cost,
-        f.import_cost_cop, f.national_freight_cop, f.full_cost_cop, f.extra_expenses_cop, f.unit_cost_cop,
-        f.total_cost_cop, f.price_ml_cop, f.commission_ml_cop, f.income_cop, f.margin_percent, f.total_profit_cop,
-        f.total_money_cop, f.payment_card || '', f.eta_date || '', f.days_to_arrive || 0, f.active_transit_units || 0, f.delivery_status,
-        f.id
+        shipment.product_name, shipment.notion_link, shipment.quantity, shipment.chinese_winery_date, shipment.agency, shipment.supply, shipment.status,
+        shipment.total_price_cop, shipment.boxes, shipment.length_m, shipment.height_m, shipment.width_m, shipment.cubic_meter, shipment.container_m3_cost,
+        shipment.import_cost_cop, shipment.national_freight_cop, shipment.full_cost_cop, shipment.extra_expenses_cop, shipment.unit_cost_cop,
+        shipment.total_cost_cop, shipment.price_ml_cop, shipment.commission_ml_cop, shipment.income_cop, shipment.margin_percent, shipment.total_profit_cop,
+        shipment.total_money_cop, shipment.payment_card, shipment.eta_date, shipment.days_to_arrive, shipment.active_transit_units, shipment.delivery_status,
+        shipment.tracking_number, shipment.supplier_name, shipment.shipment_type, shipment.etd_date, shipment.trm_cop, shipment.total_cost_usd, shipment.total_units, shipment.notes, shipment.master_product_title || null,
+        shipment.id
       ]
     );
-    return f.id;
+    return shipment.id;
   } else {
     runSql(
       `INSERT INTO china_shipments (
-        product_name, supplier_name, notion_link, quantity, chinese_winery_date, agency, supply, status,
+        product_name, notion_link, quantity, chinese_winery_date, agency, supply, status,
         total_price_cop, boxes, length_m, height_m, width_m, cubic_meter, container_m3_cost,
         import_cost_cop, national_freight_cop, full_cost_cop, extra_expenses_cop, unit_cost_cop,
         total_cost_cop, price_ml_cop, commission_ml_cop, income_cop, margin_percent, total_profit_cop,
-        total_money_cop, payment_card, eta_date, days_to_arrive, active_transit_units, delivery_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        total_money_cop, payment_card, eta_date, days_to_arrive, active_transit_units, delivery_status,
+        tracking_number, supplier_name, shipment_type, etd_date, trm_cop, total_cost_usd, total_units, notes, master_product_title
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        f.product_name, f.agency || 'Proveedor China', f.notion_link || '', f.quantity, f.chinese_winery_date || '', f.agency || 'William', f.supply || 'Alibaba', f.status || 'In progress',
-        f.total_price_cop, f.boxes, f.length_m, f.height_m, f.width_m, f.cubic_meter, f.container_m3_cost,
-        f.import_cost_cop, f.national_freight_cop, f.full_cost_cop, f.extra_expenses_cop, f.unit_cost_cop,
-        f.total_cost_cop, f.price_ml_cop, f.commission_ml_cop, f.income_cop, f.margin_percent, f.total_profit_cop,
-        f.total_money_cop, f.payment_card || '', f.eta_date || '', f.days_to_arrive || 0, f.active_transit_units || 0, f.delivery_status
+        shipment.product_name, shipment.notion_link, shipment.quantity, shipment.chinese_winery_date, shipment.agency, shipment.supply, shipment.status,
+        shipment.total_price_cop, shipment.boxes, shipment.length_m, shipment.height_m, shipment.width_m, shipment.cubic_meter, shipment.container_m3_cost,
+        shipment.import_cost_cop, shipment.national_freight_cop, shipment.full_cost_cop, shipment.extra_expenses_cop, shipment.unit_cost_cop,
+        shipment.total_cost_cop, shipment.price_ml_cop, shipment.commission_ml_cop, shipment.income_cop, shipment.margin_percent, shipment.total_profit_cop,
+        shipment.total_money_cop, shipment.payment_card, shipment.eta_date, shipment.days_to_arrive, shipment.active_transit_units, shipment.delivery_status,
+        shipment.tracking_number, shipment.supplier_name, shipment.shipment_type, shipment.etd_date, shipment.trm_cop, shipment.total_cost_usd, shipment.total_units, shipment.notes, shipment.master_product_title || null
       ]
     );
     const created = queryOne('SELECT id FROM china_shipments ORDER BY id DESC LIMIT 1');
     saveChinaShipmentsToJsonFile();
     return created ? created.id : null;
   }
+}
+
+function saveChinaProductMapping(chinaId, masterProductTitle) {
+  runSql(
+    "UPDATE china_shipments SET master_product_title = ?, updated_at = datetime('now') WHERE id = ?",
+    [masterProductTitle ? masterProductTitle.trim() : null, chinaId]
+  );
+  saveChinaShipmentsToJsonFile();
 }
 
 function deleteChinaShipment(id) {
@@ -1509,9 +1522,9 @@ function getInventoryPlanningIntelligence(accountId = null) {
     });
   });
 
-  // Next, add active China transit stock matching by STRICT title matching
+  // Next, add active China transit stock matching by STRICT title matching (master_product_title or product_name)
   chinaShipments.forEach(c => {
-    const cName = (c.product_name || '').trim().toLowerCase();
+    const cName = (c.master_product_title || c.product_name || '').trim().toLowerCase();
     if (!cName) return;
 
     // We only map to the EXACT master_title (case-insensitive)
@@ -1761,7 +1774,7 @@ module.exports = {
   // Stats
   updateDailyStats, getDailyStats, getOverviewStats,
   // China Shipments (Fase 1)
-  getChinaShipments, saveChinaShipment, deleteChinaShipment,
+  getChinaShipments, saveChinaShipment, deleteChinaShipment, saveChinaProductMapping,
   // Local Inventory (Fase 2)
   getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
   // Stock Full ML (Fase 3) & Planning Intelligence

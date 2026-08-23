@@ -578,7 +578,8 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Producto</th>
+                <th>Producto China</th>
+                <th>🔗 Producto Maestro</th>
                 <th>Cant.</th>
                 <th>Agente</th>
                 <th>Vol. (m³)</th>
@@ -608,7 +609,8 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Producto</th>
+                <th>Producto China</th>
+                <th>🔗 Producto Maestro</th>
                 <th>Cant.</th>
                 <th>Agente</th>
                 <th>Vol. (m³)</th>
@@ -1195,6 +1197,36 @@
           <button class="btn btn-secondary" onclick="closeLinkProductModal()">Cancelar</button>
           <button class="btn btn-danger" onclick="unlinkProductFromModal()">Desvincular</button>
           <button class="btn btn-primary" onclick="saveLinkProductFromModal()">Guardar Vinculación Permanente</button>
+  <!-- Modal 6: Link China Shipment Item to Master Physical Product -->
+  <div class="modal-overlay" id="linkChinaModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🚢 Vincular Embarque de China a Producto Maestro</h3>
+        <button class="modal-close" onclick="closeLinkChinaModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="linkChinaId">
+        <div class="form-group">
+          <label>Producto en Embarque de China:</label>
+          <input type="text" id="linkChinaProductName" class="form-input" readonly style="background-color: var(--bg-card); font-weight:600;">
+        </div>
+        <div class="form-group">
+          <label>Seleccionar Producto Maestro (Bodega Casa / Mercado Libre):</label>
+          <select id="linkChinaMasterSelect" class="form-input">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div class="form-group">
+          <label>O escribir Nuevo Nombre de Producto Maestro:</label>
+          <input type="text" id="linkChinaMasterCustom" class="form-input" placeholder="Ej: Interruptor Inteligente 3 Botones">
+        </div>
+        <p class="settings-hint" style="margin-top:8px">
+          💡 <strong>¿Por qué vincular?</strong> Vincula este embarque con el Producto Maestro al que pertenecen las publicaciones de Mercado Libre. Así el tránsito de China (Fase 1) se sumará exactamente al producto indicado.
+        </p>
+        <div class="form-actions" style="margin-top:16px;">
+          <button class="btn btn-secondary" onclick="closeLinkChinaModal()">Cancelar</button>
+          <button class="btn btn-danger" onclick="unlinkChinaFromModal()">Desvincular</button>
+          <button class="btn btn-primary" onclick="saveLinkChinaFromModal()">Guardar Vinculación</button>
         </div>
       </div>
     </div>
