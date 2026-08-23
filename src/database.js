@@ -2,7 +2,8 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'bot.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'bot.db');
+const MAPPINGS_JSON_PATH = path.join(__dirname, '..', 'data', 'product_mappings.json');
 
 let db = null;
 let SQL = null;
@@ -387,6 +388,7 @@ function initSchema() {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
+  restoreProductMappingsFromJsonFile();
 
   // ── Modulo de Ofertas & Margen ──
   db.run(`
@@ -1095,14 +1097,51 @@ function saveProductMapping(mlItemId, masterProductTitle) {
        created_at = datetime('now')`,
     [mlItemId, masterProductTitle]
   );
+  saveProductMappingsToJsonFile();
 }
 
 function deleteProductMapping(mlItemId) {
   runSql('DELETE FROM product_mappings WHERE ml_item_id = ?', [mlItemId]);
+  saveProductMappingsToJsonFile();
 }
 
 function getProductMappings() {
   return queryAll('SELECT * FROM product_mappings');
+}
+
+function saveProductMappingsToJsonFile() {
+  try {
+    const dir = path.dirname(MAPPINGS_JSON_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const mappings = queryAll('SELECT ml_item_id, master_product_title FROM product_mappings');
+    const mappingMap = {};
+    mappings.forEach(m => { mappingMap[m.ml_item_id] = m.master_product_title; });
+    fs.writeFileSync(MAPPINGS_JSON_PATH, JSON.stringify(mappingMap, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[DB] Error writing product_mappings.json:', e.message);
+  }
+}
+
+function restoreProductMappingsFromJsonFile() {
+  try {
+    if (fs.existsSync(MAPPINGS_JSON_PATH)) {
+      const raw = fs.readFileSync(MAPPINGS_JSON_PATH, 'utf-8');
+      const mappingMap = JSON.parse(raw);
+      for (const [mlItemId, masterProductTitle] of Object.entries(mappingMap)) {
+        runSql(
+          `INSERT INTO product_mappings (ml_item_id, master_product_title)
+           VALUES (?, ?)
+           ON CONFLICT(ml_item_id) DO UPDATE SET
+             master_product_title = excluded.master_product_title,
+             created_at = datetime('now')`,
+          [mlItemId, masterProductTitle]
+        );
+      }
+      console.log(`[DB] Restored ${Object.keys(mappingMap).length} product mappings from product_mappings.json`);
+    }
+  } catch (e) {
+    console.error('[DB] Error restoring product_mappings.json:', e.message);
+  }
 }
 
 const ACTIVE_ML_LISTINGS = [
