@@ -2520,7 +2520,7 @@ function renderProductContextsTable(contexts) {
 async function syncAllProductContexts() {
   try {
     showToast('⚡ Iniciando análisis de fotos y descripciones con Gemini 3.6 Flash...', 'info');
-    const accountId = activeAccountId || 1;
+    const accountId = activeAccountId || '';
     const res = await apiFetch('/api/product-contexts/sync', {
       method: 'POST',
       body: JSON.stringify({ accountId })

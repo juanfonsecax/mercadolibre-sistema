@@ -691,9 +691,9 @@ app.get('/api/product-contexts/:itemId', (req, res) => {
 app.post('/api/product-contexts/sync', async (req, res) => {
   try {
     const { accountId } = req.body;
-    const accId = accountId ? parseInt(accountId) : 1;
+    const accId = accountId ? parseInt(accountId) : null;
     
-    // Launch background sync
+    // Launch background sync (passes accId or null for all accounts)
     productContextApi.syncAllProductContexts(accId).catch(err => {
       console.error('[ProductContext] Error in async syncAllProductContexts:', err.message);
     });

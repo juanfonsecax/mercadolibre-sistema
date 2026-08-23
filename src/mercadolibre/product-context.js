@@ -211,25 +211,41 @@ async function extractAndSaveProductContext(itemId, sales30d = 0, accountId = 1)
 /**
  * Sync product contexts for all active items sold in the last 30 days
  */
-async function syncAllProductContexts(accountId = 1) {
-  console.log(`[ProductContext] Starting sync of product contexts for account ${accountId}...`);
+async function syncAllProductContexts(accountId = null) {
+  let targetAccounts = [];
 
-  const topItems = await fetchTopSellingActiveItems(accountId);
-  console.log(`[ProductContext] Found ${topItems.length} active items to process.`);
-
-  const results = [];
-  for (const itemInfo of topItems) {
-    try {
-      console.log(`[ProductContext] Processing ${itemInfo.id} (${itemInfo.sales_30d} sales 30d)...`);
-      const record = await extractAndSaveProductContext(itemInfo.id, itemInfo.sales_30d, accountId);
-      if (record) results.push(record);
-    } catch (err) {
-      console.error(`[ProductContext] Failed to process ${itemInfo.id}:`, err.message);
+  if (accountId && accountId !== 'all') {
+    targetAccounts = [{ id: parseInt(accountId) }];
+  } else {
+    const allAccs = db.getAccounts();
+    if (allAccs && allAccs.length > 0) {
+      targetAccounts = allAccs;
+    } else {
+      targetAccounts = [{ id: 1 }];
     }
   }
 
-  db.logActivity('context_sync', `Sincronización de contextos completada (${results.length} ítems procesados)`, { count: results.length }, accountId);
-  return results;
+  const allResults = [];
+  for (const acc of targetAccounts) {
+    const currentAccId = acc.id;
+    console.log(`[ProductContext] Starting sync of product contexts for account ${currentAccId}...`);
+
+    const topItems = await fetchTopSellingActiveItems(currentAccId);
+    console.log(`[ProductContext] Account ${currentAccId}: Found ${topItems.length} active items to process.`);
+
+    for (const itemInfo of topItems) {
+      try {
+        console.log(`[ProductContext] Processing ${itemInfo.id} (${itemInfo.sales_30d} sales 30d) for account ${currentAccId}...`);
+        const record = await extractAndSaveProductContext(itemInfo.id, itemInfo.sales_30d, currentAccId);
+        if (record) allResults.push(record);
+      } catch (err) {
+        console.error(`[ProductContext] Failed to process ${itemInfo.id}:`, err.message);
+      }
+    }
+    db.logActivity('context_sync', `Sincronización de contextos completada (${allResults.length} ítems procesados)`, { count: allResults.length }, currentAccId);
+  }
+
+  return allResults;
 }
 
 module.exports = {

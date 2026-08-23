@@ -293,7 +293,7 @@ async function generateMultimodalProductContext(itemData, descriptionText, image
     : 'No especificados';
 
   const textPrompt = `Eres un experto especialista en productos de comercio electrónico y atención al cliente en Mercado Libre Colombia.
-Analiza la siguiente publicación de producto, incluyendo su descripción textual, especificaciones y las imágenes adjuntas del producto.
+Analiza detenidamente la siguiente publicación de producto, incluyendo su descripción textual, especificaciones y las imágenes adjuntas.
 
 INFORMACIÓN DE LA PUBLICACIÓN:
 - Título: ${itemData.title || 'Sin título'}
@@ -307,25 +307,22 @@ DESCRIPCIÓN COMPLETA DE LA PUBLICACIÓN:
 ${descriptionText || 'Sin descripción textual.'}
 """
 
-INSTRUCCIONES DE ANÁLISIS:
-Sintetiza y genera un CONTEXTO DE CONOCIMIENTO PROFUNDO sobre este producto para ser usado por una IA de ventas y soporte post-venta de Mercado Libre.
+INSTRUCCIONES DE ANÁLISIS PROFUNDO (EXTRAER TODO DETALLE VALIOSO DE FOTOS Y TEXTO):
+1. 🛡️ CERTIFICACIONES Y SEGURIDAD: Identifica y destaca explícitamente cualquier certificado de protección de energía, protección contra sobretensión/cortocircuito, certificaciones de calidad (RETIE, CE, RoHS, etc.), resistencia ignífuga y nivel de calidad del producto. Si las imágenes o el texto mencionan que es de grado superior o el mejor del mercado, explicítalo.
+2. 💎 MATERIALES Y RESISTENCIA: Detalla los materiales de construcción (ej: panel de vidrio templado de alta resistencia a rayones y humedad, cuerpo en PC ignífugo).
+3. 🔘 BOTONES Y VARIANTES DE COLOR: Identifica las variantes descritas o mostradas en fotos (ej: 1, 2 o 3 botones / gang, colores blanco y negro) y cómo se diferencian.
+4. ⚙️ ESPECIFICACIONES TÉCNICAS Y CONEXIÓN: Especifica voltajes (110V-240V), corriente máx, frecuencia, potencia por canal, necesidad de cable neutro (o si incluye capacitor para instalación sin neutro), conectividad Wi-Fi 2.4GHz y apps compatibles (Tuya, Smart Life, Alexa, Google Home).
+5. 🛠️ INSTALACIÓN Y CONTENIDO DE LA CAJA: Pasos sencillos de instalación, qué incluye la caja (tornillos, capacitador, manual) y visualización física según las fotos.
+6. ❓ PREGUNTAS FRECUENTES Y ASISTENCIA: Respuestas directas a preguntas probables del comprador resaltando las ventajas superiores de este producto frente a otras publicaciones.
 
 Devuelve una síntesis estructurada clara con las siguientes secciones:
 
-1. 📌 RESUMEN DEL PRODUCTO Y FUNCIÓN PRINCIPAL
-   (En qué consiste el producto y cuál es su utilidad clave).
-
-2. ⚙️ ESPECIFICACIONES TÉCNICAS Y COMPATIBILIDAD
-   (Dimensiones, voltajes, conectores, peso, materiales, compatibilidad con apps como Tuya, Smart Life, Alexa, Google Home, iOS, Android si aplica).
-
-3. 📷 DETALLES VISUALES Y CONTENIDO DE LA CAJA (DE LAS FOTOS Y TEXTO)
-   (Qué elementos físicos se observan en las fotos, botones, indicadores LED, puertos, qué viene en el empaque/caja).
-
-4. ❓ PREGUNTAS FRECUENTES Y RESPUESTAS RECOMENDADAS
-   (Respuestas concretas a preguntas probables de compradores: instalación, vincular app, garantía, requerimientos).
-
-5. ⚠️ NOTAS IMPORTANTES Y ADVERTENCIAS
-   (Lo que el comprador debe saber antes de comprar o al recibir el producto).
+1. 📌 RESUMEN Y PUNTOS FUERTES DEL PRODUCTO
+2. 🛡️ CERTIFICADOS, SEGURIDAD Y MATERIALES (Protección de energía, vidrio templado, calidad)
+3. ⚙️ ESPECIFICACIONES TÉCNICAS Y COMPATIBILIDAD (Apps, neutro, capacitador, voltajes)
+4. 🔘 VARIANTES (1, 2, 3 botones, colores blanco/negro)
+5. 📷 DETALLES VISUALES Y CONTENIDO DE LA CAJA (DE LAS FOTOS)
+6. ❓ PREGUNTAS FRECUENTES Y ASISTENCIA POST-VENTA
 
 Responde en texto claro en español de Colombia, estructurado y directo.`;
 
