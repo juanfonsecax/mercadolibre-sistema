@@ -209,7 +209,11 @@ async function syncMlFullInventory(accountId = null) {
             const itemsData = await itemsRes.json();
             itemsData.forEach(res => {
               if (res.body && res.body.id) {
-                itemsMap.set(res.body.id, res.body);
+                const item = res.body;
+                if (item.status === 'paused' && !(item.sub_status && item.sub_status.includes('out_of_stock'))) {
+                   return; // Skip manually paused items
+                }
+                itemsMap.set(item.id, item);
               }
             });
           }
@@ -241,6 +245,17 @@ async function syncMlFullInventory(accountId = null) {
           sales_last_30d: sales30d
         });
         syncedCount++;
+      }
+
+      // Delete items from the DB that are no longer active/out_of_stock
+      const allItemIdsFromApi = Array.from(itemsMap.keys());
+      if (allItemIdsFromApi.length > 0) {
+        const placeholders = allItemIdsFromApi.map(() => '?').join(',');
+        try {
+          db.getDb().run(`DELETE FROM ml_full_inventory WHERE account_id = ? AND ml_item_id NOT IN (${placeholders})`, [acc.id, ...allItemIdsFromApi]);
+        } catch(e) {
+          console.error('[ML Sync] Error cleaning up old items:', e.message);
+        }
       }
 
       // Save updated sales to JSON for persistence across restarts
