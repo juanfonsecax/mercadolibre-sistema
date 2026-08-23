@@ -4,6 +4,8 @@ const path = require('path');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'bot.db');
 const MAPPINGS_JSON_PATH = path.join(__dirname, '..', 'data', 'product_mappings.json');
+const CHINA_JSON_PATH = path.join(__dirname, '..', 'data', 'china_shipments.json');
+const LOCAL_JSON_PATH = path.join(__dirname, '..', 'data', 'local_inventory.json');
 
 let db = null;
 let SQL = null;
@@ -388,6 +390,8 @@ function initSchema() {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
+  restoreChinaShipmentsFromJsonFile();
+  restoreLocalInventoryFromJsonFile();
   restoreProductMappingsFromJsonFile();
 
   // ── Modulo de Ofertas & Margen ──
@@ -982,12 +986,14 @@ function saveChinaShipment(shipment, items = []) {
       ]
     );
     const created = queryOne('SELECT id FROM china_shipments ORDER BY id DESC LIMIT 1');
+    saveChinaShipmentsToJsonFile();
     return created ? created.id : null;
   }
 }
 
 function deleteChinaShipment(id) {
   runSql('DELETE FROM china_shipments WHERE id = ?', [id]);
+  saveChinaShipmentsToJsonFile();
 }
 
 // ── Fase 2: Stock Casa / Bodega Local Operations ──
@@ -1027,12 +1033,14 @@ function saveLocalInventoryItem(item) {
       [item.account_id || null, item.sku, item.title, item.category || 'General', item.units_house || 0, item.unit_cost_cop || 0, item.min_stock_alert || 10, item.location || 'Bodega Principal']
     );
     const created = queryOne('SELECT id FROM local_inventory WHERE sku = ?', [item.sku]);
+    saveLocalInventoryToJsonFile();
     return created ? created.id : null;
   }
 }
 
 function deleteLocalInventoryItem(id) {
   runSql('DELETE FROM local_inventory WHERE id = ?', [id]);
+  saveLocalInventoryToJsonFile();
 }
 
 function recordInventoryMovement(movement) {
@@ -1047,6 +1055,7 @@ function recordInventoryMovement(movement) {
   } else if (movement.movement_type === 'transferencia_full' || movement.movement_type === 'ajuste_manual_resta') {
     runSql('UPDATE local_inventory SET units_house = MAX(0, units_house - ?) WHERE sku = ?', [Math.abs(movement.units), movement.sku]);
   }
+  saveLocalInventoryToJsonFile();
 }
 
 function getInventoryMovements(sku = null, limit = 50) {
@@ -1141,6 +1150,111 @@ function restoreProductMappingsFromJsonFile() {
     }
   } catch (e) {
     console.error('[DB] Error restoring product_mappings.json:', e.message);
+  }
+}
+
+function saveChinaShipmentsToJsonFile() {
+  try {
+    const dir = path.dirname(CHINA_JSON_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const shipments = queryAll('SELECT * FROM china_shipments ORDER BY id ASC');
+    fs.writeFileSync(CHINA_JSON_PATH, JSON.stringify(shipments, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[DB] Error saving china_shipments.json:', e.message);
+  }
+}
+
+function restoreChinaShipmentsFromJsonFile() {
+  try {
+    if (fs.existsSync(CHINA_JSON_PATH)) {
+      const raw = fs.readFileSync(CHINA_JSON_PATH, 'utf-8');
+      const shipments = JSON.parse(raw);
+      if (Array.isArray(shipments) && shipments.length > 0) {
+        shipments.forEach(s => {
+          runSql(
+            `INSERT INTO china_shipments (id, product_name, notion_link, quantity, chinese_winery_date, agency, box_quantity, volume_m3, weight_kg, invoice_cop, freight_fee_usd, freight_fee_cop, tax_customs_cop, local_transport_cop, total_cost_cop, price_ml_cop, commission_ml_cop, income_cop, margin_percent, total_profit_cop, total_money_cop, payment_card, eta_date, days_to_arrive, active_transit_units, delivery_status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               product_name = excluded.product_name,
+               notion_link = excluded.notion_link,
+               quantity = excluded.quantity,
+               chinese_winery_date = excluded.chinese_winery_date,
+               agency = excluded.agency,
+               box_quantity = excluded.box_quantity,
+               volume_m3 = excluded.volume_m3,
+               weight_kg = excluded.weight_kg,
+               invoice_cop = excluded.invoice_cop,
+               freight_fee_usd = excluded.freight_fee_usd,
+               freight_fee_cop = excluded.freight_fee_cop,
+               tax_customs_cop = excluded.tax_customs_cop,
+               local_transport_cop = excluded.local_transport_cop,
+               total_cost_cop = excluded.total_cost_cop,
+               price_ml_cop = excluded.price_ml_cop,
+               commission_ml_cop = excluded.commission_ml_cop,
+               income_cop = excluded.income_cop,
+               margin_percent = excluded.margin_percent,
+               total_profit_cop = excluded.total_profit_cop,
+               total_money_cop = excluded.total_money_cop,
+               payment_card = excluded.payment_card,
+               eta_date = excluded.eta_date,
+               days_to_arrive = excluded.days_to_arrive,
+               active_transit_units = excluded.active_transit_units,
+               delivery_status = excluded.delivery_status`,
+            [
+              s.id, s.product_name, s.notion_link || '', s.quantity || 0, s.chinese_winery_date || '', s.agency || 'William',
+              s.box_quantity || 0, s.volume_m3 || 0, s.weight_kg || 0, s.invoice_cop || 0, s.freight_fee_usd || 0, s.freight_fee_cop || 0,
+              s.tax_customs_cop || 0, s.local_transport_cop || 0, s.total_cost_cop || 0, s.price_ml_cop || 0, s.commission_ml_cop || 0,
+              s.income_cop || 0, s.margin_percent || 0, s.total_profit_cop || 0, s.total_money_cop || 0, s.payment_card || '',
+              s.eta_date || '', s.days_to_arrive || 0, s.active_transit_units || 0, s.delivery_status || 'En Tránsito'
+            ]
+          );
+        });
+        console.log(`[DB] Restored ${shipments.length} China shipments from china_shipments.json`);
+      }
+    }
+  } catch (e) {
+    console.error('[DB] Error restoring china_shipments.json:', e.message);
+  }
+}
+
+function saveLocalInventoryToJsonFile() {
+  try {
+    const dir = path.dirname(LOCAL_JSON_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const items = queryAll('SELECT * FROM local_inventory ORDER BY id ASC');
+    fs.writeFileSync(LOCAL_JSON_PATH, JSON.stringify(items, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[DB] Error saving local_inventory.json:', e.message);
+  }
+}
+
+function restoreLocalInventoryFromJsonFile() {
+  try {
+    if (fs.existsSync(LOCAL_JSON_PATH)) {
+      const raw = fs.readFileSync(LOCAL_JSON_PATH, 'utf-8');
+      const items = JSON.parse(raw);
+      if (Array.isArray(items) && items.length > 0) {
+        items.forEach(i => {
+          runSql(
+            `INSERT INTO local_inventory (id, account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(sku) DO UPDATE SET
+               account_id = excluded.account_id,
+               title = excluded.title,
+               category = excluded.category,
+               units_house = excluded.units_house,
+               unit_cost_cop = excluded.unit_cost_cop,
+               min_stock_alert = excluded.min_stock_alert,
+               location = excluded.location,
+               updated_at = datetime('now')`,
+            [i.id, i.account_id || null, i.sku, i.title, i.category || 'General', i.units_house || 0, i.unit_cost_cop || 0, i.min_stock_alert || 10, i.location || 'Bodega Principal']
+          );
+        });
+        console.log(`[DB] Restored ${items.length} local inventory items from local_inventory.json`);
+      }
+    }
+  } catch (e) {
+    console.error('[DB] Error restoring local_inventory.json:', e.message);
   }
 }
 
