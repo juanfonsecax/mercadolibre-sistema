@@ -1320,13 +1320,13 @@ const DISCONTINUED_KEYWORDS = [
   'vichy',
   'vitamina d3', 'vitamina d-3',
   'bombillo 15w *2', 'bombillos 15w *2', 'bombilla 15w x2', 'bombilla 15w x4',
-  'bombillo 9w', 'bombilla 9w', 'bombillo 19w', 'bombilla 19w'
+  'bombillo 9w', 'bombilla 9w', 'bombillo 19w', 'bombilla 19w',
+  'laser', 'láser', 'regleta', 'modulo solar', 'módulo solar'
 ];
 
 function isProductDiscontinued(nameOrTitle) {
   if (!nameOrTitle) return false;
   const str = String(nameOrTitle).toLowerCase();
-  if (str.includes('laser') || str.includes('lacerazo')) return false;
   return DISCONTINUED_KEYWORDS.some(k => str.includes(k));
 }
 
@@ -1336,7 +1336,7 @@ function isProductDiscontinued(nameOrTitle) {
 function getInventoryPlanningIntelligence(accountId = null) {
   const localItems = getLocalInventory(accountId).filter(i => !isProductDiscontinued(i.title));
   const fullItems = getMlFullInventory(accountId).filter(f => !isProductDiscontinued(f.title));
-  const chinaShipments = getChinaShipments().filter(c => c.delivery_status !== 'Entregado');
+  const chinaShipments = getChinaShipments().filter(c => c.delivery_status !== 'RECIBIDO EN CASA' && c.delivery_status !== 'Entregado');
 
   const planningMap = {};
 
@@ -1385,12 +1385,18 @@ function getInventoryPlanningIntelligence(accountId = null) {
     });
   });
 
-  // Next, add active China transit stock matching by title keyword
+  // Next, add active China transit stock matching by title tokens
   chinaShipments.forEach(c => {
     const cName = (c.product_name || '').trim().toLowerCase();
     if (!cName) return;
+
     for (const key of Object.keys(planningMap)) {
-      if (key.toLowerCase().includes(cName) || cName.includes(key.toLowerCase())) {
+      const kLower = key.toLowerCase();
+      const cTokens = cName.split(/[\s\-_,]+/);
+      const kTokens = kLower.split(/[\s\-_,]+/);
+      const common = cTokens.filter(t => t.length > 2 && kTokens.includes(t));
+
+      if (kLower.includes(cName) || cName.includes(kLower) || common.length >= 1) {
         planningMap[key].transit_stock += (c.quantity || c.active_transit_units || 0);
       }
     }
@@ -1400,61 +1406,86 @@ function getInventoryPlanningIntelligence(accountId = null) {
   const COVERAGE_CYCLE_DAYS = 120; // 4-month inventory cycle target
   const SAFETY_STOCK_DAYS = 15; // 15d safety buffer
 
-  const planningList = Object.values(planningMap).map(p => {
-    const totalCurrentStock = p.house_stock + p.full_stock;
-    const totalAvailablePosition = totalCurrentStock + p.transit_stock;
+  const planningList = Object.values(planningMap)
+    .filter(p => {
+      const totalAvailable = p.house_stock + p.full_stock + p.transit_stock;
+      return (totalAvailable > 0 || p.sales_30d > 0) && !isProductDiscontinued(p.master_title);
+    })
+    .map(p => {
+      const totalCurrentStock = p.house_stock + p.full_stock;
+      const totalAvailablePosition = totalCurrentStock + p.transit_stock;
 
-    // Stockout-Adjusted Sales Velocity
-    let activeDays = 30;
-    if (totalCurrentStock === 0 && p.sales_30d > 0) {
-      activeDays = Math.max(7, Math.min(25, p.sales_30d));
-    }
-    const adjustedVelocity = p.sales_30d > 0 ? (p.sales_30d / activeDays) : 0.1;
+      // Stockout-Adjusted Sales Velocity
+      let adjustedVelocity = 0;
+      if (p.sales_30d > 0) {
+        let activeDays = 30;
+        if (totalCurrentStock === 0) {
+          activeDays = Math.max(7, Math.min(25, p.sales_30d));
+        }
+        adjustedVelocity = p.sales_30d / activeDays;
+      }
 
-    // Reorder Point (ROP)
-    const reorderPointUnits = Math.ceil((adjustedVelocity * LEAD_TIME_DAYS) + (adjustedVelocity * SAFETY_STOCK_DAYS));
+      if (adjustedVelocity === 0) {
+        return {
+          ...p,
+          total_current_stock: totalCurrentStock,
+          total_available_position: totalAvailablePosition,
+          adjusted_velocity_daily: 0,
+          reorder_point_units: 0,
+          target_inventory_level: 0,
+          suggested_po_quantity: 0,
+          days_coverage_remaining: totalAvailablePosition > 0 ? 999 : 0,
+          days_until_po_trigger: 999,
+          status: 'NO_DEMAND',
+          status_label: '⚪ SIN VENTAS RECIENTES',
+          badge_class: 'badge-secondary'
+        };
+      }
 
-    // Target Inventory Level
-    const targetInventoryLevel = Math.ceil(adjustedVelocity * (LEAD_TIME_DAYS + COVERAGE_CYCLE_DAYS));
+      // Reorder Point (ROP)
+      const reorderPointUnits = Math.ceil((adjustedVelocity * LEAD_TIME_DAYS) + (adjustedVelocity * SAFETY_STOCK_DAYS));
 
-    // Suggested PO Quantity
-    const suggestedPoQuantity = Math.max(0, Math.ceil(targetInventoryLevel - totalAvailablePosition));
+      // Target Inventory Level
+      const targetInventoryLevel = Math.ceil(adjustedVelocity * (LEAD_TIME_DAYS + COVERAGE_CYCLE_DAYS));
 
-    // Coverage Days Remaining
-    const daysCoverageRemaining = adjustedVelocity > 0 ? (totalAvailablePosition / adjustedVelocity) : 999;
+      // Suggested PO Quantity
+      const suggestedPoQuantity = Math.max(0, Math.ceil(targetInventoryLevel - totalAvailablePosition));
 
-    // Days Until PO Trigger
-    const daysUntilPoTrigger = Math.max(0, Math.round(daysCoverageRemaining - LEAD_TIME_DAYS));
+      // Coverage Days Remaining
+      const daysCoverageRemaining = adjustedVelocity > 0 ? (totalAvailablePosition / adjustedVelocity) : 999;
 
-    let status = 'OPTIMAL';
-    let statusLabel = '🟢 STOCK SUFICIENTE';
-    let badgeClass = 'badge-success';
+      // Days Until PO Trigger
+      const daysUntilPoTrigger = Math.max(0, Math.round(daysCoverageRemaining - LEAD_TIME_DAYS));
 
-    if (totalAvailablePosition < reorderPointUnits || daysCoverageRemaining <= LEAD_TIME_DAYS) {
-      status = 'CRITICAL_ORDER_NOW';
-      statusLabel = '🚨 PEDIR A CHINA HOY';
-      badgeClass = 'badge-critical';
-    } else if (daysUntilPoTrigger <= 30) {
-      status = 'WARNING_ORDER_SOON';
-      statusLabel = `🟡 PEDIR EN ${daysUntilPoTrigger} DÍAS`;
-      badgeClass = 'badge-warning';
-    }
+      let status = 'OPTIMAL';
+      let statusLabel = '🟢 STOCK SUFICIENTE';
+      let badgeClass = 'badge-success';
 
-    return {
-      ...p,
-      total_current_stock: totalCurrentStock,
-      total_available_position: totalAvailablePosition,
-      adjusted_velocity_daily: parseFloat(adjustedVelocity.toFixed(2)),
-      reorder_point_units: reorderPointUnits,
-      target_inventory_level: targetInventoryLevel,
-      suggested_po_quantity: suggestedPoQuantity,
-      days_coverage_remaining: parseFloat(daysCoverageRemaining.toFixed(1)),
-      days_until_po_trigger: daysUntilPoTrigger,
-      status,
-      status_label: statusLabel,
-      badge_class: badgeClass
-    };
-  });
+      if (totalAvailablePosition < reorderPointUnits || daysCoverageRemaining <= LEAD_TIME_DAYS) {
+        status = 'CRITICAL_ORDER_NOW';
+        statusLabel = '🚨 PEDIR A CHINA HOY';
+        badgeClass = 'badge-critical';
+      } else if (daysUntilPoTrigger <= 30) {
+        status = 'WARNING_ORDER_SOON';
+        statusLabel = `🟡 PEDIR EN ${daysUntilPoTrigger} DÍAS`;
+        badgeClass = 'badge-warning';
+      }
+
+      return {
+        ...p,
+        total_current_stock: totalCurrentStock,
+        total_available_position: totalAvailablePosition,
+        adjusted_velocity_daily: parseFloat(adjustedVelocity.toFixed(2)),
+        reorder_point_units: reorderPointUnits,
+        target_inventory_level: targetInventoryLevel,
+        suggested_po_quantity: suggestedPoQuantity,
+        days_coverage_remaining: parseFloat(daysCoverageRemaining.toFixed(1)),
+        days_until_po_trigger: daysUntilPoTrigger,
+        status,
+        status_label: statusLabel,
+        badge_class: badgeClass
+      };
+    });
 
   planningList.sort((a, b) => {
     if (a.status === 'CRITICAL_ORDER_NOW' && b.status !== 'CRITICAL_ORDER_NOW') return -1;
