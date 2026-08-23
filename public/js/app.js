@@ -2320,20 +2320,21 @@ async function triggerImportCsv() {
 // --- Modulo de Vinculacion China <-> Producto Maestro (Fase 1 ↔ Fase 2 ↔ Fase 3) ---
 async function getOrFetchMasterProductTitles() {
   try {
-    const [localData, fullData, planningData] = await Promise.all([
+    const [localData, fullData] = await Promise.all([
       apiFetch(`/api/inventory/local?accountId=${activeAccountId}`),
-      apiFetch(`/api/inventory/full?accountId=${activeAccountId}`),
-      apiFetch(`/api/inventory/planning?accountId=${activeAccountId}`)
+      apiFetch(`/api/inventory/full?accountId=${activeAccountId}`)
     ]);
     
     const titlesSet = new Set();
-    ((localData && localData.inventory) || []).forEach(i => { if (i.title) titlesSet.add(i.title.trim()); });
-    ((fullData && fullData.fullInventory) || []).forEach(f => {
-      if (f.master_product_title) titlesSet.add(f.master_product_title.trim());
-      else if (f.title) titlesSet.add(f.title.trim());
+    // 1. Add titles from physical House Inventory (Bodega Casa)
+    ((localData && localData.inventory) || []).forEach(i => {
+      if (i.title && i.title.trim()) titlesSet.add(i.title.trim());
     });
-    ((planningData && planningData.planning) || []).forEach(p => {
-      if (p.master_title) titlesSet.add(p.master_title.trim());
+    // 2. Add explicitly mapped master product titles from ML Full
+    ((fullData && fullData.fullInventory) || []).forEach(f => {
+      if (f.master_product_title && f.master_product_title.trim()) {
+        titlesSet.add(f.master_product_title.trim());
+      }
     });
     
     return Array.from(titlesSet).sort();
