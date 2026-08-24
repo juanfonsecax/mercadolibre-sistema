@@ -27,6 +27,12 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
       deal_price: parseFloat(dealPrice),
       ...extraPayload
     };
+
+    // Mercado Libre API requiere parámetro de stock para Ofertas Relámpago (LIGHTNING)
+    if ((promotionType === 'LIGHTNING' || promotionId?.startsWith('LGH-')) && !payload.stock) {
+      payload.stock = 10;
+    }
+
     const response = await mlFetch(`/seller-promotions/items/${mlItemId}?app_version=v2`, accountId, {
       method: 'POST',
       body: JSON.stringify(payload),
