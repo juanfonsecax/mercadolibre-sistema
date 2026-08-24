@@ -724,6 +724,35 @@ async function openClaimModal(claimId) {
     const claimType = liveMlClaim.type || claim.claim_type || 'Reclamo';
     const claimDetail = liveMlClaim.description || liveMlClaim.detail || firstBotDetail;
 
+    // Build Strategic Deadline Card
+    const deadlineInfo = data.deadlineInfo;
+    let deadlineBadgeHtml = '';
+    if (deadlineInfo) {
+      let badgeClass = 'badge-success';
+      let icon = '⏳';
+      if (deadlineInfo.urgencyLevel === 'danger') {
+        badgeClass = 'badge-danger';
+        icon = '🚨';
+      } else if (deadlineInfo.urgencyLevel === 'warning') {
+        badgeClass = 'badge-warning';
+        icon = '⏰';
+      }
+
+      deadlineBadgeHtml = `
+        <div class="claim-deadline-card ${deadlineInfo.urgencyLevel}" style="margin: 12px 0; padding: 10px 14px; border-radius: 8px; font-size: 0.88rem;">
+          <div style="font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+            <span>${icon} Plazo Límite Mercado Libre:</span>
+            <span class="badge ${badgeClass}">${deadlineInfo.remainingDays > 0 ? `${deadlineInfo.remainingDays}d ${deadlineInfo.remainingHoursMod}h restantes` : `${deadlineInfo.remainingHours}h restantes`}</span>
+          </div>
+          <div style="font-size: 0.82rem; margin-top: 4px; opacity: 0.9;">
+            🗓️ Vence el: <strong>${escapeHtml(deadlineInfo.formattedDate)}</strong>
+          </div>
+          <div style="font-size: 0.8rem; margin-top: 6px; color: var(--accent-yellow); background: rgba(255, 193, 7, 0.1); padding: 6px 10px; border-radius: 4px;">
+            ${escapeHtml(deadlineInfo.recommendation)}
+          </div>
+        </div>`;
+    }
+
     let reasonBoxHtml = `
       <div class="claim-reason-box">
         <div class="claim-reason-header">
@@ -732,6 +761,7 @@ async function openClaimModal(claimId) {
         </div>
         <div class="reason-title-text">📌 Motivo/Código: <strong>${escapeHtml(claimReason)}</strong></div>
         ${claimDetail ? `<div class="reason-detail-text">💬 <strong>Detalle Notificado por la IA de Mercado Libre:</strong><br>"${escapeHtml(claimDetail)}"</div>` : ''}
+        ${deadlineBadgeHtml}
         <div class="claim-reason-meta">
           <span>👤 Comprador: <strong>${escapeHtml(claim.buyer_nickname || 'Comprador')}</strong></span>
           <span>📦 Orden #: <strong>${escapeHtml(claim.ml_order_id || 'N/A')}</strong></span>

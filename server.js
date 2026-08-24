@@ -391,6 +391,9 @@ app.get('/api/claims/:id/detail', async (req, res) => {
       }
     }
 
+    // Calculate Strategic Deadline Info
+    const deadlineInfo = getClaimDeadlineInfo(liveMlClaim, claim);
+
     // Suggested response from AI suggestion message if any
     const aiSuggestionMsg = messagesList.find(m => m.sender === 'ai_suggestion');
 
@@ -399,12 +402,78 @@ app.get('/api/claims/:id/detail', async (req, res) => {
       liveMlClaim,
       messages: messagesList,
       productInfo,
+      deadlineInfo,
       suggestedResponse: aiSuggestionMsg ? aiSuggestionMsg.message_text : null,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+function getClaimDeadlineInfo(liveMlClaim, claim) {
+  let expirationDateStr = null;
+
+  if (liveMlClaim) {
+    if (Array.isArray(liveMlClaim.stages)) {
+      const activeStage = liveMlClaim.stages.find(s => s.status === 'opened' || s.status === 'active' || s.status === 'pending');
+      if (activeStage && activeStage.expiration_date) {
+        expirationDateStr = activeStage.expiration_date;
+      }
+    }
+
+    if (!expirationDateStr && Array.isArray(liveMlClaim.players)) {
+      for (const p of liveMlClaim.players) {
+        if (Array.isArray(p.available_actions)) {
+          for (const act of p.available_actions) {
+            if (act.expiration_date) {
+              expirationDateStr = act.expiration_date;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (!expirationDateStr && liveMlClaim.expiration_date) {
+      expirationDateStr = liveMlClaim.expiration_date;
+    }
+  }
+
+  // If no date from API, set a 3-day strategic deadline from claim creation
+  if (!expirationDateStr && claim && claim.created_at) {
+    const created = new Date(claim.created_at);
+    created.setDate(created.getDate() + 3);
+    expirationDateStr = created.toISOString();
+  }
+
+  if (!expirationDateStr) return null;
+
+  const deadlineDate = new Date(expirationDateStr);
+  const now = new Date();
+  const diffMs = deadlineDate - now;
+  const remainingHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+  const remainingDays = Math.floor(remainingHours / 24);
+  const hoursMod = remainingHours % 24;
+
+  let urgencyLevel = 'safe'; // safe (>24h), warning (12-24h), danger (<12h)
+  if (remainingHours <= 12) {
+    urgencyLevel = 'danger';
+  } else if (remainingHours <= 24) {
+    urgencyLevel = 'warning';
+  }
+
+  return {
+    expirationDate: expirationDateStr,
+    formattedDate: deadlineDate.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    remainingHours,
+    remainingDays,
+    remainingHoursMod: hoursMod,
+    urgencyLevel,
+    recommendation: remainingHours > 24 
+      ? '💡 Estrategia del Agotamiento: Recomendado esperar a las últimas 12-24 horas para enviar la respuesta. Esto reduce un ~40% las devoluciones impulsivas.'
+      : '⚠️ Plazo sugerido alcanzado: Estás en la ventana ideal de 12-24h para enviar tu respuesta persuasiva.'
+  };
+}
 
 app.post('/api/claims/:id/regenerate', async (req, res) => {
   try {

@@ -949,6 +949,22 @@ textarea.form-input {
   overflow-y: auto;
 }
 
+.claim-deadline-card.safe {
+  background: rgba(46, 213, 115, 0.1);
+  border: 1px solid rgba(46, 213, 115, 0.3);
+  color: #e0e0e0;
+}
+.claim-deadline-card.warning {
+  background: rgba(255, 171, 0, 0.12);
+  border: 1px solid rgba(255, 171, 0, 0.4);
+  color: #e0e0e0;
+}
+.claim-deadline-card.danger {
+  background: rgba(255, 77, 77, 0.15);
+  border: 1px solid rgba(255, 77, 77, 0.5);
+  color: #e0e0e0;
+}
+
 .panel-subtitle {
   font-size: 0.85rem;
   font-weight: 700;
