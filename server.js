@@ -318,7 +318,13 @@ app.get('/api/claims', (req, res) => {
     const accId = accountId ? parseInt(accountId) : null;
     const data = db.getClaims(accId, status || null);
     const stats = db.getClaimStats(accId);
-    res.json({ claims: data, stats });
+
+    const claimsWithDeadline = data.map(c => ({
+      ...c,
+      deadlineInfo: getClaimDeadlineInfo(null, c)
+    }));
+
+    res.json({ claims: claimsWithDeadline, stats });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

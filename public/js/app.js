@@ -667,21 +667,46 @@ function renderClaims(claims) {
     return;
   }
 
-  container.innerHTML = claims.map(c => `
-    <div class="claim-card status-${c.status}" onclick="openClaimModal(${c.id})">
-      <div class="claim-header">
-        <span class="claim-type">📋 ${escapeHtml(c.claim_type || 'Reclamo')}</span>
-        ${c.account_name ? `<span class="account-tag">🏪 ${escapeHtml(c.account_name)}</span>` : ''}
-        <span class="status-badge ${c.status}">${c.status}</span>
-        <span class="time" style="margin-left:auto">${formatTime(c.created_at)}</span>
-      </div>
-      <div class="claim-info">
-        <span>📦 ${escapeHtml(c.item_title || 'Producto')}</span>
-        <span>👤 ${escapeHtml(c.buyer_nickname || 'Comprador')}</span>
-        <span>💬 Razón: ${escapeHtml(c.claim_reason || 'No especificada')}</span>
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML = claims.map(c => {
+    const d = c.deadlineInfo;
+    let deadlineChipHtml = '';
+    if (d) {
+      let chipClass = 'deadline-safe';
+      let icon = '⏳';
+      if (d.urgencyLevel === 'danger') {
+        chipClass = 'deadline-danger';
+        icon = '🚨';
+      } else if (d.urgencyLevel === 'warning') {
+        chipClass = 'deadline-warning';
+        icon = '⏰';
+      }
+
+      const timeRemainingStr = d.remainingDays > 0 
+        ? `${d.remainingDays}d ${d.remainingHoursMod}h restantes` 
+        : `${d.remainingHours}h restantes`;
+
+      deadlineChipHtml = `
+        <div class="card-deadline-chip ${chipClass}">
+          <span>${icon} <strong>Límite: ${timeRemainingStr}</strong> (${escapeHtml(d.formattedDate)})</span>
+        </div>`;
+    }
+
+    return `
+      <div class="claim-card status-${c.status}" onclick="openClaimModal(${c.id})">
+        <div class="claim-header">
+          <span class="claim-type">📋 ${escapeHtml(c.claim_type || 'Reclamo')}</span>
+          ${c.account_name ? `<span class="account-tag">🏪 ${escapeHtml(c.account_name)}</span>` : ''}
+          <span class="status-badge ${c.status}">${c.status}</span>
+          <span class="time" style="margin-left:auto">${formatTime(c.created_at)}</span>
+        </div>
+        <div class="claim-info">
+          <span>📦 ${escapeHtml(c.item_title || 'Producto')}</span>
+          <span>👤 ${escapeHtml(c.buyer_nickname || 'Comprador')}</span>
+          <span>💬 Razón: ${escapeHtml(c.claim_reason || 'No especificada')}</span>
+          ${deadlineChipHtml}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 let claimTemplatesCache = null;

@@ -965,6 +965,33 @@ textarea.form-input {
   color: #e0e0e0;
 }
 
+.card-deadline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  margin-top: 8px;
+  font-weight: 500;
+  width: fit-content;
+}
+.card-deadline-chip.deadline-safe {
+  background: rgba(46, 213, 115, 0.12);
+  border: 1px solid rgba(46, 213, 115, 0.35);
+  color: #2ed573;
+}
+.card-deadline-chip.deadline-warning {
+  background: rgba(255, 171, 0, 0.15);
+  border: 1px solid rgba(255, 171, 0, 0.45);
+  color: #ffab00;
+}
+.card-deadline-chip.deadline-danger {
+  background: rgba(255, 77, 77, 0.18);
+  border: 1px solid rgba(255, 77, 77, 0.6);
+  color: #ff4d4d;
+}
+
 .panel-subtitle {
   font-size: 0.85rem;
   font-weight: 700;
