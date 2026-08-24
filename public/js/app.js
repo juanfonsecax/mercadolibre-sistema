@@ -2572,6 +2572,64 @@ async function joinLightningDeal(itemId, promoId, dealPrice) {
   }
 }
 
+async function loadCatalogCampaigns() {
+  const container = document.getElementById('catalogCampaignsContainer');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="empty-state" style="padding: 20px;">
+      <div class="spinner"></div>
+      <p style="margin-top:10px">Analizando todas tus publicaciones y simulando rentabilidad neta de campañas en Mercado Libre...</p>
+    </div>`;
+
+  try {
+    const res = await apiFetch(`/api/promotions/catalog-campaigns?accountId=${activeAccountId}`);
+    const catalog = res.catalog || [];
+
+    if (catalog.length === 0) {
+      container.innerHTML = '<p class="empty-state">No hay publicaciones registradas en el catálogo de Full/Local.</p>';
+      return;
+    }
+
+    container.innerHTML = catalog.map(item => {
+      const campaignsListHtml = item.campaigns.map(c => {
+        const marginClass = c.estimated_net_percent >= 20 ? 'badge-success' : (c.estimated_net_percent >= 10 ? 'badge-warning' : 'badge-danger');
+        return `
+          <div style="background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 6px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.84rem;">
+            <div>
+              <strong>${escapeHtml(c.name)}</strong> (-${c.discount_percent}%)<br>
+              <span>Precio Oferta: <strong>$${c.suggested_price.toLocaleString('es-CO')} COP</strong></span> | 
+              <span>Margen Neto Estimado: <strong class="${marginClass}">${c.estimated_net_percent.toFixed(1)}% ($${Math.round(c.estimated_net_cop).toLocaleString('es-CO')} COP)</strong></span>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="joinLightningDeal('${item.ml_item_id}', '${c.promotion_id}', ${c.suggested_price})">
+              🚀 Programar / Activar
+            </button>
+          </div>`;
+      }).join('');
+
+      return `
+        <div class="card p-3 mb-3" style="border: 1px solid var(--border-color);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span class="account-tag"><code>${escapeHtml(item.ml_item_id)}</code></span>
+              <strong style="font-size: 0.95rem; margin-left: 6px;">${escapeHtml(item.title)}</strong>
+              <div style="font-size: 0.82rem; opacity: 0.8; margin-top: 2px;">
+                Precio Actual: $${item.price.toLocaleString('es-CO')} COP | Stock Full: ${item.units_full} unid. | Ventas (30d): ${item.sales_30d} unid.
+              </div>
+            </div>
+          </div>
+          <div style="margin-top: 8px;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Campañas & Ofertas Elegibles para este Producto:</div>
+            ${campaignsListHtml}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (error) {
+    container.innerHTML = `<p class="text-danger">Error escaneando catálogo de campañas: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function loadPromotions() {
   calculateLiveMargin();
   try {

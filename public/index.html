@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=10">
+  <link rel="stylesheet" href="/css/styles.css?v=11">
 </head>
 <body>
   <!-- Sidebar Navigation -->
@@ -875,6 +875,27 @@
         </div>
       </div>
 
+      <!-- Catalog & Publication Campaigns Scanner Card -->
+      <div class="card mb-4">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3>📱 Programador & Escáner Diario de Campañas por Publicación</h3>
+          <button class="btn btn-secondary" onclick="loadCatalogCampaigns()" style="padding: 6px 14px;">
+            📡 Escanear Catálogo Completo
+          </button>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 14px;">
+            El robot monitorea diariamente tus publicaciones activas y evalúa la rentabilidad neta de cada campaña sugerida por Mercado Libre. Desde aquí puedes programar la oferta ideal para cada producto.
+          </p>
+          <div id="catalogCampaignsContainer">
+            <div class="empty-state" style="padding: 16px;">
+              <span class="empty-icon">📊</span>
+              <p>Haz clic en "Escanear Catálogo Completo" para ver las campañas y descuentos programables por cada publicación.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Live Margin Calculator Card -->
       <div class="card margin-calculator-card mb-4">
         <div class="card-header">
@@ -1425,6 +1446,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js?v=10"></script>
+  <script src="/js/app.js?v=11"></script>
 </body>
 </html>

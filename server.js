@@ -1003,6 +1003,16 @@ app.post('/api/promotions/join-lightning', async (req, res) => {
   }
 });
 
+app.get('/api/promotions/catalog-campaigns', async (req, res) => {
+  try {
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
+    const catalog = await promotionsApi.scanAllPublicationCampaigns(accountId);
+    res.json({ success: true, catalog });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ══════════════════════════════════════════
 // ── Etapa 1: Contexto de Publicaciones API ──
 // ══════════════════════════════════════════
@@ -1122,6 +1132,21 @@ function startAutoInventorySync() {
   console.log('[Cron] 24/7 Auto inventory & sales sync scheduled (every 30m)');
 }
 
+function startAutoPromotionsScan() {
+  cron.schedule('0 */6 * * *', async () => {
+    console.log('[Cron] ⚡ Escaneando de fondo campañas y Ofertas Relámpago disponibles en Mercado Libre...');
+    try {
+      const accounts = db.getAccounts();
+      for (const acc of accounts) {
+        await promotionsApi.scanAllPublicationCampaigns(acc.id);
+      }
+    } catch (e) {
+      console.error('[Cron] Error scanning promotions:', e.message);
+    }
+  });
+  console.log('[Cron] ⚡ Monitoreo 24/7 de Ofertas Relámpago y Campañas ML activado (cada 6h)');
+}
+
 async function startServer() {
   await db.initDb();
   console.log('[DB] Database initialized');
@@ -1152,6 +1177,7 @@ async function startServer() {
 
     startPolling();
     startAutoInventorySync();
+    startAutoPromotionsScan();
   });
 
   server.on('error', (err) => {
