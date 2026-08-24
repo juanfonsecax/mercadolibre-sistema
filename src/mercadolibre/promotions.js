@@ -3,11 +3,11 @@ const db = require('../database');
 
 /**
  * Get promotions/campaigns available for a specific seller item
- * Mercado Libre API: GET /seller-promotions/items/{ITEM_ID}?user_id={USER_ID}
+ * Mercado Libre API v2: GET /seller-promotions/items/{ITEM_ID}?app_version=v2
  */
 async function getItemPromotions(mlItemId, accountId) {
   try {
-    const data = await mlFetch(`/seller-promotions/items/${mlItemId}`, accountId);
+    const data = await mlFetch(`/seller-promotions/items/${mlItemId}?app_version=v2`, accountId);
     return data || [];
   } catch (error) {
     console.warn(`[Promotions] Warning fetching promotions for ${mlItemId}:`, error.message);
@@ -17,17 +17,17 @@ async function getItemPromotions(mlItemId, accountId) {
 
 /**
  * Opt an item into a promotion (Oferta Relámpago, Oferta del Día, Campaña ML)
- * Mercado Libre API: POST /seller-promotions/items/{ITEM_ID}
- * Body: { promotion_id, promotion_type, deal_price }
+ * Mercado Libre API v2: POST /seller-promotions/items/{ITEM_ID}?app_version=v2
  */
-async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, accountId) {
+async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, accountId, extraPayload = {}) {
   try {
     const payload = {
       promotion_id: promotionId,
       promotion_type: promotionType,
       deal_price: parseFloat(dealPrice),
+      ...extraPayload
     };
-    const response = await mlFetch(`/seller-promotions/items/${mlItemId}`, accountId, {
+    const response = await mlFetch(`/seller-promotions/items/${mlItemId}?app_version=v2`, accountId, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -41,11 +41,11 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
 
 /**
  * Remove an item from a promotion
- * Mercado Libre API: DELETE /seller-promotions/items/{ITEM_ID}?promotion_type={TYPE}&promotion_id={ID}
+ * Mercado Libre API v2: DELETE /seller-promotions/items/{ITEM_ID}?app_version=v2&promotion_type={TYPE}&promotion_id={ID}
  */
 async function leavePromotion(mlItemId, promotionId, promotionType, accountId) {
   try {
-    const query = `promotion_type=${promotionType}&promotion_id=${promotionId}`;
+    const query = `app_version=v2&promotion_type=${promotionType}&promotion_id=${promotionId}`;
     const response = await mlFetch(`/seller-promotions/items/${mlItemId}?${query}`, accountId, {
       method: 'DELETE',
     });
@@ -121,9 +121,9 @@ async function scanAllPublicationCampaigns(accountId) {
       if (Array.isArray(promos) && promos.length > 0) {
         promos.forEach(p => {
           const promoType = p.type || p.promotion_type || 'PRICE_DISCOUNT';
-          const suggestedPrice = p.suggested_price || p.deal_price || Math.round((item.price || 50000) * 0.85);
-          const origPrice = item.price || 50000;
-          const discountPct = Math.round(((origPrice - suggestedPrice) / origPrice) * 100);
+          const origPrice = p.original_price || item.price || 50000;
+          const suggestedPrice = p.price || p.suggested_discounted_price || p.suggested_price || p.deal_price || Math.round(origPrice * 0.85);
+          const discountPct = origPrice > 0 ? Math.round(((origPrice - suggestedPrice) / origPrice) * 100) : 0;
 
           // Calculate estimated net margin
           const commission = origPrice * 0.13;
