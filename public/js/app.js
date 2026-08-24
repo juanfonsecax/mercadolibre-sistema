@@ -2503,6 +2503,11 @@ async function runAiMarginEvaluation() {
         <button class="btn btn-sm btn-secondary mt-2" onclick="runAiMarginEvaluation()">🔄 Re-evaluar</button>
       </div>
     `;
+  } catch (error) {
+    box.innerHTML = `<p class="text-danger">Error: ${error.message}</p>`;
+  }
+}
+
 async function scanLightningDeals() {
   const container = document.getElementById('lightningDealsContainer');
   if (!container) return;
