@@ -50,6 +50,14 @@ Certificación oficial de seguridad eléctrica en Colombia No. co.9019129. Vida 
   },
   {
     category: 'faq',
+    title: '🌐 [Web Research] ¿Es compatible con Apple HomeKit, Alexa, Google Home y Siri?',
+    content: `COMPATIBILIDAD CON ASISTENTES DE VOZ Y APPLE:
+1. Amazon Alexa y Google Home: 100% compatible de forma nativa desde la App Tuya o Smart Life.
+2. Apple Siri (Comandos de voz / Atajos): Sí se puede controlar desde cualquier iPhone / iPad usando Comandos de voz de Siri (Siri Shortcuts) creados en la App Tuya / Smart Life.
+3. Apple HomeKit nativo: No utiliza el protocolo nativo HomeKit (no requiere ecosistema cerrado Apple), funciona mediante la app universal Tuya / Smart Life con Siri Shortcuts.`
+  },
+  {
+    category: 'faq',
     title: '🌐 [Web Research] ¿Emiten Factura Electrónica?',
     content: `POLÍTICA DE FACTURACIÓN ELECTRÓNICA Y COMPROBANTES:
 1. Compras Individuales / al Detalle: Como comercio bajo el Régimen No Responsable de IVA (Persona Natural / Régimen Simplificado), todas las compras individuales incluyen Documento de Venta / Comprobante legal de compra.
