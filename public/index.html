@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=3">
+  <link rel="stylesheet" href="/css/styles.css?v=4">
 </head>
 <body>
   <!-- Sidebar Navigation -->
@@ -298,8 +298,9 @@
               <div class="ai-controls-card">
                 <div class="controls-header">🧠 Estrategia de IA Neuro-Persuasiva:</div>
                 <select id="claimStrategySelect" class="form-input">
-                  <option value="auto">🤖 Auto (Analizar reclamo y producto)</option>
-                  <option value="capacitor">💡 Solución Parpadeo / Capacitor L1 Gratis</option>
+                  <option value="auto">🤖 Auto (Analizar reclamo y producto exacto)</option>
+                  <option value="socket_power">🔌 Tomacorriente / Enchufe (Amperaje 16A / Potencia)</option>
+                  <option value="capacitor">💡 Interruptores (Parpadeo / Capacitor L1 Gratis)</option>
                   <option value="wifi">📲 Configuración Red Wi-Fi 2.4GHz</option>
                   <option value="voltage">🛡️ Protección MOV y Calidad Industrial</option>
                   <option value="misuse">🔌 Incompatibilidad / Conexión Errónea</option>
@@ -318,10 +319,10 @@
               <div class="templates-card">
                 <div class="controls-header">⚡ Respuestas Rápidas Predefinidas:</div>
                 <div class="templates-chips" id="claimTemplatesChips">
+                  <button class="chip-btn" onclick="applyClaimTemplate('socket_power')">🔌 Enchufe 16A / Amperaje</button>
                   <button class="chip-btn" onclick="applyClaimTemplate('capacitor')">💡 Parpadeo / Capacitor</button>
                   <button class="chip-btn" onclick="applyClaimTemplate('wifi')">📲 Red 2.4GHz</button>
                   <button class="chip-btn" onclick="applyClaimTemplate('voltage')">🛡️ Voltaje MOV</button>
-                  <button class="chip-btn" onclick="applyClaimTemplate('misuse')">🔌 Conexión Errónea</button>
                 </div>
               </div>
             </div>
@@ -1400,6 +1401,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js?v=3"></script>
+  <script src="/js/app.js?v=4"></script>
 </body>
 </html>

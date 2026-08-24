@@ -346,24 +346,29 @@ app.get('/api/claims/templates', (req, res) => {
   res.json({
     templates: [
       {
+        id: 'socket_power',
+        name: '🔌 Enchufe / Tomacorriente (16A / Amperaje / Potencia)',
+        text: 'Hola. Entendemos tu inquietud con las especificaciones. Queremos indicarte que nuestros tomacorrientes e enchufes inteligentes cuentan con relé de alta potencia de grado industrial (16A / 3520W carga máxima) certificado de fábrica. En la app Tuya / Smart Life puedes verificar la lectura de consumo y voltaje en tiempo real. El producto fue despachado 100% verificado.',
+      },
+      {
         id: 'capacitor',
-        name: '💡 Parpadeo / Sin Neutro (Capacitor Gratis L1)',
+        name: '💡 Interruptores (Parpadeo / Capacitor L1 Gratis)',
         text: 'Hola. Entendemos tu inquietud con la iluminación. Queremos indicarte que este producto de Tecnología Híbrida INCLUYE GRATIS en la caja el Capacitor / Estabilizador de Luz. Solo debes conectarlo en paralelo en el bombillo (L1) para eliminar el parpadeo de inmediato. El interruptor está 100% verificado y operativo.',
       },
       {
         id: 'wifi',
         name: '📲 Vinculación Wi-Fi 2.4GHz (Tuya / Smart Life)',
-        text: 'Hola. Para vincular con la App Tuya/Smart Life, asegúrate de conectarlo únicamente a una red Wi-Fi 2.4GHz (si tu router tiene red 5GHz, desacplala temporalmente). Mantén presionado el botón del interruptor 5 segundos hasta que parpadee rápido y dale Buscar en la App. El producto está 100% certificado.',
+        text: 'Hola. Para vincular con la App Tuya/Smart Life, asegúrate de conectarlo únicamente a una red Wi-Fi 2.4GHz (si tu router tiene red 5GHz, desacplala temporalmente). Mantén presionado el botón 5 segundos hasta que parpadee rápido y dale Buscar en la App. El producto está 100% certificado.',
       },
       {
         id: 'voltage',
-        name: '🛡️ Protección de Voltaje y Calidad (+100.000 clics)',
-        text: 'Hola. El producto cuenta con blindaje de voltaje MOV anti-picos y vida útil industrial (+100.000 clics). Si no enciende, por favor verifica que la fase y neutro/capacitor estén firmemente ajustados en las borneras y el breaker activo. Todo el lote cuenta con certificación Co.9019129.',
+        name: '🛡️ Protección de Voltaje y Calidad Industrial',
+        text: 'Hola. El producto cuenta con blindaje de voltaje MOV anti-picos y relé de potencia de grado industrial. Si no enciende, por favor verifica que la fase y neutro estén firmemente ajustados en las borneras y el breaker activo. Todo el lote cuenta con certificación de fábrica.',
       },
       {
         id: 'misuse',
         name: '🔌 Incompatibilidad / Conexión Errónea',
-        text: 'Hola. Todos nuestros productos se entregan probados y certificados de fábrica. Si la instalación eléctrica no cuenta con la conexión correcta o capacitor en L1, el dispositivo no encenderá por protección. Por favor verifica las borneras traseras según la guía adjunta.',
+        text: 'Hola. Todos nuestros productos se entregan probados y certificados de fábrica. Si la instalación eléctrica no cuenta con la conexión correcta o excede la carga soportada, el dispositivo no encenderá por protección. Por favor verifica las especificaciones del circuito.',
       },
     ]
   });

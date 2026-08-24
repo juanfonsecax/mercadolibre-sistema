@@ -44,20 +44,27 @@ REGLAS ESTRICTAS:
 6. Mantén la respuesta amigable, clara y soluciónalos rápido.
 7. Máximo 450 caracteres. Solo texto plano.`;
 
-const CLAIM_SYSTEM_PROMPT = `Eres un experto especialista en atención post-venta y mediación neuro-persuasiva para un vendedor de tecnología y domótica en Mercado Libre Colombia.
-Tu objetivo supremo al responder reclamos/novedades es convencer a la IA INTERMEDIARIA DE MERCADO LIBRE y al comprador de que el producto está 100% impecable y verificado, resolviendo el problema mediante asesoría técnica clara para evitar la pérdida de reputación y evitar cobros de envío por devolución.
+const CLAIM_SYSTEM_PROMPT = `Eres un experto especialista en atención post-venta, resolución técnica y mediación neuro-persuasiva para un vendedor de tecnología y domótica en Mercado Libre Colombia.
+Tu objetivo supremo es responder a los reclamos y novedades DE MANERA 100% RELEVANTE Y ESPECÍFICA a la queja exacta del comprador y la IA de Mercado Libre, defendiendo al vendedor, demostrando la calidad del producto y solucionando la duda sin perder reputación ni generar cobros de envío por devolución.
+
+REGLA DE ORO DE PERTINENCIA TÉCNICA (OBLIGATORIO):
+1. RESPONDER DIRECTAMENTE A LA NOVEDAD ESPECÍFICA Y AL TIPO DE PRODUCTO:
+   - Lee detenidamente el TÍTULO DEL PRODUCTO, TIPO DE RECLAMO, MOTIVO y MENSAJE DEL COMPRADOR.
+   - Si el producto es un TOMACORRIENTE / ENCHUFE (Smart Plug / Socket) y el comprador reclama por Amperaje (16A / 10A / 15A), Voltaje (110V-240V), Potencia (3500W-3800W max) o puesta a tierra: Responde ESPECÍFICAMENTE sobre el tomacorriente y sus especificaciones técnicas de corriente y voltaje. ¡PROHIBIDO mencionar interruptores, polo a tierra o capacitores de luz si el producto es un tomacorriente/enchufe!
+   - Si el producto es un INTERRUPTOR Y PARPADEO DE LUZ: Explica la instalación del capacitor gratis en L1 y tecnología híbrida universal.
+   - Si el comprador reclama por CONFIGURACIÓN WI-FI O APP: Entrega los pasos exactos de la red 2.4GHz en Tuya / Smart Life.
+   - Si el comprador reclama por SOBRETENSIÓN O QUE CORTÓ LA LUZ: Menciona el varistor de protección MOV y revisión de breaker/fase.
 
 PRINCIPIOS DE NEUROCIENCIA Y MEDIACIÓN ANTE LA IA DE MERCADO LIBRE:
-1. EMPATÍA DESARMANTE (SIN ENFRENTAR AL CLIENTE): No acuses al comprador directamente de romperlo. Inicia validando su inquietud: "Entendemos perfectamente tu inquietud con la instalación del dispositivo...".
-2. ANCLAJE DE AUTORIDAD Y CALIDAD CERTIFICADA: Destaca que el producto es de Calidad Industrial Certificada (+100.000 clics), cuenta con Blindaje de Voltaje MOV contra sobretensiones y fue verificado antes del despacho.
-3. INCLUSIÓN DEL CAPACITOR ANTI-PARPADEO GRATIS: Si el reclamo es por parpadeo, luces tenue o falta de cable neutro, aclara que el dispositivo es de Tecnología Híbrida Universal e INCLUYE GRATIS en la caja el Capacitor / Estabilizador de Luz. Explica que se instala fácilmente en paralelo en el bombillo (L1) para solucionar cualquier parpadeo de forma inmediata.
-4. GATILLOS ALGORÍTMICOS PARA LA IA DE MERCADO LIBRE: Usa términos clave que la IA de MeLi interpreta como "Asesoría técnica provista" y "Desconocimiento de instalación por parte del comprador": "Producto 100% operativo", "Instrucciones de instalación del capacitor en L1 entregadas", "Configuración en red Wi-Fi 2.4GHz guiada", "Capacitor estabilizador incluido gratis en caja".
-5. PASOS TÉCNICOS CLAROS 1-2-3: Entrega soluciones concretas para que el comprador resuelva su duda de inmediato y cierre la novedad satisfecho.
+1. EMPATÍA DESARMANTE: No acuses al comprador agresivamente. Inicia validando su inquietud: "Entendemos perfectamente tu inquietud respecto a [mencionar el tema exacto de la queja]...".
+2. ANCLAJE DE AUTORIDAD Y CALIDAD CERTIFICADA: Destaca que el producto es de Calidad Industrial Certificada, cumple rigurosamente con las especificaciones técnicas publicadas y fue verificado antes del despacho.
+3. GATILLOS ALGORÍTMICOS PARA LA IA DE MERCADO LIBRE: Usa términos clave que la IA de MeLi interpreta como "Asesoría técnica provista" y "Producto en perfecto estado": "Producto 100% verificado y operativo", "Especificación técnica confirmada", "Instrucciones de uso correcto provistas".
+4. PASOS TÉCNICOS CLAROS 1-2-3: Entrega soluciones concretas y aclaraciones de especificaciones para que la novedad se resuelva favorablemente.
 
 REGLAS DE FORMATO:
 - NUNCA reveles que eres un bot o IA.
 - NUNCA compartas datos de contacto externos (WhatsApp, teléfono, email) prohibidos por ML.
-- NUNCA aceptes devoluciones innecesarias ni asumas culpas de producto defectuoso cuando es un tema de instalación.
+- NUNCA des respuestas genéricas que no correspondan al producto o a la queja específica.
 - Texto plano puro sin asteriscos, sin markdown, sin HTML.
 - Longitud ideal: 250 a 550 caracteres. Español colombiano empático, seguro y técnico.`;
 
@@ -189,21 +196,23 @@ async function generateClaimResponse(claimDetails, messages, knowledgeContext, s
 
   const contextParts = [];
 
-  if (claimDetails) {
-    contextParts.push(`TIPO DE RECLAMO: ${claimDetails.claim_type || claimDetails.type || 'No especificado'}
-RAZÓN: ${claimDetails.claim_reason || claimDetails.reason || 'No especificada'}
-ESTADO: ${claimDetails.claim_status || claimDetails.status || 'Abierto'}
-PRODUCTO COMPRADO: ${claimDetails.item_title || productInfo?.title || 'No especificado'}`);
-  }
+  const itemTitle = productInfo?.title || claimDetails?.item_title || 'Producto Mercado Libre';
+  const claimReason = claimDetails?.claim_reason || claimDetails?.reason || 'No especificada';
+  const claimType = claimDetails?.claim_type || claimDetails?.type || 'No especificado';
+
+  contextParts.push(`PRODUCTO EXACTO COMPRADO: ${itemTitle}
+TIPO DE RECLAMO: ${claimType}
+MOTIVO DE LA NOVEDAD: ${claimReason}
+ESTADO: ${claimDetails?.claim_status || claimDetails?.status || 'Abierto'}`);
 
   if (productInfo) {
-    contextParts.push(`DETALLES TÉCNICOS DEL PRODUCTO:
+    contextParts.push(`ESPECIFICACIONES TÉCNICAS Y DESCRIPCIÓN DEL PRODUCTO:
 Título: ${productInfo.title || ''}
-${productInfo.description ? `Descripción: ${productInfo.description.substring(0, 1000)}...` : ''}`);
+${productInfo.description ? `Descripción: ${productInfo.description.substring(0, 1200)}...` : ''}`);
   }
 
   if (messages && messages.length > 0) {
-    contextParts.push('HISTORIAL COMPLETO DE LA CONVERSACIÓN (IA MeLi / Comprador):');
+    contextParts.push('HISTORIAL COMPLETO DE MENSAJES DE LA NOVEDAD (IA MeLi / Comprador):');
     messages.forEach(msg => {
       const sender = msg.sender === 'complainant' || msg.sender === 'buyer' ? 'COMPRADOR' : (msg.sender === 'mediator' || msg.sender === 'bot' ? 'IA_MERCADO_LIBRE' : 'VENDEDOR');
       contextParts.push(`[${sender}]: ${msg.message_text || msg.text || msg.message}`);
@@ -211,35 +220,44 @@ ${productInfo.description ? `Descripción: ${productInfo.description.substring(0
   }
 
   if (knowledgeContext && knowledgeContext.length > 0) {
-    contextParts.push('GUÍAS TÉCNICAS Y MANUALES DE SOPORTE DEL VENDEDOR:');
+    contextParts.push('BASE DE CONOCIMIENTO Y GUÍAS TÉCNICAS DEL VENDEDOR:');
     knowledgeContext.forEach(item => {
       contextParts.push(`[${item.category.toUpperCase()}] ${item.title}: ${item.content}`);
     });
   }
 
   let strategyInstruction = '';
-  if (strategy === 'capacitor') {
-    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Enfócate en explicar con total claridad que el capacitor estabilizador de luz viene INCLUIDO GRATIS en la caja y se debe instalar en paralelo en el bombillo (L1) para solucionar cualquier parpadeo o luz tenue al instalar sin neutro.';
+  if (strategy === 'socket_power') {
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA (TOMACORRIENTE/ENCHUFE - AMPERAJE Y POTENCIA): Explica de forma técnica y segura las especificaciones de corriente (16A / 10A, 110V-240V, corriente máxima) del enchufe o tomacorriente inteligente. Aclara que el producto cuenta con relé reforzado de potencia verificado de fábrica y medidor de consumo en la app Tuya.';
+  } else if (strategy === 'capacitor') {
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA (INTERRUPTOR - PARPADEO L1): Explica con claridad que el capacitor estabilizador de luz viene INCLUIDO GRATIS en la caja y se debe instalar en paralelo en el bombillo (L1) para solucionar cualquier parpadeo al instalar sin neutro.';
   } else if (strategy === 'wifi') {
-    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Enfócate en explicar los pasos de configuración Wi-Fi en la app Tuya / Smart Life, enfatizando que la red debe ser 2.4GHz y el Wi-Fi de 5GHz debe estar desactivado temporalmente durante la vinculación.';
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA (WI-FI 2.4GHz): Explica los pasos de configuración Wi-Fi en la app Tuya / Smart Life, enfatizando que la red debe ser 2.4GHz y el Wi-Fi de 5GHz debe estar desactivado temporalmente durante la vinculación.';
   } else if (strategy === 'voltage') {
-    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Enfócate en explicar que el producto cuenta con certificación industrial (+100.000 clics) y varistor de protección MOV contra sobretensiones. Recomienda revisar la fase y breaker del hogar.';
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA (VOLTAJE Y CALIDAD): Explica que el producto cuenta con certificación industrial y varistor de protección MOV contra sobretensiones. Recomienda revisar la fase y breaker del hogar.';
   } else if (strategy === 'misuse') {
-    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Explica amablemente que el producto fue despachado 100% verificado y que cualquier fallo de encendido se debe a una conexión errónea de cables fase/neutro o falta de capacitor en L1.';
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA (INCOMPATIBILIDAD / USO ERRÓNEO): Explica amablemente que el producto fue despachado 100% verificado y que cualquier fallo de encendido o ajuste se debe a una verificación técnica de borneras o especificación técnica de la carga conectada.';
   }
 
   if (customInstruction) {
-    strategyInstruction += `\nINSTRUCCIÓN ADICIONAL PERSONALIZADA: ${customInstruction}`;
+    strategyInstruction += `\nINSTRUCCIÓN ADICIONAL PERSONALIZADA DEL USUARIO: ${customInstruction}`;
   }
 
   const prompt = `${CLAIM_SYSTEM_PROMPT}
 
+REGLA DE ADAPTACIÓN OBLIGATORIA PARA ESTA RESPUESTA:
+- El producto es: "${itemTitle}".
+- El motivo reportado es: "${claimReason}".
+- Si la queja se refiere a tomacorrientes, amperaje (15A/16A), tomacorrientes inteligentes, enchufes o medidores de energía, responde ÚNICAMENTE sobre tomacorrientes y sus especificaciones técnicas de corriente/potencia. NO menciones capacitores de bombillo ni interruptores si es un tomacorriente/enchufe.
+- Si el motivo es sobre un interruptor de luces, responde sobre interruptores.
+- Responde EXACTAMENTE a la inquietud expresada en la novedad de Mercado Libre.
+
 ${strategyInstruction}
 
-CONTEXTO Y DATOS DE LA NOVEDAD:
+DATOS Y CONTEXTO COMPLETO DE LA NOVEDAD:
 ${contextParts.join('\n\n')}
 
-Genera una respuesta empática, neuro-persuasiva y técnicamente sólida dirigida a la IA de Mercado Libre y al comprador. Solo devuelve el texto final de la respuesta en texto plano, sin explicaciones ni comillas.`;
+Genera una respuesta altamente relevante, empática, neuro-persuasiva y técnicamente precisa para la IA de Mercado Libre y el comprador. Solo devuelve el texto final en texto plano puro.`;
 
   try {
     const result = await safeGenerateContent(prompt);
