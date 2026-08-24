@@ -1493,7 +1493,8 @@ const DISCONTINUED_KEYWORDS = [
   'vitamina d3', 'vitamina d-3',
   'bombillo 15w *2', 'bombillos 15w *2', 'bombilla 15w x2', 'bombilla 15w x4',
   'bombillo 9w', 'bombilla 9w', 'bombillo 19w', 'bombilla 19w',
-  'laser', 'láser', 'regleta', 'modulo solar', 'módulo solar'
+  'laser', 'láser', 'regleta', 'modulo solar', 'módulo solar',
+  'cashflow', 'juego cashflow'
 ];
 
 function isProductDiscontinued(nameOrTitle) {

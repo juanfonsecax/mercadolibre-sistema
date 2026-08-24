@@ -62,11 +62,15 @@ async function leavePromotion(mlItemId, promotionId, promotionType, accountId) {
  */
 async function scanEligibleLightningDeals(accountId) {
   try {
-    // 1. Get active inventory listings for account
-    const listings = db.getMlFullInventory(accountId);
+    // 1. Get active inventory listings for account (Strict filter: Published with stock > 0 and NOT discontinued)
+    const listings = db.getMlFullInventory(accountId)
+      .filter(item => item.ml_item_id && !db.isProductDiscontinued(item.title))
+      .filter(item => (item.units_full && item.units_full > 0))
+      .sort((a, b) => (b.units_full || 0) - (a.units_full || 0));
+
     const eligibleDeals = [];
 
-    for (const item of listings.slice(0, 15)) {
+    for (const item of listings) {
       if (!item.ml_item_id) continue;
       const promos = await getItemPromotions(item.ml_item_id, accountId);
       
@@ -97,11 +101,16 @@ async function scanEligibleLightningDeals(accountId) {
 }
 
 /**
- * Scan ALL account publications and return available campaigns for each publication
+ * Scan ALL active account publications and return available campaigns for each publication
  */
 async function scanAllPublicationCampaigns(accountId) {
   try {
-    const listings = db.getMlFullInventory(accountId);
+    // Strict filter: Only active published products currently in stock (>0) & not discontinued
+    const listings = db.getMlFullInventory(accountId)
+      .filter(item => item.ml_item_id && !db.isProductDiscontinued(item.title))
+      .filter(item => (item.units_full && item.units_full > 0))
+      .sort((a, b) => (b.units_full || 0) - (a.units_full || 0));
+
     const campaignsResult = [];
 
     for (const item of listings) {
