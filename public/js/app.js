@@ -848,6 +848,18 @@ function closeClaimModal() {
   currentClaimId = null;
 }
 
+async function cleanOldClaims() {
+  try {
+    showToast('🧹 Limpiando novedades antiguas y configurando los 2 casos activos...', 'info');
+    const res = await apiFetch('/api/claims/clean-old', { method: 'POST' });
+    showToast(res.message || '✅ Reclamos antiguos archivados. Quedaron activos los 2 casos actuales.', 'success');
+    loadClaims();
+    refreshOverview();
+  } catch (error) {
+    showToast('Error al limpiar novedades: ' + error.message, 'error');
+  }
+}
+
 async function approveClaimResponse() {
   if (!currentClaimId) return;
   const responseText = document.getElementById('claimResponseInput')?.value;

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=5">
+  <link rel="stylesheet" href="/css/styles.css?v=6">
 </head>
 <body>
   <!-- Sidebar Navigation -->
@@ -252,6 +252,7 @@
             <option value="responded">Respondidos</option>
             <option value="resolved">Resueltos</option>
           </select>
+          <button class="btn btn-secondary" onclick="cleanOldClaims()">🧹 Archivar Antiguos (2 Activos)</button>
           <button class="btn btn-primary" id="btnPollClaims" onclick="pollClaims()">📡 Buscar nuevos</button>
         </div>
       </div>
@@ -1401,6 +1402,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js?v=5"></script>
+  <script src="/js/app.js?v=6"></script>
 </body>
 </html>
