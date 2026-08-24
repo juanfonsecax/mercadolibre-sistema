@@ -2572,6 +2572,45 @@ async function joinLightningDeal(itemId, promoId, dealPrice) {
   }
 }
 
+async function triggerAutoPilotWorker() {
+  try {
+    showToast('⚡ Ejecutando Piloto Automático de Ofertas Continuas en Mercado Libre...', 'info');
+    const res = await apiFetch('/api/promotions/run-auto-pilot', {
+      method: 'POST',
+      body: JSON.stringify({ accountId: activeAccountId })
+    });
+    showToast(`🤖 ${res.message}`, 'success');
+    loadCatalogCampaigns();
+  } catch (error) {
+    showToast(`Error ejecutando Piloto Automático: ${error.message}`, 'error');
+  }
+}
+
+async function saveItemAutoPilotConfig(itemId, title) {
+  const targetInput = document.getElementById(`target_price_${itemId}`);
+  const autoPilotToggle = document.getElementById(`autopilot_${itemId}`);
+  if (!targetInput) return;
+
+  const targetPrice = parseFloat(targetInput.value || 0);
+  const isEnabled = autoPilotToggle ? autoPilotToggle.checked : true;
+
+  try {
+    await apiFetch('/api/promotions/auto-pilot', {
+      method: 'POST',
+      body: JSON.stringify({
+        accountId: activeAccountId,
+        ml_item_id: itemId,
+        title: title,
+        target_promo_price: targetPrice,
+        auto_pilot_enabled: isEnabled
+      })
+    });
+    showToast(`🤖 Piloto Automático actualizado para ${itemId}: Oferta Objetivo $${targetPrice.toLocaleString('es-CO')} COP`, 'success');
+  } catch (error) {
+    showToast(`Error guardando configuración de Piloto Automático: ${error.message}`, 'error');
+  }
+}
+
 async function loadCatalogCampaigns() {
   const container = document.getElementById('catalogCampaignsContainer');
   if (!container) return;
@@ -2579,12 +2618,17 @@ async function loadCatalogCampaigns() {
   container.innerHTML = `
     <div class="empty-state" style="padding: 20px;">
       <div class="spinner"></div>
-      <p style="margin-top:10px">Analizando todas tus publicaciones y simulando rentabilidad neta de campañas en Mercado Libre...</p>
+      <p style="margin-top:10px">Analizando publicaciones y configuraciones de Piloto Automático 24/7...</p>
     </div>`;
 
   try {
     const res = await apiFetch(`/api/promotions/catalog-campaigns?accountId=${activeAccountId}`);
+    const configRes = await apiFetch(`/api/promotions/auto-pilot?accountId=${activeAccountId}`);
     const catalog = res.catalog || [];
+    const configs = configRes.configs || [];
+
+    const configMap = {};
+    configs.forEach(c => { configMap[c.ml_item_id] = c; });
 
     if (catalog.length === 0) {
       container.innerHTML = '<p class="empty-state">No hay publicaciones registradas en el catálogo de Full/Local.</p>';
@@ -2592,6 +2636,10 @@ async function loadCatalogCampaigns() {
     }
 
     container.innerHTML = catalog.map(item => {
+      const cfg = configMap[item.ml_item_id] || {};
+      const targetPrice = cfg.target_promo_price || Math.round((item.price || 50000) * 0.85);
+      const isAutoPilotOn = cfg.auto_pilot_enabled !== undefined ? Boolean(cfg.auto_pilot_enabled) : true;
+
       const campaignsListHtml = item.campaigns.map(c => {
         const marginClass = c.estimated_net_percent >= 20 ? 'badge-success' : (c.estimated_net_percent >= 10 ? 'badge-warning' : 'badge-danger');
         return `
@@ -2601,25 +2649,41 @@ async function loadCatalogCampaigns() {
               <span>Precio Oferta: <strong>$${c.suggested_price.toLocaleString('es-CO')} COP</strong></span> | 
               <span>Margen Neto Estimado: <strong class="${marginClass}">${c.estimated_net_percent.toFixed(1)}% ($${Math.round(c.estimated_net_cop).toLocaleString('es-CO')} COP)</strong></span>
             </div>
-            <button class="btn btn-sm btn-primary" onclick="joinLightningDeal('${item.ml_item_id}', '${c.promotion_id}', ${c.suggested_price})">
-              🚀 Programar / Activar
+            <button class="btn btn-sm btn-primary" onclick="joinLightningDeal('${item.ml_item_id}', '${c.promotion_id}', ${targetPrice})">
+              🚀 Aplicar a $${targetPrice.toLocaleString('es-CO')} COP
             </button>
           </div>`;
       }).join('');
 
       return `
-        <div class="card p-3 mb-3" style="border: 1px solid var(--border-color);">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
+        <div class="card p-3 mb-3" style="border: 1px solid var(--border-color); background: rgba(18, 21, 30, 0.6);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 280px;">
               <span class="account-tag"><code>${escapeHtml(item.ml_item_id)}</code></span>
-              <strong style="font-size: 0.95rem; margin-left: 6px;">${escapeHtml(item.title)}</strong>
-              <div style="font-size: 0.82rem; opacity: 0.8; margin-top: 2px;">
-                Precio Actual: $${item.price.toLocaleString('es-CO')} COP | Stock Full: ${item.units_full} unid. | Ventas (30d): ${item.sales_30d} unid.
+              <strong style="font-size: 0.98rem; margin-left: 6px;">${escapeHtml(item.title)}</strong>
+              <div style="font-size: 0.84rem; opacity: 0.85; margin-top: 4px;">
+                Precio de Lista ML: <strong style="text-decoration: line-through; opacity:0.7;">$${item.price.toLocaleString('es-CO')} COP</strong> | Stock Full: <strong>${item.units_full} unid.</strong>
+              </div>
+            </div>
+
+            <!-- Auto-Pilot Settings Box -->
+            <div style="background: rgba(0, 230, 118, 0.06); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 8px; padding: 10px 14px; min-width: 320px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.82rem; font-weight: 700; color: #00e676;">🤖 PILOTO AUTOMÁTICO 24/7</span>
+                <label class="switch" style="transform: scale(0.85);">
+                  <input type="checkbox" id="autopilot_${item.ml_item_id}" ${isAutoPilotOn ? 'checked' : ''} onchange="saveItemAutoPilotConfig('${item.ml_item_id}', '${escapeHtml(item.title)}')">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <label style="font-size: 0.8rem; white-space: nowrap;">Precio Objetivo Oferta ($ COP):</label>
+                <input type="number" id="target_price_${item.ml_item_id}" class="form-input" value="${targetPrice}" style="padding: 4px 8px; font-size: 0.85rem; font-weight: 700; width: 110px;" onchange="saveItemAutoPilotConfig('${item.ml_item_id}', '${escapeHtml(item.title)}')">
               </div>
             </div>
           </div>
-          <div style="margin-top: 8px;">
-            <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Campañas & Ofertas Elegibles para este Producto:</div>
+
+          <div style="margin-top: 10px;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Campañas Disponibles en Mercado Libre:</div>
             ${campaignsListHtml}
           </div>
         </div>`;

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=11">
+  <link rel="stylesheet" href="/css/styles.css?v=12">
 </head>
 <body>
   <!-- Sidebar Navigation -->
@@ -852,6 +852,26 @@
         </div>
       </div>
 
+      <!-- Auto-Pilot Continuous Offers Card -->
+      <div class="card mb-4" style="background: linear-gradient(135deg, rgba(0, 230, 118, 0.08) 0%, rgba(0, 176, 255, 0.08) 100%); border: 1px solid rgba(0, 230, 118, 0.3);">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="color: #00e676; font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+            🤖 Piloto Automático 24/7 de Ofertas Continuas
+          </h3>
+          <button class="btn btn-success" onclick="triggerAutoPilotWorker()" style="background: #00e676; color: #12151e; font-weight: 700; border: none; padding: 8px 16px;">
+            ⚡ Ejecutar Verificación & Re-activación Ahora
+          </button>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 4px;">
+            <strong>¡Garantiza que tus publicaciones SIEMPRE tengan ofertas activas sin mover un dedo!</strong>
+          </p>
+          <p style="font-size: 0.84rem; opacity: 0.85; margin: 0;">
+            Cuando una oferta de Mercado Libre caduca y el producto regresa a su precio de lista alto (ej: $80.000 COP), el robot <strong>re-inscribe de inmediato el producto en la mejor oferta disponible</strong> manteniendo tu Precio Objetivo de Venta real (ej: $34.000 COP).
+          </p>
+        </div>
+      </div>
+
       <!-- Lightning Deals Scanner Card -->
       <div class="card mb-4" style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08) 0%, rgba(255, 87, 34, 0.08) 100%); border: 1px solid rgba(255, 171, 0, 0.3);">
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -1446,6 +1466,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js?v=11"></script>
+  <script src="/js/app.js?v=12"></script>
 </body>
 </html>

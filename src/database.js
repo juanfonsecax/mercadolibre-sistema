@@ -496,6 +496,25 @@ function initSchema() {
     )
   `);
 
+  // ── Modulo de Piloto Automático 24/7 de Ofertas Continuas ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS auto_promotions_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      ml_item_id TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      list_price REAL DEFAULT 0,
+      target_promo_price REAL DEFAULT 0,
+      auto_pilot_enabled INTEGER DEFAULT 1,
+      current_ml_price REAL DEFAULT 0,
+      current_ml_original_price REAL DEFAULT 0,
+      has_active_offer INTEGER DEFAULT 0,
+      active_offer_type TEXT,
+      last_auto_renewed_at TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // ── Etapa 1: Contexto de Publicaciones con IA (Ventas 30 días) ──
   db.run(`
     CREATE TABLE IF NOT EXISTS product_contexts (
@@ -1887,6 +1906,53 @@ function deleteProductPromotion(id) {
   runSql('DELETE FROM product_promotions WHERE id = ?', [id]);
 }
 
+function getAutoPromoConfigs(accountId = null) {
+  let sql = 'SELECT * FROM auto_promotions_config WHERE 1=1';
+  const params = [];
+  if (accountId) {
+    sql += ' AND account_id = ?';
+    params.push(accountId);
+  }
+  return queryAll(sql, params);
+}
+
+function getAutoPromoConfig(mlItemId) {
+  return queryOne('SELECT * FROM auto_promotions_config WHERE ml_item_id = ?', [mlItemId]);
+}
+
+function saveAutoPromoConfig(cfg) {
+  runSql(
+    `INSERT INTO auto_promotions_config (account_id, ml_item_id, title, list_price, target_promo_price, auto_pilot_enabled, current_ml_price, current_ml_original_price, has_active_offer, active_offer_type, last_auto_renewed_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(ml_item_id) DO UPDATE SET
+       account_id = excluded.account_id,
+       title = excluded.title,
+       list_price = CASE WHEN excluded.list_price > 0 THEN excluded.list_price ELSE auto_promotions_config.list_price END,
+       target_promo_price = CASE WHEN excluded.target_promo_price > 0 THEN excluded.target_promo_price ELSE auto_promotions_config.target_promo_price END,
+       auto_pilot_enabled = excluded.auto_pilot_enabled,
+       current_ml_price = excluded.current_ml_price,
+       current_ml_original_price = excluded.current_ml_original_price,
+       has_active_offer = excluded.has_active_offer,
+       active_offer_type = excluded.active_offer_type,
+       last_auto_renewed_at = excluded.last_auto_renewed_at,
+       updated_at = datetime('now')`,
+    [
+      cfg.account_id || 1,
+      cfg.ml_item_id,
+      cfg.title || '',
+      cfg.list_price || 0,
+      cfg.target_promo_price || 0,
+      cfg.auto_pilot_enabled !== undefined ? (cfg.auto_pilot_enabled ? 1 : 0) : 1,
+      cfg.current_ml_price || 0,
+      cfg.current_ml_original_price || 0,
+      cfg.has_active_offer ? 1 : 0,
+      cfg.active_offer_type || null,
+      cfg.last_auto_renewed_at || null,
+    ]
+  );
+  saveDbToFile();
+}
+
 // ── Product Context (Etapa 1) Database Operations ──
 
 function getProductContexts(accountId = null) {
@@ -2028,6 +2094,7 @@ module.exports = {
   saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
+  getAutoPromoConfigs, getAutoPromoConfig, saveAutoPromoConfig,
   // Product Contexts (Etapa 1)
   getProductContexts, getProductContextByItemId, saveProductContext, updateProductContext,
 };

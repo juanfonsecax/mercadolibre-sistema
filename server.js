@@ -1013,6 +1013,48 @@ app.get('/api/promotions/catalog-campaigns', async (req, res) => {
   }
 });
 
+app.get('/api/promotions/auto-pilot', (req, res) => {
+  try {
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
+    const configs = db.getAutoPromoConfigs(accountId);
+    res.json({ success: true, configs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/promotions/auto-pilot', (req, res) => {
+  try {
+    const { accountId, ml_item_id, title, list_price, target_promo_price, auto_pilot_enabled } = req.body;
+    if (!ml_item_id) {
+      return res.status(400).json({ error: 'ml_item_id es requerido' });
+    }
+
+    db.saveAutoPromoConfig({
+      account_id: accountId ? parseInt(accountId) : 1,
+      ml_item_id,
+      title: title || '',
+      list_price: parseFloat(list_price || 0),
+      target_promo_price: parseFloat(target_promo_price || 0),
+      auto_pilot_enabled: auto_pilot_enabled !== undefined ? (auto_pilot_enabled ? 1 : 0) : 1,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/promotions/run-auto-pilot', async (req, res) => {
+  try {
+    const accountId = req.body.accountId ? parseInt(req.body.accountId) : 1;
+    await promotionsApi.runAutoPilotPromotionsWorker(accountId);
+    res.json({ success: true, message: 'Piloto Automático de Ofertas Continuas ejecutado con éxito.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ══════════════════════════════════════════
 // ── Etapa 1: Contexto de Publicaciones API ──
 // ══════════════════════════════════════════
@@ -1139,6 +1181,7 @@ function startAutoPromotionsScan() {
       const accounts = db.getAccounts();
       for (const acc of accounts) {
         await promotionsApi.scanAllPublicationCampaigns(acc.id);
+        await promotionsApi.runAutoPilotPromotionsWorker(acc.id);
       }
     } catch (e) {
       console.error('[Cron] Error scanning promotions:', e.message);

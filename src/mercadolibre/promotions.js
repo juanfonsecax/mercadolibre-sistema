@@ -207,10 +207,97 @@ async function scanAllPublicationCampaigns(accountId) {
   }
 }
 
+/**
+ * Get live item price and active promotion status directly from Mercado Libre API
+ */
+async function fetchItemLivePriceAndOfferStatus(mlItemId, accountId) {
+  try {
+    const itemData = await mlFetch(`/items/${mlItemId}`, accountId);
+    if (!itemData) return null;
+
+    const currentPrice = itemData.price || 0;
+    const originalPrice = itemData.original_price || currentPrice;
+    const hasActiveOffer = originalPrice > currentPrice;
+    const discountPercent = hasActiveOffer ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
+
+    return {
+      ml_item_id: mlItemId,
+      title: itemData.title,
+      current_ml_price: currentPrice,
+      list_price: originalPrice,
+      has_active_offer: hasActiveOffer,
+      discount_percent: discountPercent,
+    };
+  } catch (error) {
+    console.warn(`[Promotions] Warning fetching live item prices for ${mlItemId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * 24/7 Auto-Pilot Promotions Worker: Checks all active products.
+ * If an item's promotion expired or is inactive, it automatically re-enrolls at target_promo_price!
+ */
+async function runAutoPilotPromotionsWorker(accountId = 1) {
+  try {
+    const listings = db.getMlFullInventory(accountId)
+      .filter(item => item.ml_item_id && !db.isProductDiscontinued(item.title))
+      .filter(item => (item.units_full && item.units_full > 0));
+
+    console.log(`[Auto-Pilot Promos] 🤖 Verificando ofertas continuas para ${listings.length} publicaciones activas...`);
+
+    for (const item of listings) {
+      const mlItemId = item.ml_item_id;
+      const liveStatus = await fetchItemLivePriceAndOfferStatus(mlItemId, accountId);
+      const savedConfig = db.getAutoPromoConfig(mlItemId) || {};
+
+      const isEnabled = savedConfig.auto_pilot_enabled !== undefined ? Boolean(savedConfig.auto_pilot_enabled) : true;
+      const targetPrice = savedConfig.target_promo_price || Math.round((item.price || 50000) * 0.85);
+      const listPrice = liveStatus?.list_price || item.price || 50000;
+
+      // Update config snapshot in DB
+      db.saveAutoPromoConfig({
+        account_id: accountId,
+        ml_item_id: mlItemId,
+        title: item.title,
+        list_price: listPrice,
+        target_promo_price: targetPrice,
+        auto_pilot_enabled: isEnabled ? 1 : 0,
+        current_ml_price: liveStatus?.current_ml_price || item.price || 0,
+        current_ml_original_price: listPrice,
+        has_active_offer: liveStatus?.has_active_offer || false,
+        active_offer_type: liveStatus?.has_active_offer ? 'ACTIVE_OFFER' : 'NONE',
+      });
+
+      // If Auto-Pilot is enabled and item currently has NO active offer in ML (offer expired or price reset to full list_price)
+      if (isEnabled && (!liveStatus?.has_active_offer || liveStatus?.current_ml_price >= listPrice)) {
+        console.log(`[Auto-Pilot Promos] ⚡ La oferta de ${item.title} (${mlItemId}) venció. Re-activando oferta automática a $${targetPrice.toLocaleString('es-CO')} COP...`);
+        try {
+          const promos = await getItemPromotions(mlItemId, accountId);
+          let targetPromo = Array.isArray(promos) && promos.length > 0 ? promos[0] : null;
+
+          if (targetPromo) {
+            const promoId = targetPromo.id || targetPromo.promotion_id;
+            const promoType = targetPromo.type || targetPromo.promotion_type || 'PRICE_DISCOUNT';
+            await joinPromotion(mlItemId, promoId, promoType, targetPrice, accountId);
+            db.logActivity('auto_promo_renew', `🤖 Piloto Automático: Oferta re-activada para ${item.title} a $${targetPrice.toLocaleString('es-CO')} COP`, { promoId, promoType, targetPrice }, accountId);
+          }
+        } catch (e) {
+          console.warn(`[Auto-Pilot Promos] No se pudo re-activar la oferta para ${mlItemId}:`, e.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[Auto-Pilot Promos] Error in worker execution for account ${accountId}:`, error.message);
+  }
+}
+
 module.exports = {
   getItemPromotions,
   joinPromotion,
   leavePromotion,
   scanEligibleLightningDeals,
   scanAllPublicationCampaigns,
+  fetchItemLivePriceAndOfferStatus,
+  runAutoPilotPromotionsWorker,
 };
