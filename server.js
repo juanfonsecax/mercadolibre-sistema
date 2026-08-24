@@ -271,7 +271,33 @@ app.get('/api/claims/:id/detail', async (req, res) => {
     const claim = db.getClaimById(claimDbId);
     if (!claim) return res.status(404).json({ error: 'Reclamo/Novedad no encontrado' });
 
-    const messagesList = db.getClaimMessages(claimDbId);
+    let messagesList = db.getClaimMessages(claimDbId);
+    let liveMlClaim = null;
+
+    // Fetch live claim info & messages from ML API if token available
+    if (claim.ml_claim_id && claim.account_id) {
+      try {
+        liveMlClaim = await claimsApi.getClaimDetails(claim.ml_claim_id, claim.account_id);
+        const liveMessages = await claimsApi.getClaimMessages(claim.ml_claim_id, claim.account_id);
+        if (Array.isArray(liveMessages) && liveMessages.length > 0) {
+          liveMessages.forEach(msg => {
+            const msgText = msg.message || msg.text || '';
+            if (msgText) {
+              db.saveClaimMessage({
+                claim_id: claim.id,
+                ml_claim_id: String(claim.ml_claim_id),
+                sender: msg.sender_role || msg.role || 'unknown',
+                message_text: msgText,
+                is_auto: false,
+              });
+            }
+          });
+          messagesList = db.getClaimMessages(claimDbId);
+        }
+      } catch (e) {
+        console.warn('[Server] Live ML claim fetch warning:', e.message);
+      }
+    }
 
     // Fetch product details if order available
     let productInfo = null;
@@ -292,6 +318,7 @@ app.get('/api/claims/:id/detail', async (req, res) => {
 
     res.json({
       claim,
+      liveMlClaim,
       messages: messagesList,
       productInfo,
       suggestedResponse: aiSuggestionMsg ? aiSuggestionMsg.message_text : null,

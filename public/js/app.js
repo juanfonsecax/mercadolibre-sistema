@@ -693,6 +693,7 @@ async function openClaimModal(claimId) {
     const claim = data.claim || {};
     const messages = data.messages || [];
     const productInfo = data.productInfo || null;
+    const liveMlClaim = data.liveMlClaim || {};
 
     const titleEl = document.getElementById('claimModalTitle');
     if (titleEl) {
@@ -710,12 +711,31 @@ async function openClaimModal(claimId) {
       prodTitleEl.textContent = productInfo?.title || claim.item_title || 'Producto Mercado Libre';
     }
 
+    // Build Initial Claim Reason Box
+    const claimReason = liveMlClaim.reason || liveMlClaim.reason_id || claim.claim_reason || 'No especificada';
+    const claimType = liveMlClaim.type || claim.claim_type || 'Reclamo';
+    const claimDetail = liveMlClaim.description || liveMlClaim.detail || null;
+
+    let reasonBoxHtml = `
+      <div class="claim-reason-box">
+        <div class="claim-reason-header">
+          <span class="reason-badge">⚠️ NOVEDAD REGISTRADA EN MERCADO LIBRE</span>
+          <span class="reason-type-chip">${escapeHtml(claimType)}</span>
+        </div>
+        <div class="reason-title-text">📌 Motivo principal: <strong>${escapeHtml(claimReason)}</strong></div>
+        ${claimDetail ? `<div class="reason-detail-text">💬 Detalle notificado: "${escapeHtml(claimDetail)}"</div>` : ''}
+        <div class="claim-reason-meta">
+          <span>👤 Comprador: <strong>${escapeHtml(claim.buyer_nickname || 'Comprador')}</strong></span>
+          <span>📦 Orden #: <strong>${escapeHtml(claim.ml_order_id || 'N/A')}</strong></span>
+        </div>
+      </div>`;
+
     // Render Timeline Messages
     const chatContainer = document.getElementById('claimChatMessages');
-    if (!messages.length) {
-      chatContainer.innerHTML = '<p class="empty-state" style="padding:20px">No hay mensajes guardados en este reclamo</p>';
-    } else {
-      chatContainer.innerHTML = messages.map(m => {
+
+    let messagesHtml = '';
+    if (messages.length > 0) {
+      messagesHtml = messages.map(m => {
         let msgClass = 'buyer';
         let senderLabel = '👤 Comprador';
         if (m.sender === 'defendant' || m.sender === 'seller') {
@@ -734,10 +754,12 @@ async function openClaimModal(claimId) {
             <div>${escapeHtml(m.message_text)}</div>
           </div>`;
       }).join('');
-
-      // Auto scroll chat to bottom
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+    } else {
+      messagesHtml = '<p class="empty-state" style="padding:10px 0">Esperando respuesta o seguimiento del chat...</p>';
     }
+
+    chatContainer.innerHTML = reasonBoxHtml + messagesHtml;
+    chatContainer.scrollTop = chatContainer.scrollHeight;
 
     // Set response input
     const responseInput = document.getElementById('claimResponseInput');
@@ -773,20 +795,8 @@ async function regenerateClaimAiResponse() {
       document.getElementById('claimResponseInput').value = res.generatedResponse;
       showToast('✅ Respuesta persuasiva generada con éxito', 'success');
 
-      // Refresh chat messages inside modal
-      if (res.messages) {
-        const chatContainer = document.getElementById('claimChatMessages');
-        chatContainer.innerHTML = res.messages.map(m => {
-          let msgClass = m.sender === 'seller' ? 'seller' : (m.sender === 'ai_suggestion' ? 'ai' : 'buyer');
-          let senderLabel = m.sender === 'seller' ? '🏪 Tú (Vendedor)' : (m.sender === 'ai_suggestion' ? '🧠 Respuesta Sugerida por Tu IA' : '👤 Comprador');
-          return `
-            <div class="chat-message ${msgClass}">
-              <div class="msg-sender">${senderLabel}</div>
-              <div>${escapeHtml(m.message_text)}</div>
-            </div>`;
-        }).join('');
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-      }
+      // Refresh modal to keep reason box and messages updated
+      openClaimModal(currentClaimId);
     }
   } catch (error) {
     showToast('Error generando respuesta de IA: ' + error.message, 'error');
