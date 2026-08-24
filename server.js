@@ -265,6 +265,83 @@ app.post('/api/claims/:id/approve', async (req, res) => {
   }
 });
 
+app.get('/api/claims/:id/detail', async (req, res) => {
+  try {
+    const claimDbId = parseInt(req.params.id);
+    const claim = db.getClaimById(claimDbId);
+    if (!claim) return res.status(404).json({ error: 'Reclamo/Novedad no encontrado' });
+
+    const messagesList = db.getClaimMessages(claimDbId);
+
+    // Fetch product details if order available
+    let productInfo = null;
+    if (claim.ml_order_id) {
+      try {
+        const order = await claimsApi.getOrderDetails(claim.ml_order_id, claim.account_id);
+        if (order && order.order_items && order.order_items.length > 0) {
+          const itemId = order.order_items[0].item.id;
+          productInfo = await questionsApi.getItemDetails(itemId, claim.account_id);
+        }
+      } catch (e) {
+        console.warn('[Server] Could not fetch claim product details:', e.message);
+      }
+    }
+
+    // Suggested response from AI suggestion message if any
+    const aiSuggestionMsg = messagesList.find(m => m.sender === 'ai_suggestion');
+
+    res.json({
+      claim,
+      messages: messagesList,
+      productInfo,
+      suggestedResponse: aiSuggestionMsg ? aiSuggestionMsg.message_text : null,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/claims/:id/regenerate', async (req, res) => {
+  try {
+    const { strategy, customInstruction } = req.body;
+    const result = await processor.regenerateClaimResponse(
+      parseInt(req.params.id),
+      strategy || 'auto',
+      customInstruction || null
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/claims/templates', (req, res) => {
+  res.json({
+    templates: [
+      {
+        id: 'capacitor',
+        name: '💡 Parpadeo / Sin Neutro (Capacitor Gratis L1)',
+        text: 'Hola. Entendemos tu inquietud con la iluminación. Queremos indicarte que este producto de Tecnología Híbrida INCLUYE GRATIS en la caja el Capacitor / Estabilizador de Luz. Solo debes conectarlo en paralelo en el bombillo (L1) para eliminar el parpadeo de inmediato. El interruptor está 100% verificado y operativo.',
+      },
+      {
+        id: 'wifi',
+        name: '📲 Vinculación Wi-Fi 2.4GHz (Tuya / Smart Life)',
+        text: 'Hola. Para vincular con la App Tuya/Smart Life, asegúrate de conectarlo únicamente a una red Wi-Fi 2.4GHz (si tu router tiene red 5GHz, desacplala temporalmente). Mantén presionado el botón del interruptor 5 segundos hasta que parpadee rápido y dale Buscar en la App. El producto está 100% certificado.',
+      },
+      {
+        id: 'voltage',
+        name: '🛡️ Protección de Voltaje y Calidad (+100.000 clics)',
+        text: 'Hola. El producto cuenta con blindaje de voltaje MOV anti-picos y vida útil industrial (+100.000 clics). Si no enciende, por favor verifica que la fase y neutro/capacitor estén firmemente ajustados en las borneras y el breaker activo. Todo el lote cuenta con certificación Co.9019129.',
+      },
+      {
+        id: 'misuse',
+        name: '🔌 Incompatibilidad / Conexión Errónea',
+        text: 'Hola. Todos nuestros productos se entregan probados y certificados de fábrica. Si la instalación eléctrica no cuenta con la conexión correcta o capacitor en L1, el dispositivo no encenderá por protección. Por favor verifica las borneras traseras según la guía adjunta.',
+      },
+    ]
+  });
+});
+
 app.post('/api/claims/poll', async (req, res) => {
   try {
     const { accountId } = req.body;

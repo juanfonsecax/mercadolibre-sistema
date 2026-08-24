@@ -529,6 +529,71 @@ async function regenerateQuestionAnswer(questionId) {
   return db.getQuestionById(questionId);
 }
 
+/**
+ * Regenerate an AI response for a claim with a selected neuro-persuasive strategy
+ */
+async function regenerateClaimResponse(claimDbId, strategy = 'auto', customInstruction = null) {
+  const claim = db.getClaimById(claimDbId);
+  if (!claim) throw new Error(`Reclamo/Novedad ${claimDbId} no encontrado`);
+
+  const accountId = claim.account_id || 1;
+
+  // 1. Get messages
+  let messagesList = db.getClaimMessages(claimDbId);
+  if (!messagesList || messagesList.length === 0) {
+    try {
+      messagesList = await claims.getClaimMessages(claim.ml_claim_id, accountId);
+    } catch {
+      messagesList = [];
+    }
+  }
+
+  // 2. Fetch product info if order available
+  let productInfo = null;
+  if (claim.ml_order_id) {
+    try {
+      const order = await claims.getOrderDetails(claim.ml_order_id, accountId);
+      if (order && order.order_items && order.order_items.length > 0) {
+        const itemId = order.order_items[0].item.id;
+        productInfo = await questions.getItemDetails(itemId, accountId);
+      }
+    } catch (e) {
+      console.warn('[Processor] Could not fetch order details for claim:', e.message);
+    }
+  }
+
+  // 3. Knowledge base context
+  const knowledgeContext = kb.getKnowledgeForClaims();
+
+  // 4. Generate AI response
+  const generatedResponse = await gemini.generateClaimResponse(
+    claim,
+    messagesList,
+    knowledgeContext,
+    strategy,
+    productInfo,
+    customInstruction
+  );
+
+  if (generatedResponse) {
+    db.saveClaimMessage({
+      claim_id: claim.id,
+      ml_claim_id: claim.ml_claim_id,
+      sender: 'ai_suggestion',
+      message_text: generatedResponse,
+      is_auto: true,
+    });
+  } else {
+    throw new Error('No se pudo generar la respuesta de IA para la novedad. Verifica tu GEMINI_API_KEY.');
+  }
+
+  return {
+    claim: db.getClaimById(claimDbId),
+    generatedResponse,
+    messages: db.getClaimMessages(claimDbId),
+  };
+}
+
 module.exports = {
   processQuestion,
   processClaim,
@@ -539,6 +604,7 @@ module.exports = {
   rejectQuestion,
   rejectMessage,
   regenerateQuestionAnswer,
+  regenerateClaimResponse,
   pollQuestionsForAccount,
   pollClaimsForAccount,
   pollMessagesForAccount,

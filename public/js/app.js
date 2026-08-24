@@ -684,27 +684,49 @@ function renderClaims(claims) {
   `).join('');
 }
 
+let claimTemplatesCache = null;
+
 async function openClaimModal(claimId) {
   currentClaimId = claimId;
   try {
-    const data = await apiFetch(`/api/claims/${claimId}/messages`);
+    const data = await apiFetch(`/api/claims/${claimId}/detail`);
+    const claim = data.claim || {};
     const messages = data.messages || [];
+    const productInfo = data.productInfo || null;
 
-    document.getElementById('claimModalTitle').textContent = `Reclamo #${claimId}`;
+    const titleEl = document.getElementById('claimModalTitle');
+    if (titleEl) {
+      titleEl.textContent = `📋 Novedad #${claim.ml_claim_id || claimId} — ${claim.buyer_nickname || 'Comprador'}`;
+    }
 
+    const badgeEl = document.getElementById('claimModalBadge');
+    if (badgeEl) {
+      badgeEl.textContent = claim.claim_status || claim.status || 'Abierto';
+    }
+
+    // Populate Product Card
+    const prodTitleEl = document.getElementById('claimProductTitle');
+    if (prodTitleEl) {
+      prodTitleEl.textContent = productInfo?.title || claim.item_title || 'Producto Mercado Libre';
+    }
+
+    // Render Timeline Messages
     const chatContainer = document.getElementById('claimChatMessages');
     if (!messages.length) {
-      chatContainer.innerHTML = '<p class="empty-state" style="padding:20px">No hay mensajes en este reclamo</p>';
+      chatContainer.innerHTML = '<p class="empty-state" style="padding:20px">No hay mensajes guardados en este reclamo</p>';
     } else {
       chatContainer.innerHTML = messages.map(m => {
         let msgClass = 'buyer';
-        let senderLabel = 'Comprador';
+        let senderLabel = '👤 Comprador';
         if (m.sender === 'defendant' || m.sender === 'seller') {
           msgClass = 'seller';
-          senderLabel = 'Tú (Vendedor)';
+          senderLabel = '🏪 Tú (Vendedor)';
+        } else if (m.sender === 'mediator' || m.sender === 'bot') {
+          msgClass = 'ai';
+          senderLabel = '🤖 IA Mercado Libre';
         } else if (m.sender === 'ai_suggestion') {
           msgClass = 'ai';
-          senderLabel = '🤖 Sugerencia IA';
+          senderLabel = '🧠 Respuesta Sugerida por Tu IA';
         }
         return `
           <div class="chat-message ${msgClass}">
@@ -713,15 +735,82 @@ async function openClaimModal(claimId) {
           </div>`;
       }).join('');
 
-      const aiMsg = messages.find(m => m.sender === 'ai_suggestion');
-      if (aiMsg) {
-        document.getElementById('claimResponseInput').value = aiMsg.message_text;
-      }
+      // Auto scroll chat to bottom
+      chatContainer.scrollTop = chatContainer.scrollHeight;
     }
+
+    // Set response input
+    const responseInput = document.getElementById('claimResponseInput');
+    if (responseInput) {
+      responseInput.value = data.suggestedResponse || '';
+    }
+
+    // Load templates if needed
+    loadClaimTemplates();
 
     document.getElementById('claimModal').style.display = 'flex';
   } catch (error) {
-    showToast('Error cargando mensajes: ' + error.message, 'error');
+    showToast('Error cargando detalle de novedad: ' + error.message, 'error');
+  }
+}
+
+async function regenerateClaimAiResponse() {
+  if (!currentClaimId) return;
+  const btn = document.getElementById('btnRegenerateClaimAi');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+
+  const strategy = document.getElementById('claimStrategySelect')?.value || 'auto';
+  const customInstruction = document.getElementById('claimCustomInstruction')?.value || '';
+
+  try {
+    showToast('🧠 Generando borrador neuro-persuasivo...', 'info');
+    const res = await apiFetch(`/api/claims/${currentClaimId}/regenerate`, {
+      method: 'POST',
+      body: JSON.stringify({ strategy, customInstruction }),
+    });
+
+    if (res && res.generatedResponse) {
+      document.getElementById('claimResponseInput').value = res.generatedResponse;
+      showToast('✅ Respuesta persuasiva generada con éxito', 'success');
+
+      // Refresh chat messages inside modal
+      if (res.messages) {
+        const chatContainer = document.getElementById('claimChatMessages');
+        chatContainer.innerHTML = res.messages.map(m => {
+          let msgClass = m.sender === 'seller' ? 'seller' : (m.sender === 'ai_suggestion' ? 'ai' : 'buyer');
+          let senderLabel = m.sender === 'seller' ? '🏪 Tú (Vendedor)' : (m.sender === 'ai_suggestion' ? '🧠 Respuesta Sugerida por Tu IA' : '👤 Comprador');
+          return `
+            <div class="chat-message ${msgClass}">
+              <div class="msg-sender">${senderLabel}</div>
+              <div>${escapeHtml(m.message_text)}</div>
+            </div>`;
+        }).join('');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    }
+  } catch (error) {
+    showToast('Error generando respuesta de IA: ' + error.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Generar Respuesta Persuasiva'; }
+  }
+}
+
+async function loadClaimTemplates() {
+  if (claimTemplatesCache) return;
+  try {
+    const data = await apiFetch('/api/claims/templates');
+    claimTemplatesCache = data.templates || [];
+  } catch (e) {
+    console.warn('Could not load claim templates:', e.message);
+  }
+}
+
+function applyClaimTemplate(templateId) {
+  if (!claimTemplatesCache) return;
+  const tpl = claimTemplatesCache.find(t => t.id === templateId);
+  if (tpl) {
+    document.getElementById('claimResponseInput').value = tpl.text;
+    showToast(`Aplicada plantilla: ${tpl.name}`, 'info');
   }
 }
 
@@ -740,12 +829,12 @@ async function approveClaimResponse() {
       method: 'POST',
       body: JSON.stringify({ editedResponse: responseText }),
     });
-    showToast('¡Respuesta de reclamo enviada!', 'success');
+    showToast('¡Respuesta de novedad enviada a Mercado Libre!', 'success');
     closeClaimModal();
     loadClaims();
     refreshOverview();
   } catch (error) {
-    showToast('Error al enviar: ' + error.message, 'error');
+    showToast('Error al enviar respuesta: ' + error.message, 'error');
   }
 }
 

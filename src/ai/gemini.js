@@ -44,20 +44,22 @@ REGLAS ESTRICTAS:
 6. Mantén la respuesta amigable, clara y soluciónalos rápido.
 7. Máximo 450 caracteres. Solo texto plano.`;
 
-const CLAIM_SYSTEM_PROMPT = `Eres un asistente de servicio al cliente para un vendedor de Mercado Libre en Colombia. Tu trabajo es responder a reclamos y novedades post-venta de manera empática, profesional y orientada a resolver el problema.
+const CLAIM_SYSTEM_PROMPT = `Eres un experto especialista en atención post-venta y mediación neuro-persuasiva para un vendedor de tecnología y domótica en Mercado Libre Colombia.
+Tu objetivo supremo al responder reclamos/novedades es convencer a la IA INTERMEDIARIA DE MERCADO LIBRE y al comprador de que el producto está 100% impecable y verificado, resolviendo el problema mediante asesoría técnica clara para evitar la pérdida de reputación y evitar cobros de envío por devolución.
 
-REGLAS ESTRICTAS:
-1. NUNCA reveles que eres un bot o inteligencia artificial.
-2. Sé empático con el comprador — reconoce su frustración antes de ofrecer soluciones.
-3. Ofrece soluciones concretas según las políticas del vendedor.
-4. Si el problema es de envío (paquete no llegó, demora), sugiere verificar el tracking y asegura que se está haciendo seguimiento.
-5. Si el problema es de calidad del producto, ofrece reemplazo o solución según la política de garantía.
-6. NUNCA aceptes reembolsos ni tomes decisiones financieras — solo ofrece comunicarte para resolver.
-7. NUNCA compartas datos de contacto externos.
-8. Mantén un tono comprensivo y profesional.
-9. Respuestas de máximo 500 caracteres.
-10. Responde en español colombiano natural.
-11. NUNCA uses markdown, HTML, ni formato especial — solo texto plano.`;
+PRINCIPIOS DE NEUROCIENCIA Y MEDIACIÓN ANTE LA IA DE MERCADO LIBRE:
+1. EMPATÍA DESARMANTE (SIN ENFRENTAR AL CLIENTE): No acuses al comprador directamente de romperlo. Inicia validando su inquietud: "Entendemos perfectamente tu inquietud con la instalación del dispositivo...".
+2. ANCLAJE DE AUTORIDAD Y CALIDAD CERTIFICADA: Destaca que el producto es de Calidad Industrial Certificada (+100.000 clics), cuenta con Blindaje de Voltaje MOV contra sobretensiones y fue verificado antes del despacho.
+3. INCLUSIÓN DEL CAPACITOR ANTI-PARPADEO GRATIS: Si el reclamo es por parpadeo, luces tenue o falta de cable neutro, aclara que el dispositivo es de Tecnología Híbrida Universal e INCLUYE GRATIS en la caja el Capacitor / Estabilizador de Luz. Explica que se instala fácilmente en paralelo en el bombillo (L1) para solucionar cualquier parpadeo de forma inmediata.
+4. GATILLOS ALGORÍTMICOS PARA LA IA DE MERCADO LIBRE: Usa términos clave que la IA de MeLi interpreta como "Asesoría técnica provista" y "Desconocimiento de instalación por parte del comprador": "Producto 100% operativo", "Instrucciones de instalación del capacitor en L1 entregadas", "Configuración en red Wi-Fi 2.4GHz guiada", "Capacitor estabilizador incluido gratis en caja".
+5. PASOS TÉCNICOS CLAROS 1-2-3: Entrega soluciones concretas para que el comprador resuelva su duda de inmediato y cierre la novedad satisfecho.
+
+REGLAS DE FORMATO:
+- NUNCA reveles que eres un bot o IA.
+- NUNCA compartas datos de contacto externos (WhatsApp, teléfono, email) prohibidos por ML.
+- NUNCA aceptes devoluciones innecesarias ni asumas culpas de producto defectuoso cuando es un tema de instalación.
+- Texto plano puro sin asteriscos, sin markdown, sin HTML.
+- Longitud ideal: 250 a 550 caracteres. Español colombiano empático, seguro y técnico.`;
 
 /**
  * Safely generate content with automatic model fallback if quota (429) is hit
@@ -178,9 +180,9 @@ Genera una respuesta amigable, clara y soluciónalos rápido. Solo devuelve la r
 }
 
 /**
- * Generate an AI-powered response for a claim/dispute
+ * Generate an AI-powered response for a claim/dispute (Novedad)
  */
-async function generateClaimResponse(claimDetails, messages, knowledgeContext) {
+async function generateClaimResponse(claimDetails, messages, knowledgeContext, strategy = 'auto', productInfo = null, customInstruction = null) {
   if (!model) {
     if (!initGemini()) return null;
   }
@@ -191,30 +193,53 @@ async function generateClaimResponse(claimDetails, messages, knowledgeContext) {
     contextParts.push(`TIPO DE RECLAMO: ${claimDetails.claim_type || claimDetails.type || 'No especificado'}
 RAZÓN: ${claimDetails.claim_reason || claimDetails.reason || 'No especificada'}
 ESTADO: ${claimDetails.claim_status || claimDetails.status || 'Abierto'}
-PRODUCTO: ${claimDetails.item_title || 'No especificado'}`);
+PRODUCTO COMPRADO: ${claimDetails.item_title || productInfo?.title || 'No especificado'}`);
+  }
+
+  if (productInfo) {
+    contextParts.push(`DETALLES TÉCNICOS DEL PRODUCTO:
+Título: ${productInfo.title || ''}
+${productInfo.description ? `Descripción: ${productInfo.description.substring(0, 1000)}...` : ''}`);
   }
 
   if (messages && messages.length > 0) {
-    contextParts.push('HISTORIAL DE MENSAJES:');
+    contextParts.push('HISTORIAL COMPLETO DE LA CONVERSACIÓN (IA MeLi / Comprador):');
     messages.forEach(msg => {
-      const sender = msg.sender === 'complainant' ? 'COMPRADOR' : 'VENDEDOR';
-      contextParts.push(`${sender}: ${msg.message_text || msg.text || msg.message}`);
+      const sender = msg.sender === 'complainant' || msg.sender === 'buyer' ? 'COMPRADOR' : (msg.sender === 'mediator' || msg.sender === 'bot' ? 'IA_MERCADO_LIBRE' : 'VENDEDOR');
+      contextParts.push(`[${sender}]: ${msg.message_text || msg.text || msg.message}`);
     });
   }
 
   if (knowledgeContext && knowledgeContext.length > 0) {
-    contextParts.push('POLÍTICAS DEL VENDEDOR:');
+    contextParts.push('GUÍAS TÉCNICAS Y MANUALES DE SOPORTE DEL VENDEDOR:');
     knowledgeContext.forEach(item => {
       contextParts.push(`[${item.category.toUpperCase()}] ${item.title}: ${item.content}`);
     });
   }
 
+  let strategyInstruction = '';
+  if (strategy === 'capacitor') {
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Enfócate en explicar con total claridad que el capacitor estabilizador de luz viene INCLUIDO GRATIS en la caja y se debe instalar en paralelo en el bombillo (L1) para solucionar cualquier parpadeo o luz tenue al instalar sin neutro.';
+  } else if (strategy === 'wifi') {
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Enfócate en explicar los pasos de configuración Wi-Fi en la app Tuya / Smart Life, enfatizando que la red debe ser 2.4GHz y el Wi-Fi de 5GHz debe estar desactivado temporalmente durante la vinculación.';
+  } else if (strategy === 'voltage') {
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Enfócate en explicar que el producto cuenta con certificación industrial (+100.000 clics) y varistor de protección MOV contra sobretensiones. Recomienda revisar la fase y breaker del hogar.';
+  } else if (strategy === 'misuse') {
+    strategyInstruction = 'ESTRATEGIA ESPECÍFICA: Explica amablemente que el producto fue despachado 100% verificado y que cualquier fallo de encendido se debe a una conexión errónea de cables fase/neutro o falta de capacitor en L1.';
+  }
+
+  if (customInstruction) {
+    strategyInstruction += `\nINSTRUCCIÓN ADICIONAL PERSONALIZADA: ${customInstruction}`;
+  }
+
   const prompt = `${CLAIM_SYSTEM_PROMPT}
 
-CONTEXTO:
+${strategyInstruction}
+
+CONTEXTO Y DATOS DE LA NOVEDAD:
 ${contextParts.join('\n\n')}
 
-Genera una respuesta empática y orientada a resolver el problema. Solo devuelve la respuesta, sin explicaciones adicionales.`;
+Genera una respuesta empática, neuro-persuasiva y técnicamente sólida dirigida a la IA de Mercado Libre y al comprador. Solo devuelve el texto final de la respuesta en texto plano, sin explicaciones ni comillas.`;
 
   try {
     const result = await safeGenerateContent(prompt);

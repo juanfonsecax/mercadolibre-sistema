@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css?v=2">
 </head>
 <body>
   <!-- Sidebar Navigation -->
@@ -264,20 +264,78 @@
         </div>
       </div>
 
-      <!-- Claim detail modal -->
+      <!-- Claim detail modal (Centro de Gestión de Novedades) -->
       <div class="modal-overlay" id="claimModal" style="display:none">
-        <div class="modal">
+        <div class="modal modal-xl">
           <div class="modal-header">
-            <h3 id="claimModalTitle">Detalle del reclamo</h3>
+            <div>
+              <h3 id="claimModalTitle">📋 Centro de Gestión de Novedades (Reclamo ML)</h3>
+              <span class="badge" id="claimModalBadge">Abierto</span>
+            </div>
             <button class="modal-close" onclick="closeClaimModal()">✕</button>
           </div>
-          <div class="modal-body">
-            <div class="chat-messages" id="claimChatMessages"></div>
-            <div class="chat-input-area">
-              <textarea id="claimResponseInput" rows="3" placeholder="Respuesta sugerida por IA..."></textarea>
-              <div class="chat-actions">
-                <button class="btn btn-success" id="btnApproveClaimResponse" onclick="approveClaimResponse()">✅ Enviar respuesta</button>
+          <div class="modal-body claim-modal-grid">
+            <!-- Left: Message timeline -->
+            <div class="claim-timeline-panel">
+              <div class="panel-subtitle">💬 Historial Completo (IA de Mercado Libre & Comprador)</div>
+              <div class="chat-messages" id="claimChatMessages"></div>
+            </div>
+
+            <!-- Right: Product context & Neuro-Persuasion Assistant -->
+            <div class="claim-assistant-panel">
+              <!-- Product info card -->
+              <div class="claim-product-card" id="claimProductCard">
+                <div class="product-card-title">📦 Producto Comprado:</div>
+                <div id="claimProductTitle" class="product-title-text">Cargando producto...</div>
+                <div class="product-specs-list" id="claimProductSpecs">
+                  <span class="spec-chip">💡 Estabilizador L1 Gratis Incluido</span>
+                  <span class="spec-chip">🛡️ Protección MOV Voltaje</span>
+                  <span class="spec-chip">💎 +100.000 Clics Grado Industrial</span>
+                </div>
               </div>
+
+              <!-- Neuro-Persuasion AI Controls -->
+              <div class="ai-controls-card">
+                <div class="controls-header">🧠 Estrategia de IA Neuro-Persuasiva:</div>
+                <select id="claimStrategySelect" class="form-input">
+                  <option value="auto">🤖 Auto (Analizar reclamo y producto)</option>
+                  <option value="capacitor">💡 Solución Parpadeo / Capacitor L1 Gratis</option>
+                  <option value="wifi">📲 Configuración Red Wi-Fi 2.4GHz</option>
+                  <option value="voltage">🛡️ Protección MOV y Calidad Industrial</option>
+                  <option value="misuse">🔌 Incompatibilidad / Conexión Errónea</option>
+                </select>
+
+                <div class="custom-instruction-group" style="margin-top: 10px;">
+                  <input type="text" id="claimCustomInstruction" class="form-input" placeholder="Indicación adicional para la IA (opcional)...">
+                </div>
+
+                <button class="btn btn-secondary w-100" style="margin-top: 10px; width: 100%;" id="btnRegenerateClaimAi" onclick="regenerateClaimAiResponse()">
+                  🔄 Generar Respuesta Persuasiva
+                </button>
+              </div>
+
+              <!-- Quick Templates Chips -->
+              <div class="templates-card">
+                <div class="controls-header">⚡ Respuestas Rápidas Predefinidas:</div>
+                <div class="templates-chips" id="claimTemplatesChips">
+                  <button class="chip-btn" onclick="applyClaimTemplate('capacitor')">💡 Parpadeo / Capacitor</button>
+                  <button class="chip-btn" onclick="applyClaimTemplate('wifi')">📲 Red 2.4GHz</button>
+                  <button class="chip-btn" onclick="applyClaimTemplate('voltage')">🛡️ Voltaje MOV</button>
+                  <button class="chip-btn" onclick="applyClaimTemplate('misuse')">🔌 Conexión Errónea</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom: Action Bar -->
+          <div class="modal-footer claim-modal-footer">
+            <div class="response-textarea-container" style="width: 100%;">
+              <label for="claimResponseInput" style="font-weight: 600; margin-bottom: 6px; display: block;">✍️ Respuesta a enviar a la IA de Mercado Libre & Comprador:</label>
+              <textarea id="claimResponseInput" rows="3" class="form-input" placeholder="Escribe o edita la respuesta..."></textarea>
+            </div>
+            <div class="footer-actions" style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 10px;">
+              <button class="btn btn-secondary" onclick="closeClaimModal()">Cancelar</button>
+              <button class="btn btn-success" id="btnApproveClaimResponse" onclick="approveClaimResponse()">✅ Enviar a Mercado Libre</button>
             </div>
           </div>
         </div>
@@ -1342,6 +1400,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js"></script>
+  <script src="/js/app.js?v=2"></script>
 </body>
 </html>
