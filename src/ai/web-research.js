@@ -50,6 +50,14 @@ Certificación oficial de seguridad eléctrica en Colombia No. co.9019129. Vida 
   },
   {
     category: 'faq',
+    title: '🌐 [Web Research] ¿Emiten Factura Electrónica?',
+    content: `POLÍTICA DE FACTURACIÓN ELECTRÓNICA Y COMPROBANTES:
+1. Compras Individuales / al Detalle: Como comercio bajo el Régimen No Responsable de IVA (Persona Natural / Régimen Simplificado), todas las compras individuales incluyen Documento de Venta / Comprobante legal de compra.
+2. Compras al por Mayor / Montos Grandes (Volumen): Para pedidos corporativos o compras de alto volumen/monto, SÍ gestionamos el trámite de Factura Electrónica según la cantidad de unidades requeridas.
+3. Cómo solicitarla en compras de volumen: Una vez realizada la compra por cantidad, el cliente nos envía sus datos de facturación por el chat privado para coordinar la expedición.`
+  },
+  {
+    category: 'faq',
     title: '🌐 [Web Research] ¿Funciona sin Polo a Tierra o sin Cable Neutro?',
     content: `ESPECIFICACIONES DE INSTALACIÓN (POLO A TIERRA Y NEUTRO):
 1. Funciona 100% sin Polo a Tierra ni Cable Neutro en la caja del interruptor: Es Tecnología Híbrida Universal.
