@@ -15,6 +15,7 @@ const processor = require('./src/processor');
 const gemini = require('./src/ai/gemini');
 const kb = require('./src/ai/knowledge-base');
 const productContextApi = require('./src/mercadolibre/product-context');
+const promotionsApi = require('./src/mercadolibre/promotions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -976,6 +977,27 @@ app.post('/api/promotions/ai-evaluate', async (req, res) => {
     const { productData, targetMarginPercent } = req.body;
     const evaluation = await gemini.evaluatePromotionStrategy(productData || {}, parseFloat(targetMarginPercent || 20));
     res.json({ evaluation });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/promotions/lightning-scan', async (req, res) => {
+  try {
+    const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
+    const deals = await promotionsApi.scanEligibleLightningDeals(accountId);
+    res.json({ success: true, deals });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/promotions/join-lightning', async (req, res) => {
+  try {
+    const { ml_item_id, promotion_id, promotion_type, deal_price, accountId } = req.body;
+    const accId = accountId ? parseInt(accountId) : 1;
+    const result = await promotionsApi.joinPromotion(ml_item_id, promotion_id, promotion_type || 'LIGHTNING', deal_price, accId);
+    res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

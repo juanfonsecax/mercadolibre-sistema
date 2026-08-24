@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css?v=8">
+  <link rel="stylesheet" href="/css/styles.css?v=9">
 </head>
 <body>
   <!-- Sidebar Navigation -->
@@ -852,6 +852,29 @@
         </div>
       </div>
 
+      <!-- Lightning Deals Scanner Card -->
+      <div class="card mb-4" style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08) 0%, rgba(255, 87, 34, 0.08) 100%); border: 1px solid rgba(255, 171, 0, 0.3);">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="color: #ffab00; font-size: 1.1rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+            ⚡ Gestor de Ofertas Relámpago (Mercado Libre API Oficial)
+          </h3>
+          <button class="btn btn-warning" onclick="scanLightningDeals()" style="background: #ffab00; color: #12151e; font-weight: 700; border: none; padding: 8px 16px;">
+            🔍 Escanear Publicaciones Elegibles
+          </button>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 14px;">
+            Las <strong>Ofertas Relámpago (LIGHTNING Deals)</strong> son campañas de 6 a 8 horas con máxima prioridad en las notificaciones push de la app y el banner principal de Mercado Libre. El algoritmo premia estas ventas aceleradas subiendo el posicionamiento orgánico permanente de la publicación.
+          </p>
+          <div id="lightningDealsContainer">
+            <div class="empty-state" style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+              <span class="empty-icon">⚡</span>
+              <p>Presiona "Escanear Publicaciones Elegibles" para consultar la API de Mercado Libre y comprobar qué publicaciones califican para Ofertas Relámpago hoy.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Live Margin Calculator Card -->
       <div class="card margin-calculator-card mb-4">
         <div class="card-header">
@@ -1402,6 +1425,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js?v=8"></script>
+  <script src="/js/app.js?v=9"></script>
 </body>
 </html>

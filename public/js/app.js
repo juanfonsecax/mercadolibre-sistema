@@ -2503,8 +2503,67 @@ async function runAiMarginEvaluation() {
         <button class="btn btn-sm btn-secondary mt-2" onclick="runAiMarginEvaluation()">🔄 Re-evaluar</button>
       </div>
     `;
+async function scanLightningDeals() {
+  const container = document.getElementById('lightningDealsContainer');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="empty-state" style="padding: 20px;">
+      <div class="spinner"></div>
+      <p style="margin-top:10px">Consultando la API oficial de Promociones de Mercado Libre para tus publicaciones...</p>
+    </div>`;
+
+  try {
+    const res = await apiFetch(`/api/promotions/lightning-scan?accountId=${activeAccountId}`);
+    const deals = res.deals || [];
+
+    if (deals.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state" style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <span class="empty-icon">ℹ️</span>
+          <p style="margin-bottom: 4px;"><strong>No hay cupos activos en este instante</strong></p>
+          <p style="font-size: 0.84rem; opacity: 0.8;">Mercado Libre asigna invitaciones a Ofertas Relámpago de forma automática según la velocidad de ventas y la reputación. El sistema continuará escaneando periódicamente para avisarte en cuanto ML habilite cupos flash.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = deals.map(d => `
+      <div class="card p-3 mb-2" style="background: rgba(255, 171, 0, 0.05); border: 1px solid rgba(255, 171, 0, 0.25); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <span class="badge badge-warning">⚡ Oferta Relámpago Disponible</span>
+          <strong style="display: block; margin-top: 4px; font-size: 0.95rem;">${escapeHtml(d.title)}</strong>
+          <div style="font-size: 0.82rem; opacity: 0.8; margin-top: 4px;">
+            Precio Actual: $${(d.current_price || 0).toLocaleString('es-CO')} COP | Precio Relámpago Sugerido: <strong>$${(d.suggested_price || 0).toLocaleString('es-CO')} COP</strong> (Descuento -${d.min_discount_percent}%)
+          </div>
+        </div>
+        <button class="btn btn-warning" onclick="joinLightningDeal('${d.ml_item_id}', '${d.promotion_id}', ${d.suggested_price})" style="background: #ffab00; color: #12151e; font-weight: 700;">
+          🚀 Activar Oferta Relámpago
+        </button>
+      </div>
+    `).join('');
+
   } catch (error) {
-    box.innerHTML = `<p class="text-danger">Error: ${error.message}</p>`;
+    container.innerHTML = `<p class="text-danger" style="padding: 10px;">Error escaneando Ofertas Relámpago: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function joinLightningDeal(itemId, promoId, dealPrice) {
+  try {
+    showToast(`⚡ Postulando ${itemId} a Oferta Relámpago en Mercado Libre...`, 'info');
+    await apiFetch('/api/promotions/join-lightning', {
+      method: 'POST',
+      body: JSON.stringify({
+        ml_item_id: itemId,
+        promotion_id: promoId,
+        promotion_type: 'LIGHTNING',
+        deal_price: dealPrice,
+        accountId: activeAccountId
+      })
+    });
+    showToast(`🚀 ¡Éxito! Publicación postulada a la Oferta Relámpago en Mercado Libre.`, 'success');
+    scanLightningDeals();
+  } catch (error) {
+    showToast(`Error al activar Oferta Relámpago: ${error.message}`, 'error');
   }
 }
 
