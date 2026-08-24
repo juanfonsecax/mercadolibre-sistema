@@ -205,6 +205,20 @@ TIPO DE RECLAMO: ${claimType}
 MOTIVO DE LA NOVEDAD: ${claimReason}
 ESTADO: ${claimDetails?.claim_status || claimDetails?.status || 'Abierto'}`);
 
+  const botOrBuyerMessages = (messages || [])
+    .filter(m => m.sender === 'mediator' || m.sender === 'bot' || m.sender === 'complainant' || m.sender === 'buyer')
+    .map(m => m.message_text || m.text || m.message || '')
+    .filter(Boolean);
+
+  const exactComplaintText = botOrBuyerMessages.length > 0
+    ? botOrBuyerMessages.join('\n---\n')
+    : (claimDetails?.claim_reason || claimDetails?.reason || 'Sin mensaje de detalle');
+
+  contextParts.push(`MENSAJE / TEXTO EXACTO RECIBIDO DE LA IA DE MERCADO LIBRE O COMPRADOR:
+"""
+${exactComplaintText}
+"""`);
+
   if (productInfo) {
     contextParts.push(`ESPECIFICACIONES TÉCNICAS Y DESCRIPCIÓN DEL PRODUCTO:
 Título: ${productInfo.title || ''}
@@ -245,19 +259,20 @@ ${productInfo.description ? `Descripción: ${productInfo.description.substring(0
 
   const prompt = `${CLAIM_SYSTEM_PROMPT}
 
-REGLA DE ADAPTACIÓN OBLIGATORIA PARA ESTA RESPUESTA:
-- El producto es: "${itemTitle}".
-- El motivo reportado es: "${claimReason}".
-- Si la queja se refiere a tomacorrientes, amperaje (15A/16A), tomacorrientes inteligentes, enchufes o medidores de energía, responde ÚNICAMENTE sobre tomacorrientes y sus especificaciones técnicas de corriente/potencia. NO menciones capacitores de bombillo ni interruptores si es un tomacorriente/enchufe.
-- Si el motivo es sobre un interruptor de luces, responde sobre interruptores.
-- Responde EXACTAMENTE a la inquietud expresada en la novedad de Mercado Libre.
+REGLA DE ADAPTACIÓN CRÍTICA PARA ESTA RESPUESTA:
+1. DEBES LEER EL "MENSAJE / TEXTO EXACTO RECIBIDO DE LA IA DE MERCADO LIBRE O COMPRADOR" ANTERIOR.
+2. Tu respuesta DEBE abordar DIRECTA Y EXCLUSIVAMENTE las afirmaciones o quejas expresadas en ese texto.
+   - Por ejemplo: Si la IA de MeLi o el comprador afirman que "el producto se anunciaba de 16A pero el producto entregado solo soporta 10A o la etiqueta dice 10A", tu respuesta DEBE EXPLICAR DIRECTAMENTE LA ESPECIFICACIÓN DE 16A (explicando la corriente pico máxima de 16A / 3520W frente a la nominal continua de 10A, la certificación del fabricante y el relé reforzado de alta potencia). Queda estrictamente prohibido responder sobre Wi-Fi o capacitores cuando el texto hable de la etiqueta de 16A vs 10A.
+   - Si la queja es sobre parpadeo de luz, responde sobre el capacitor en L1.
+   - Si la queja es sobre conexión a la app, responde sobre la red 2.4GHz.
+3. Responde EXACTAMENTE al problema reportado en la notificación.
 
 ${strategyInstruction}
 
 DATOS Y CONTEXTO COMPLETO DE LA NOVEDAD:
 ${contextParts.join('\n\n')}
 
-Genera una respuesta altamente relevante, empática, neuro-persuasiva y técnicamente precisa para la IA de Mercado Libre y el comprador. Solo devuelve el texto final en texto plano puro.`;
+Genera una respuesta empática, neuro-persuasiva y técnicamente precisa para la IA de Mercado Libre y el comprador. Solo devuelve el texto final en texto plano puro.`;
 
   try {
     const result = await safeGenerateContent(prompt);

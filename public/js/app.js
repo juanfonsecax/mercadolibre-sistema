@@ -711,10 +711,18 @@ async function openClaimModal(claimId) {
       prodTitleEl.textContent = productInfo?.title || claim.item_title || 'Producto Mercado Libre';
     }
 
+    // Extract detailed text from ML Bot / Comprador messages if available
+    const botMessages = (messages || [])
+      .filter(m => m.sender === 'mediator' || m.sender === 'bot' || m.sender === 'complainant' || m.sender === 'buyer')
+      .map(m => m.message_text)
+      .filter(Boolean);
+
+    const firstBotDetail = botMessages.length > 0 ? botMessages[0] : null;
+
     // Build Initial Claim Reason Box
     const claimReason = liveMlClaim.reason || liveMlClaim.reason_id || claim.claim_reason || 'No especificada';
     const claimType = liveMlClaim.type || claim.claim_type || 'Reclamo';
-    const claimDetail = liveMlClaim.description || liveMlClaim.detail || null;
+    const claimDetail = liveMlClaim.description || liveMlClaim.detail || firstBotDetail;
 
     let reasonBoxHtml = `
       <div class="claim-reason-box">
@@ -722,20 +730,31 @@ async function openClaimModal(claimId) {
           <span class="reason-badge">⚠️ NOVEDAD REGISTRADA EN MERCADO LIBRE</span>
           <span class="reason-type-chip">${escapeHtml(claimType)}</span>
         </div>
-        <div class="reason-title-text">📌 Motivo principal: <strong>${escapeHtml(claimReason)}</strong></div>
-        ${claimDetail ? `<div class="reason-detail-text">💬 Detalle notificado: "${escapeHtml(claimDetail)}"</div>` : ''}
+        <div class="reason-title-text">📌 Motivo/Código: <strong>${escapeHtml(claimReason)}</strong></div>
+        ${claimDetail ? `<div class="reason-detail-text">💬 <strong>Detalle Notificado por la IA de Mercado Libre:</strong><br>"${escapeHtml(claimDetail)}"</div>` : ''}
         <div class="claim-reason-meta">
           <span>👤 Comprador: <strong>${escapeHtml(claim.buyer_nickname || 'Comprador')}</strong></span>
           <span>📦 Orden #: <strong>${escapeHtml(claim.ml_order_id || 'N/A')}</strong></span>
         </div>
       </div>`;
 
-    // Render Timeline Messages
+    // Render Timeline Messages with Deduplication
     const chatContainer = document.getElementById('claimChatMessages');
 
+    // Deduplicate messages by sender + message_text
+    const uniqueMessages = [];
+    const seenMap = new Set();
+    (messages || []).forEach(m => {
+      const key = `${m.sender}:${(m.message_text || '').trim()}`;
+      if (!seenMap.has(key)) {
+        seenMap.add(key);
+        uniqueMessages.push(m);
+      }
+    });
+
     let messagesHtml = '';
-    if (messages.length > 0) {
-      messagesHtml = messages.map(m => {
+    if (uniqueMessages.length > 0) {
+      messagesHtml = uniqueMessages.map(m => {
         let msgClass = 'buyer';
         let senderLabel = '👤 Comprador';
         if (m.sender === 'defendant' || m.sender === 'seller') {
@@ -755,7 +774,7 @@ async function openClaimModal(claimId) {
           </div>`;
       }).join('');
     } else {
-      messagesHtml = '<p class="empty-state" style="padding:10px 0">Esperando respuesta o seguimiento del chat...</p>';
+      messagesHtml = '<p class="empty-state" style="padding:10px 0">Esperando seguimiento del chat...</p>';
     }
 
     chatContainer.innerHTML = reasonBoxHtml + messagesHtml;

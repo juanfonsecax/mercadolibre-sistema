@@ -790,6 +790,13 @@ function getClaimStats(accountId = null) {
 }
 
 function saveClaimMessage(data) {
+  if (!data.message_text || !data.claim_id) return;
+  const existing = queryOne(
+    'SELECT id FROM claim_messages WHERE claim_id = ? AND message_text = ? AND sender = ?',
+    [data.claim_id, data.message_text, data.sender]
+  );
+  if (existing) return existing.id;
+
   runSql(
     'INSERT INTO claim_messages (claim_id, ml_claim_id, sender, message_text, is_auto) VALUES (?, ?, ?, ?, ?)',
     [data.claim_id, data.ml_claim_id || null, data.sender, data.message_text, data.is_auto ? 1 : 0]
