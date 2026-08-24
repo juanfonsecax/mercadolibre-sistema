@@ -439,6 +439,14 @@ async function pollClaimsForAccount(accountId) {
     if (Array.isArray(openClaims)) {
       for (const c of openClaims) {
         const claimId = c.id || c.claim_id;
+        const stage = c.stage || c.claim_stage || '';
+        const status = c.status || c.claim_status || '';
+
+        // Ignorar reclamos cerrados en ML
+        if (stage === 'closed' || status === 'closed' || status === 'resolved') {
+          continue;
+        }
+
         if (claimId) {
           const existing = db.getClaimByMlId(String(claimId));
           if (!existing) {

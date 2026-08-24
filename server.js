@@ -233,15 +233,19 @@ app.post('/api/messages/poll', async (req, res) => {
   }
 });
 
-// --- Claims ---
-app.post('/api/claims/clean-old', async (req, res) => {
+async function purgeOldClaimsInternal() {
   try {
-    // 1. Archivar reclamos viejos en DB
+    // 1. Eliminar físicamente reclamos viejos/fantasmas
     db.getDb().run(
-      `UPDATE claims SET status = 'resolved' WHERE ml_order_id NOT IN ('2000017937600006', '2000014308421461')`
+      `DELETE FROM claims WHERE ml_order_id NOT IN ('2000017937600006', '2000014308421461')`
     );
 
-    // 2. Caso 1: Carlos Ivan Garcia Cabrera (Venta #2000017937600006)
+    // 2. Eliminar mensajes huérfanos
+    db.getDb().run(
+      `DELETE FROM claim_messages WHERE claim_id NOT IN (SELECT id FROM claims)`
+    );
+
+    // 3. Caso 1: Carlos Ivan Garcia Cabrera (Venta #2000017937600006)
     let claim1 = db.getClaimByMlId('5563162261');
     if (!claim1) {
       db.saveClaim({
@@ -273,7 +277,7 @@ app.post('/api/claims/clean-old', async (req, res) => {
       });
     }
 
-    // 3. Caso 2: Luis Eduardo Florez Martinez (Venta #2000014308421461)
+    // 4. Caso 2: Luis Eduardo Florez Martinez (Venta #2000014308421461)
     let claim2 = db.getClaimByMlId('556014308421461');
     if (!claim2) {
       db.saveClaim({
@@ -306,7 +310,19 @@ app.post('/api/claims/clean-old', async (req, res) => {
     }
 
     await db.saveDbToFile();
-    res.json({ success: true, message: 'Novedades antiguas archivadas. Quedaron activos únicamente los 2 casos actuales.' });
+    console.log('[Server] 🧹 Novedades antiguas depuradas correctamente de SQLite y Supabase Cloud.');
+    return true;
+  } catch (e) {
+    console.error('[Server] Error en purgeOldClaimsInternal:', e.message);
+    return false;
+  }
+}
+
+// --- Claims ---
+app.post('/api/claims/clean-old', async (req, res) => {
+  try {
+    await purgeOldClaimsInternal();
+    res.json({ success: true, message: 'Novedades antiguas eliminadas permanentemente. Quedaron activos únicamente los 2 casos reales actuales.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1087,6 +1103,7 @@ function startAutoInventorySync() {
 async function startServer() {
   await db.initDb();
   console.log('[DB] Database initialized');
+  await purgeOldClaimsInternal();
 
   try {
     const fullRows = db.getMlFullInventory();
