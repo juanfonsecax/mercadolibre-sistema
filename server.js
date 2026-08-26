@@ -1123,6 +1123,49 @@ app.put('/api/product-contexts/:itemId', (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════
+// ── Financial Analytics & Profitability Routes ──
+// ══════════════════════════════════════════
+
+app.get('/api/financials/summary', (req, res) => {
+  try {
+    const { accountId, month, year } = req.query;
+    const summary = db.getFinancialSummary(accountId, month, year);
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/financials/expenses', (req, res) => {
+  try {
+    const { accountId, month, year } = req.query;
+    const expenses = db.getFinancialExpenses(accountId || 1, month, year);
+    res.json(expenses);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/financials/expenses', (req, res) => {
+  try {
+    const { account_id, period_month, period_year, ad_spend_cop, returns_cost_cop, extra_expenses_cop, notes } = req.body;
+    db.saveFinancialExpense({
+      account_id,
+      period_month,
+      period_year,
+      ad_spend_cop,
+      returns_cost_cop,
+      extra_expenses_cop,
+      notes
+    });
+    const updatedSummary = db.getFinancialSummary(account_id, period_month, period_year);
+    res.json({ success: true, summary: updatedSummary });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ── SPA Fallback ──
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -1131,7 +1174,7 @@ app.get('*', (req, res) => {
 // ══════════════════════════════════════════
 // ── Polling Cron & Background Services ──
 // ══════════════════════════════════════════
-const pollingInterval = parseInt(process.env.POLLING_INTERVAL_MINUTES || '2');
+const pollingInterval = parseInt(process.env.POLLING_INTERVAL_MINUTES || '30');
 
 process.on('uncaughtException', (err) => {
   console.error('[Server] Uncaught Exception:', err.message || err);

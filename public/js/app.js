@@ -154,6 +154,9 @@ async function refreshOverview() {
     const query = activeAccountId ? `?accountId=${activeAccountId}` : '';
     const data = await apiFetch(`/api/overview${query}`);
 
+    // Load Financial Analytics Banner
+    await loadFinancialSummary();
+
     // Financials
     const rev = data.financials?.totalRevenue || 0;
     const prof = data.financials?.estimatedProfit || 0;
@@ -181,6 +184,167 @@ async function refreshOverview() {
     renderActivityChart(data.weeklyStats || []);
   } catch (error) {
     showToast('Error cargando overview: ' + error.message, 'error');
+  }
+}
+
+// ── Financial Dashboard Functions ──
+
+async function loadFinancialSummary() {
+  try {
+    const query = activeAccountId ? `?accountId=${activeAccountId}` : '';
+    const fin = await apiFetch(`/api/financials/summary${query}`);
+    if (!fin) return;
+
+    const formatCop = (val) => `$${(Math.round(val) || 0).toLocaleString('es-CO')} COP`;
+
+    const elGrossSales = document.getElementById('fin-gross-sales');
+    const elUnitsSold = document.getElementById('fin-units-sold');
+    const elCogsCost = document.getElementById('fin-cogs-cost');
+    const elCommissions = document.getElementById('fin-meli-commissions');
+    const elAdSpend = document.getElementById('fin-ad-spend');
+    const elReturnsCost = document.getElementById('fin-returns-cost');
+    const elNetProfit = document.getElementById('fin-net-profit');
+    const elMarginBadge = document.getElementById('fin-margin-badge');
+
+    if (elGrossSales) elGrossSales.textContent = formatCop(fin.gross_sales_cop);
+    if (elUnitsSold) elUnitsSold.textContent = `${fin.total_units_sold || 0} unidades vendidas`;
+    if (elCogsCost) elCogsCost.textContent = formatCop(fin.cogs_cop);
+    if (elCommissions) elCommissions.textContent = formatCop(fin.meli_commissions_cop);
+    if (elAdSpend) elAdSpend.textContent = formatCop(fin.ad_spend_cop);
+    if (elReturnsCost) elReturnsCost.textContent = formatCop(fin.returns_cost_cop);
+    if (elNetProfit) elNetProfit.textContent = formatCop(fin.net_profit_cop);
+
+    if (elMarginBadge) {
+      const margin = fin.net_margin_percent || 0;
+      elMarginBadge.textContent = `${margin >= 0 ? '+' : ''}${margin}% Margen Neto`;
+      if (margin < 10) {
+        elMarginBadge.style.background = '#ef4444';
+        elMarginBadge.style.color = '#ffffff';
+      } else if (margin < 20) {
+        elMarginBadge.style.background = '#f59e0b';
+        elMarginBadge.style.color = '#000000';
+      } else {
+        elMarginBadge.style.background = '#10b981';
+        elMarginBadge.style.color = '#022c22';
+      }
+    }
+
+    // Render Itemized Product Profitability Table
+    renderProductFinancialBreakdown(fin.product_breakdown || []);
+  } catch (err) {
+    console.warn('[Financials] Error loading financial summary:', err.message);
+  }
+}
+
+// ── Itemized Product Financial Table Functions ──
+let rawFinProductBreakdown = [];
+
+function renderProductFinancialBreakdown(items) {
+  rawFinProductBreakdown = items || [];
+  filterFinTable();
+}
+
+function filterFinTable() {
+  const query = (document.getElementById('finSearchInput')?.value || '').toLowerCase().trim();
+  const sort = document.getElementById('finSortSelect')?.value || 'profit_desc';
+
+  let list = rawFinProductBreakdown.filter(p => 
+    p.title.toLowerCase().includes(query) || (p.sku && p.sku.toLowerCase().includes(query)) || (p.ml_item_id && p.ml_item_id.toLowerCase().includes(query))
+  );
+
+  if (sort === 'profit_desc') list.sort((a, b) => b.net_profit_cop - a.net_profit_cop);
+  else if (sort === 'margin_desc') list.sort((a, b) => b.net_margin_percent - a.net_margin_percent);
+  else if (sort === 'sales_desc') list.sort((a, b) => b.units_sold - a.units_sold);
+  else if (sort === 'cogs_desc') list.sort((a, b) => b.cogs_total_cop - a.cogs_total_cop);
+
+  const tbody = document.getElementById('tblProductBreakdownBody');
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">No se encontraron productos con ventas registradas en este período</td></tr>`;
+    return;
+  }
+
+  const formatCop = (v) => `$${(Math.round(v) || 0).toLocaleString('es-CO')}`;
+
+  tbody.innerHTML = list.map(item => {
+    const margin = item.net_margin_percent || 0;
+    let badgeClass = 'badge-success';
+    if (margin < 10) badgeClass = 'badge-critical';
+    else if (margin < 20) badgeClass = 'badge-warning';
+
+    return `
+      <tr>
+        <td style="max-width: 280px; white-space: normal;">
+          <strong style="font-size: 0.85rem; color: #fff; display: block; line-height: 1.2;">${escapeHtml(item.title)}</strong>
+          <span style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">SKU: ${escapeHtml(item.sku)} | ${item.ml_item_id}</span>
+        </td>
+        <td><span class="badge" style="background: rgba(255,255,255,0.08);">${item.units_sold} un.</span></td>
+        <td>${formatCop(item.unit_price_cop)}</td>
+        <td><span style="color: #fb923c; font-weight: 600;">${formatCop(item.unit_cost_cop)}</span></td>
+        <td><strong style="color: #4ade80;">${formatCop(item.gross_sales_cop)}</strong></td>
+        <td>${formatCop(item.cogs_total_cop)}</td>
+        <td><span style="color: #c084fc;">${formatCop(item.meli_commission_cop)}</span></td>
+        <td><strong style="color: #10b981; font-size: 0.95rem;">${formatCop(item.net_profit_cop)}</strong></td>
+        <td><span class="${badgeClass}">${margin >= 0 ? '+' : ''}${margin}%</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function sortFinTable() {
+  filterFinTable();
+}
+
+function openExpenseModal() {
+  const modal = document.getElementById('modalFinancialExpense');
+  if (!modal) return;
+  modal.style.display = 'flex';
+
+  const query = activeAccountId ? `?accountId=${activeAccountId}` : '';
+  apiFetch(`/api/financials/expenses${query}`).then(exp => {
+    if (exp) {
+      document.getElementById('inputAdSpend').value = exp.ad_spend_cop || '';
+      document.getElementById('inputReturnsCost').value = exp.returns_cost_cop || '';
+      document.getElementById('inputExtraExpenses').value = exp.extra_expenses_cop || '';
+      document.getElementById('inputExpenseNotes').value = exp.notes || '';
+    }
+  }).catch(e => console.warn(e));
+}
+
+function closeExpenseModal() {
+  const modal = document.getElementById('modalFinancialExpense');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveExpenses(e) {
+  if (e) e.preventDefault();
+  try {
+    const ad_spend_cop = parseFloat(document.getElementById('inputAdSpend').value || 0);
+    const returns_cost_cop = parseFloat(document.getElementById('inputReturnsCost').value || 0);
+    const extra_expenses_cop = parseFloat(document.getElementById('inputExtraExpenses').value || 0);
+    const notes = document.getElementById('inputExpenseNotes').value || '';
+
+    const res = await apiFetch('/api/financials/expenses', {
+      method: 'POST',
+      body: JSON.stringify({
+        account_id: activeAccountId || 1,
+        period_month: new Date().getMonth() + 1,
+        period_year: new Date().getFullYear(),
+        ad_spend_cop,
+        returns_cost_cop,
+        extra_expenses_cop,
+        notes
+      })
+    });
+
+    if (res && res.success) {
+      showToast('✅ Gastos mensuales guardados y Utilidad Neta recalculada', 'success');
+      closeExpenseModal();
+      loadFinancialSummary();
+    }
+  } catch (err) {
+    showToast('Error guardando gastos: ' + err.message, 'error');
   }
 }
 

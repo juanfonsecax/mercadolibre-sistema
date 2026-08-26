@@ -1694,3 +1694,145 @@ canvas {
   color: #fff;
 }
 
+/* ══════════════════════════════════════════
+   Financial Profitability Banner & Executive KPIs
+   ══════════════════════════════════════════ */
+.financial-banner-container {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, rgba(16, 24, 48, 0.95), rgba(11, 15, 25, 0.98));
+  border: 1px solid rgba(52, 131, 250, 0.25);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+}
+
+.financial-banner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.financial-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.financial-badge-icon {
+  font-size: 2.2rem;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.financial-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  margin-bottom: 2px;
+}
+
+.financial-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.financial-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.fin-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.fin-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.fin-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.fin-icon {
+  font-size: 1.2rem;
+}
+
+.fin-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.fin-tag.green { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.fin-tag.orange { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+.fin-tag.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.fin-tag.blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.fin-tag.red { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+.fin-amount {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.fin-subtext {
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.fin-subtext.white {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+}
+
+/* Highlighted Net Profit Card */
+.fin-card-net-profit {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(5, 150, 105, 0.35)) !important;
+  border: 1px solid rgba(52, 211, 153, 0.5) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+  grid-column: span 1;
+}
+
+.fin-margin-badge {
+  background: #10b981;
+  color: #022c22;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.fin-net-amount {
+  font-size: 1.65rem;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  margin-bottom: 4px;
+}
+

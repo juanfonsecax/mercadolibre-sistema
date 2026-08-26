@@ -97,6 +97,131 @@
         </div>
       </div>
 
+      <!-- ══════════════════════════════════════ -->
+      <!-- Financial Profitability Banner (Dinero Real & Utilidad Neta) -->
+      <!-- ══════════════════════════════════════ -->
+      <div class="financial-banner-container card">
+        <div class="financial-banner-header">
+          <div class="financial-title-group">
+            <span class="financial-badge-icon">💰</span>
+            <div>
+              <h2 class="financial-title">Dashboard de Ingresos y Utilidad Neta Real</h2>
+              <p class="financial-subtitle">Resumen ejecutivo mensual de ventas brutas, comisiones, costo de mercancía (COGS), publicidad y ganancia líquida en COP</p>
+            </div>
+          </div>
+          <div class="financial-actions">
+            <button class="btn btn-primary btn-sm" onclick="openExpenseModal()">⚙️ Ajustar Gastos / Ads</button>
+          </div>
+        </div>
+
+        <div class="financial-metrics-row">
+          <!-- 1. Ingresos Brutos -->
+          <div class="fin-card fin-card-revenue">
+            <div class="fin-card-top">
+              <span class="fin-icon">💵</span>
+              <span class="fin-tag green">Ingresos Brutos</span>
+            </div>
+            <div class="fin-amount" id="fin-gross-sales">$0</div>
+            <div class="fin-subtext" id="fin-units-sold">0 unidades vendidas</div>
+          </div>
+
+          <!-- 2. Costo de Mercancía (COGS) -->
+          <div class="fin-card fin-card-cogs">
+            <div class="fin-card-top">
+              <span class="fin-icon">📦</span>
+              <span class="fin-tag orange">Costo Mercancía (COGS)</span>
+            </div>
+            <div class="fin-amount" id="fin-cogs-cost">$0</div>
+            <div class="fin-subtext">Costo de inventario importado/local</div>
+          </div>
+
+          <!-- 3. Comisiones & Envíos MeLi -->
+          <div class="fin-card fin-card-fees">
+            <div class="fin-card-top">
+              <span class="fin-icon">🏷️</span>
+              <span class="fin-tag purple">Comisiones MeLi</span>
+            </div>
+            <div class="fin-amount" id="fin-meli-commissions">$0</div>
+            <div class="fin-subtext">Retención aprox. 13% plataforma</div>
+          </div>
+
+          <!-- 4. Publicidad (Product Ads) -->
+          <div class="fin-card fin-card-ads">
+            <div class="fin-card-top">
+              <span class="fin-icon">📣</span>
+              <span class="fin-tag blue">Gastos Publicidad (Ads)</span>
+            </div>
+            <div class="fin-amount" id="fin-ad-spend">$0</div>
+            <div class="fin-subtext">Campañas Mercado Clics</div>
+          </div>
+
+          <!-- 5. Devoluciones / Reclamos -->
+          <div class="fin-card fin-card-returns">
+            <div class="fin-card-top">
+              <span class="fin-icon">🔄</span>
+              <span class="fin-tag red">Devoluciones / Pérdidas</span>
+            </div>
+            <div class="fin-amount" id="fin-returns-cost">$0</div>
+            <div class="fin-subtext">Deducción por novedades</div>
+          </div>
+
+          <!-- 6. UTILIDAD NETA REAL (NET PROFIT) -->
+          <div class="fin-card fin-card-net-profit highlight">
+            <div class="fin-card-top">
+              <span class="fin-icon">🏆</span>
+              <span class="fin-margin-badge" id="fin-margin-badge">+0% Margen Neto</span>
+            </div>
+            <div class="fin-net-amount" id="fin-net-profit">$0</div>
+            <div class="fin-subtext white">GANANCIA LÍQUIDA REAL EN BOLSILLO</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- Desglose de Rentabilidad Producto por Producto -->
+      <!-- ══════════════════════════════════════ -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 20px;">
+          <div>
+            <h3 style="margin-bottom: 4px;">📊 Desglose de Rentabilidad Producto por Producto</h3>
+            <p class="text-muted" style="font-size: 0.82rem; margin: 0;">Costo de stock (COGS), precio de venta, comisión e ingresos líquidos calculados para cada publicación</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="finSearchInput" class="form-input" placeholder="🔍 Buscar producto o SKU..." style="width: 220px;" onkeyup="filterFinTable()">
+            <select id="finSortSelect" class="form-input" style="width: 170px;" onchange="sortFinTable()">
+              <option value="profit_desc">Mayor Ganancia Neta</option>
+              <option value="margin_desc">Mayor Margen %</option>
+              <option value="sales_desc">Más Vendidos</option>
+              <option value="cogs_desc">Mayor Costo COGS</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Publicación / Producto</th>
+                  <th>Vendidos</th>
+                  <th>Precio Venta</th>
+                  <th>Costo Stock (COGS)</th>
+                  <th>Ingresos Brutos</th>
+                  <th>Costo Total</th>
+                  <th>Comisión ML</th>
+                  <th>Ganancia Neta</th>
+                  <th>Margen %</th>
+                </tr>
+              </thead>
+              <tbody id="tblProductBreakdownBody">
+                <tr>
+                  <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando desglose financiero por producto...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Metrics Cards -->
       <div class="metrics-grid">
         <div class="metric-card accent-green">
@@ -1459,6 +1584,42 @@
           <button class="btn btn-secondary" onclick="closeProductContextModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="saveProductContextModal()">💾 Guardar Contexto</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Ajuste de Gastos Financieros (Ads / Devoluciones) -->
+  <div class="modal-backdrop" id="modalFinancialExpense" style="display:none">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>⚙️ Ajustar Gastos Mensuales (Publicidad & Costos Extras)</h3>
+        <button class="modal-close" onclick="closeExpenseModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="formFinancialExpense" onsubmit="saveExpenses(event)">
+          <div class="form-group">
+            <label>Inversión en Publicidad / Mercado Clics (COP):</label>
+            <input type="number" id="inputAdSpend" class="form-input" placeholder="Ej: 350000" min="0">
+            <small class="form-hint">Ingresa el total gastado en Ads en el mes.</small>
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label>Costo estimado por Devoluciones / Reclamos (COP):</label>
+            <input type="number" id="inputReturnsCost" class="form-input" placeholder="Ej: 80000" min="0">
+            <small class="form-hint">Descuento por productos devueltos o cambiados.</small>
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label>Gastos Logísticos / Empaques Extras (COP):</label>
+            <input type="number" id="inputExtraExpenses" class="form-input" placeholder="Ej: 45000" min="0">
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label>Notas / Observaciones:</label>
+            <textarea id="inputExpenseNotes" class="form-input" rows="2" placeholder="Ej: Inversión en campaña cyber ofertas"></textarea>
+          </div>
+          <div class="form-actions" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancelar</button>
+            <button type="submit" class="btn btn-primary">💾 Guardar y Recalcular Neta</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
