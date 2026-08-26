@@ -187,11 +187,15 @@ async function refreshOverview() {
   }
 }
 
-// ── Financial Dashboard Functions ──
+function onFinancialPeriodChange() {
+  loadFinancialSummary();
+}
 
 async function loadFinancialSummary() {
   try {
-    const query = activeAccountId ? `?accountId=${activeAccountId}` : '';
+    const month = document.getElementById('selectFinMonth')?.value || (new Date().getMonth() + 1);
+    const year = document.getElementById('selectFinYear')?.value || new Date().getFullYear();
+    const query = `?month=${month}&year=${year}` + (activeAccountId ? `&accountId=${activeAccountId}` : '');
     const fin = await apiFetch(`/api/financials/summary${query}`);
     if (!fin) return;
 
@@ -301,7 +305,10 @@ function openExpenseModal() {
   if (!modal) return;
   modal.style.display = 'flex';
 
-  const query = activeAccountId ? `?accountId=${activeAccountId}` : '';
+  const month = document.getElementById('selectFinMonth')?.value || (new Date().getMonth() + 1);
+  const year = document.getElementById('selectFinYear')?.value || new Date().getFullYear();
+
+  const query = `?month=${month}&year=${year}` + (activeAccountId ? `&accountId=${activeAccountId}` : '');
   apiFetch(`/api/financials/expenses${query}`).then(exp => {
     if (exp) {
       document.getElementById('inputAdSpend').value = exp.ad_spend_cop || '';
@@ -320,16 +327,17 @@ function closeExpenseModal() {
 async function saveExpenses(e) {
   if (e) e.preventDefault();
   try {
+    const month = document.getElementById('selectFinMonth')?.value || (new Date().getMonth() + 1);
+    const year = document.getElementById('selectFinYear')?.value || new Date().getFullYear();
     const ad_spend_cop = parseFloat(document.getElementById('inputAdSpend').value || 0);
     const returns_cost_cop = parseFloat(document.getElementById('inputReturnsCost').value || 0);
     const extra_expenses_cop = parseFloat(document.getElementById('inputExtraExpenses').value || 0);
     const notes = document.getElementById('inputExpenseNotes').value || '';
 
-    const res = await apiFetch('/api/financials/expenses', {
+    await apiFetch('/api/financials/expenses', {
       method: 'POST',
       body: JSON.stringify({
         account_id: activeAccountId || 1,
-        period_month: new Date().getMonth() + 1,
         period_year: new Date().getFullYear(),
         ad_spend_cop,
         returns_cost_cop,

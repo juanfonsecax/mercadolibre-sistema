@@ -109,7 +109,25 @@
               <p class="financial-subtitle">Resumen ejecutivo mensual de ventas brutas, comisiones, costo de mercancía (COGS), publicidad y ganancia líquida en COP</p>
             </div>
           </div>
-          <div class="financial-actions">
+          <div class="financial-actions" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <select id="selectFinMonth" class="form-select form-select-sm" onchange="onFinancialPeriodChange()" style="width: auto; padding: 6px 12px; border-radius: 8px; font-weight:600;">
+              <option value="1">Enero</option>
+              <option value="2">Febrero</option>
+              <option value="3">Marzo</option>
+              <option value="4">Abril</option>
+              <option value="5">Mayo</option>
+              <option value="6">Junio</option>
+              <option value="7">Julio</option>
+              <option value="8" selected>Agosto (Actual)</option>
+              <option value="9">Septiembre</option>
+              <option value="10">Octubre</option>
+              <option value="11">Noviembre</option>
+              <option value="12">Diciembre</option>
+            </select>
+            <select id="selectFinYear" class="form-select form-select-sm" onchange="onFinancialPeriodChange()" style="width: auto; padding: 6px 12px; border-radius: 8px; font-weight:600;">
+              <option value="2026" selected>2026</option>
+              <option value="2025">2025</option>
+            </select>
             <button class="btn btn-primary btn-sm" onclick="openExpenseModal()">⚙️ Ajustar Gastos / Ads</button>
           </div>
         </div>

@@ -26,8 +26,16 @@ async function initDb() {
   if (db) return db;
   SQL = await initSqlJs();
 
-  // Load existing database from Supabase or Local
-  if (pgPool) {
+  // Load existing database from Local bot.db if present, else from Supabase
+  if (fs.existsSync(DB_PATH) && fs.statSync(DB_PATH).size > 10000) {
+    const buffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(buffer);
+    console.log(`[DB] Loaded database from disk file bot.db (${fs.statSync(DB_PATH).size} bytes)`);
+    // Sync to Supabase in background
+    if (pgPool) {
+      pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]).catch(e => console.error('[DB] Background sync error:', e.message));
+    }
+  } else if (pgPool) {
     try {
       const res = await pgPool.query('SELECT db_data FROM sqlite_backup WHERE id = 1');
       if (res.rows.length > 0 && res.rows[0].db_data) {
@@ -40,9 +48,6 @@ async function initDb() {
       console.error('[DB] Error loading from Supabase, creating empty DB:', e.message);
       db = new SQL.Database();
     }
-  } else if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
   } else {
     db = new SQL.Database();
   }
@@ -76,6 +81,20 @@ async function saveDbToFile() {
     const data = db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_PATH, buffer);
+  }
+}
+
+async function forceSaveDb() {
+  if (!db) return;
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(DB_PATH, buffer);
+  if (pgPool) {
+    try {
+      await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
+    } catch(e) {
+      console.error('[DB] Error force saving DB to Supabase:', e.message);
+    }
   }
 }
 
@@ -208,6 +227,22 @@ function initSchema() {
       status TEXT DEFAULT 'active',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ML Orders table for historical sales & financial reporting
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ml_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      ml_order_id TEXT UNIQUE NOT NULL,
+      date_created TEXT NOT NULL,
+      total_amount REAL NOT NULL,
+      currency_id TEXT DEFAULT 'COP',
+      status TEXT,
+      buyer_nickname TEXT,
+      items_json TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
@@ -2127,108 +2162,115 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   const targetYear = year ? parseInt(year) : new Date().getFullYear();
   const accId = accountId ? parseInt(accountId) : null;
 
-  const items = queryAll(
-    `SELECT f.*, p.unit_cost_cop as china_unit_cost, l.unit_cost_cop as local_unit_cost 
-     FROM ml_full_inventory f 
-     LEFT JOIN product_mappings m ON f.ml_item_id = m.ml_item_id 
-     LEFT JOIN china_shipments p ON m.master_product_title = p.product_name 
-     LEFT JOIN local_inventory l ON f.sku = l.sku 
-     WHERE 1=1` + (accId ? ` AND f.account_id = ${accId}` : '')
-  );
+  const padM = String(targetMonth).padStart(2, '0');
+  const monthPattern = `${targetYear}-${padM}-%`;
+
+  // Query real orders from ml_orders table for this specific month/year
+  let orderSql = `SELECT * FROM ml_orders WHERE date_created LIKE ?`;
+  let orderParams = [monthPattern];
+  if (accId) {
+    orderSql += ` AND account_id = ?`;
+    orderParams.push(accId);
+  }
+
+  const dbOrders = queryAll(orderSql, orderParams);
 
   let grossSalesCop = 0;
   let totalUnitsSold = 0;
   let totalCogsCop = 0;
   let totalCommissionsCop = 0;
 
-  const productBreakdown = [];
+  const productMap = {};
 
-  items.forEach(item => {
-    let sales30d = parseInt(item.sales_last_30d || 0);
-    const price = parseFloat(item.price || 49900);
-    const unitCost = parseFloat(item.china_unit_cost || item.local_unit_cost || (price * 0.35));
-    const commPercent = 0.13;
+  if (dbOrders.length > 0) {
+    dbOrders.forEach(ord => {
+      const ordAmount = parseFloat(ord.total_amount || 0);
+      grossSalesCop += ordAmount;
 
-    if (sales30d > 0) {
-      const gross = sales30d * price;
-      const cogs = sales30d * unitCost;
-      const comm = gross * commPercent;
-      const returns = gross * 0.015;
-      const netProfit = gross - cogs - comm - returns;
-      const margin = gross > 0 ? (netProfit / gross) * 100 : 0;
+      let items = [];
+      try { items = JSON.parse(ord.items_json || '[]'); } catch {}
 
-      grossSalesCop += gross;
-      totalUnitsSold += sales30d;
-      totalCogsCop += cogs;
-      totalCommissionsCop += comm;
+      if (items.length === 0) {
+        totalUnitsSold += 1;
+        totalCogsCop += ordAmount * 0.35;
+        totalCommissionsCop += ordAmount * 0.13;
+      } else {
+        items.forEach(it => {
+          const qty = parseInt(it.quantity || 1);
+          const unitPrice = parseFloat(it.unit_price || (ordAmount / items.length));
+          const itemGross = qty * unitPrice;
+          totalUnitsSold += qty;
 
-      productBreakdown.push({
-        ml_item_id: item.ml_item_id,
-        sku: item.sku || 'N/A',
-        title: item.title,
-        units_sold: sales30d,
-        unit_price_cop: Math.round(price),
-        unit_cost_cop: Math.round(unitCost),
-        gross_sales_cop: Math.round(gross),
-        cogs_total_cop: Math.round(cogs),
-        meli_commission_cop: Math.round(comm),
-        returns_cost_cop: Math.round(returns),
-        net_profit_cop: Math.round(netProfit),
-        net_margin_percent: Math.round(margin * 10) / 10
-      });
-    }
-  });
+          const sku = it.seller_sku || '';
+          const title = it.title || 'Producto Mercado Libre';
+          
+          let unitCost = unitPrice * 0.35;
+          if (sku) {
+            const loc = queryOne('SELECT unit_cost_cop FROM local_inventory WHERE sku = ?', [sku]);
+            if (loc && loc.unit_cost_cop) unitCost = parseFloat(loc.unit_cost_cop);
+          }
 
-  // Fallback demo financial calculation if no active sales synced yet
-  if (grossSalesCop === 0 && items.length > 0) {
-    items.slice(0, 12).forEach((item, idx) => {
-      const demoSales = (idx % 4 === 0) ? 14 : (idx % 2 === 0 ? 8 : 4);
-      const estPrice = item.price || 52900;
-      const estUnitCost = item.china_unit_cost || item.local_unit_cost || 19500;
-      const gross = demoSales * estPrice;
-      const cogs = demoSales * estUnitCost;
-      const comm = gross * 0.13;
-      const returns = gross * 0.015;
-      const netProfit = gross - cogs - comm - returns;
-      const margin = gross > 0 ? (netProfit / gross) * 100 : 0;
+          const itemCogs = qty * unitCost;
+          const itemComm = itemGross * 0.13;
 
-      grossSalesCop += gross;
-      totalUnitsSold += demoSales;
-      totalCogsCop += cogs;
-      totalCommissionsCop += comm;
+          totalCogsCop += itemCogs;
+          totalCommissionsCop += itemComm;
 
-      productBreakdown.push({
-        ml_item_id: item.ml_item_id,
-        sku: item.sku || 'N/A',
-        title: item.title,
-        units_sold: demoSales,
-        unit_price_cop: Math.round(estPrice),
-        unit_cost_cop: Math.round(estUnitCost),
-        gross_sales_cop: Math.round(gross),
-        cogs_total_cop: Math.round(cogs),
-        meli_commission_cop: Math.round(comm),
-        returns_cost_cop: Math.round(returns),
-        net_profit_cop: Math.round(netProfit),
-        net_margin_percent: Math.round(margin * 10) / 10
-      });
+          const itemIdKey = it.item_id || title;
+          if (!productMap[itemIdKey]) {
+            productMap[itemIdKey] = {
+              ml_item_id: it.item_id || 'N/A',
+              sku: sku || 'N/A',
+              title: title,
+              units_sold: 0,
+              unit_price_cop: Math.round(unitPrice),
+              unit_cost_cop: Math.round(unitCost),
+              gross_sales_cop: 0,
+              cogs_total_cop: 0,
+              meli_commission_cop: 0,
+              returns_cost_cop: 0,
+              net_profit_cop: 0
+            };
+          }
+
+          productMap[itemIdKey].units_sold += qty;
+          productMap[itemIdKey].gross_sales_cop += Math.round(itemGross);
+          productMap[itemIdKey].cogs_total_cop += Math.round(itemCogs);
+          productMap[itemIdKey].meli_commission_cop += Math.round(itemComm);
+        });
+      }
     });
   }
 
-  // Sort breakdown by net profit descending
+  const productBreakdown = Object.values(productMap);
+  productBreakdown.forEach(p => {
+    p.net_profit_cop = p.gross_sales_cop - p.cogs_total_cop - p.meli_commission_cop;
+    p.net_margin_percent = p.gross_sales_cop > 0 ? Math.round((p.net_profit_cop / p.gross_sales_cop) * 1000) / 10 : 0;
+  });
+
   productBreakdown.sort((a, b) => b.net_profit_cop - a.net_profit_cop);
 
   const expenses = getFinancialExpenses(accId || 1, targetMonth, targetYear);
   const adSpendCop = parseFloat(expenses.ad_spend_cop || 0);
-  const returnsCostCop = parseFloat(expenses.returns_cost_cop || 0);
-  const extraExpensesCop = parseFloat(expenses.extra_expenses_cop || 0);
+  
+  let returnsCostCop = parseFloat(expenses.returns_cost_cop || 0);
+  if (returnsCostCop === 0) {
+    const claimsCountObj = queryOne(
+      `SELECT COUNT(*) as count FROM claims WHERE created_at LIKE ?` + (accId ? ` AND account_id = ${accId}` : ''),
+      [monthPattern]
+    );
+    const claimsCount = claimsCountObj ? claimsCountObj.count : 0;
+    returnsCostCop = claimsCount * 25000;
+  }
 
+  const extraExpensesCop = parseFloat(expenses.extra_expenses_cop || 0);
   const totalDeductionsCop = totalCommissionsCop + totalCogsCop + adSpendCop + returnsCostCop + extraExpensesCop;
   const netProfitCop = grossSalesCop - totalDeductionsCop;
   const netMarginPercent = grossSalesCop > 0 ? (netProfitCop / grossSalesCop) * 100 : 0;
 
   return {
     period: { month: targetMonth, year: targetYear },
-    gross_sales_cop: grossSalesCop,
+    gross_sales_cop: Math.round(grossSalesCop),
     total_units_sold: totalUnitsSold,
     cogs_cop: Math.round(totalCogsCop),
     meli_commissions_cop: Math.round(totalCommissionsCop),
@@ -2244,7 +2286,7 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
 }
 
 module.exports = {
-  initDb, getDb, saveDbToFile, reloadDbFromFile, queryOne, queryAll,
+  initDb, getDb, saveDbToFile, forceSaveDb, reloadDbFromFile, queryOne, queryAll, runSql,
   // Accounts
   saveAccount, getAccounts, getAccountById, getAccountByName, updateAccountSellerInfo, deleteAccount,
   // Tokens
