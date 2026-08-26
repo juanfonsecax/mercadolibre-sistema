@@ -235,8 +235,39 @@ async function loadFinancialSummary() {
 
     // Render Itemized Product Profitability Table
     renderProductFinancialBreakdown(fin.product_breakdown || []);
+    
+    // Load Tax YTD Summary
+    loadTaxSummary();
   } catch (err) {
     console.warn('[Financials] Error loading financial summary:', err.message);
+  }
+}
+
+async function loadTaxSummary() {
+  try {
+    const list = await apiFetch('/api/financials/tax-summary');
+    if (!list || !Array.isArray(list)) return;
+
+    const formatCop = (val) => `$${(Math.round(val) || 0).toLocaleString('es-CO')} COP`;
+
+    const juan = list.find(a => a.account_id === 1) || list[0];
+    const carlos = list.find(a => a.account_id === 2) || list[1];
+
+    if (juan) {
+      const elJuan = document.getElementById('tax-ytd-juan');
+      const elPctJuan = document.getElementById('tax-pct-juan');
+      if (elJuan) elJuan.textContent = formatCop(juan.ytd_gross_sales_cop);
+      if (elPctJuan) elPctJuan.textContent = `${juan.pct_used}% del tope (${formatCop(juan.remaining_cupo_cop)} libre)`;
+    }
+
+    if (carlos) {
+      const elCarlos = document.getElementById('tax-ytd-carlos');
+      const elPctCarlos = document.getElementById('tax-pct-carlos');
+      if (elCarlos) elCarlos.textContent = formatCop(carlos.ytd_gross_sales_cop);
+      if (elPctCarlos) elPctCarlos.textContent = `${carlos.pct_used}% del tope (${formatCop(carlos.remaining_cupo_cop)} libre)`;
+    }
+  } catch (err) {
+    console.warn('[TaxSummary] Error loading YTD tax summary:', err.message);
   }
 }
 

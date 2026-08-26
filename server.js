@@ -1137,6 +1137,15 @@ app.get('/api/financials/summary', (req, res) => {
   }
 });
 
+app.get('/api/financials/tax-summary', (req, res) => {
+  try {
+    const taxSummary = db.getTaxSummary2026();
+    res.json(taxSummary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/financials/expenses', (req, res) => {
   try {
     const { accountId, month, year } = req.query;

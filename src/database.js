@@ -2287,8 +2287,46 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   };
 }
 
+function getTaxSummary2026() {
+  const accounts = getAccounts();
+  const limitIvaCop = 182756000;
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+
+  const result = [];
+
+  accounts.forEach(acc => {
+    let ytdGross = 0;
+    let ytdNet = 0;
+    let ytdUnits = 0;
+
+    for (let m = 1; m <= currentMonth; m++) {
+      const s = getFinancialSummary(acc.id, m, currentYear);
+      ytdGross += s.gross_sales_cop;
+      ytdNet += s.net_profit_cop;
+      ytdUnits += s.total_units_sold;
+    }
+
+    const pctUsed = Math.round((ytdGross / limitIvaCop) * 1000) / 10;
+    const remainingCupo = limitIvaCop - ytdGross;
+
+    result.push({
+      account_id: acc.id,
+      account_name: acc.name,
+      ytd_gross_sales_cop: Math.round(ytdGross),
+      ytd_net_profit_cop: Math.round(ytdNet),
+      ytd_units_sold: ytdUnits,
+      limit_iva_cop: limitIvaCop,
+      pct_used: pctUsed,
+      remaining_cupo_cop: Math.round(remainingCupo)
+    });
+  });
+
+  return result;
+}
+
 module.exports = {
-  initDb, getDb, saveDbToFile, forceSaveDb, reloadDbFromFile, queryOne, queryAll, runSql,
+  initDb, getDb, saveDbToFile, forceSaveDb, reloadDbFromFile, queryOne, queryAll, runSql, getTaxSummary2026,
   // Accounts
   saveAccount, getAccounts, getAccountById, getAccountByName, updateAccountSellerInfo, deleteAccount,
   // Tokens
