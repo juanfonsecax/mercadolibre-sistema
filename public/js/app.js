@@ -3026,10 +3026,59 @@ async function saveItemAutoPilotConfig(itemId, title) {
         auto_pilot_enabled: isEnabled
       })
     });
-    showToast(`🤖 Piloto Automático actualizado para ${itemId}: Oferta Objetivo $${targetPrice.toLocaleString('es-CO')} COP`, 'success');
   } catch (error) {
-    showToast(`Error guardando configuración de Piloto Automático: ${error.message}`, 'error');
+    console.warn(`Error guardando Piloto Automático para ${itemId}:`, error.message);
   }
+}
+
+function updateProductTargetPromoPrice(itemId, title) {
+  const targetInput = document.getElementById(`target_price_${itemId}`);
+  if (!targetInput) return;
+
+  const targetPrice = parseFloat(targetInput.value || 0);
+  if (targetPrice <= 0) return;
+
+  saveItemAutoPilotConfig(itemId, title);
+
+  const campaignCards = document.querySelectorAll(`.campaign-card-${itemId}`);
+  campaignCards.forEach(card => {
+    const isEditable = card.getAttribute('data-editable') === 'true';
+    if (!isEditable) return;
+
+    const key = card.getAttribute('data-key');
+    if (!key || !window.pendingPromosCache[key]) return;
+
+    const p = window.pendingPromosCache[key];
+    const origPrice = p.current_price;
+    const unitCost = p.unit_cost_cop || 9829;
+
+    p.final_offer_price = targetPrice;
+    p.discount_percent = origPrice > 0 ? Math.round(((origPrice - targetPrice) / origPrice) * 100) : 0;
+
+    const commission = targetPrice * 0.13;
+    const fixedFee = targetPrice < 70000 ? 2500 : 0;
+    const shipping = targetPrice >= 70000 ? 9500 : 0;
+    const netCop = targetPrice - commission - fixedFee - shipping - unitCost;
+    const netPercent = Math.round((netCop / targetPrice) * 100);
+
+    p.estimated_net_cop = Math.round(netCop);
+    p.estimated_net_percent = netPercent;
+
+    const offerPriceEl = card.querySelector('.offer-price-val');
+    if (offerPriceEl) offerPriceEl.innerText = `$${targetPrice.toLocaleString('es-CO')} COP`;
+
+    const discountEl = card.querySelector('.discount-val');
+    if (discountEl) discountEl.innerText = `(-${p.discount_percent}%)`;
+
+    const marginEl = card.querySelector('.margin-val');
+    if (marginEl) {
+      const isLoss = netCop < 0;
+      marginEl.className = `margin-val ${isLoss ? 'badge-danger' : (netPercent >= 20 ? 'badge-success' : 'badge-warning')}`;
+      marginEl.innerText = `${netPercent}% ($${Math.round(netCop).toLocaleString('es-CO')} COP)`;
+    }
+  });
+
+  showToast(`🤖 Piloto Automático y ofertas editables actualizadas a $${targetPrice.toLocaleString('es-CO')} COP`, 'info');
 }
 
 async function loadCatalogCampaigns() {
@@ -3062,23 +3111,36 @@ async function loadCatalogCampaigns() {
       const isAutoPilotOn = cfg.auto_pilot_enabled !== undefined ? Boolean(cfg.auto_pilot_enabled) : true;
 
       const campaignsListHtml = item.campaigns.map(c => {
-        const isLoss = c.estimated_net_cop < 0;
-        const marginClass = c.estimated_net_percent >= 20 ? 'badge-success' : (c.estimated_net_percent >= 10 ? 'badge-warning' : 'badge-danger');
-        
+        const isEditable = c.is_price_editable !== false;
+        const offerPriceToUse = isEditable && targetPrice > 0 ? targetPrice : c.suggested_price;
+
+        const origPrice = c.current_price || item.price;
+        const unitCost = c.unit_cost_cop || 9829;
+
+        const commission = offerPriceToUse * 0.13;
+        const fixedFee = offerPriceToUse < 70000 ? 2500 : 0;
+        const shipping = offerPriceToUse >= 70000 ? 9500 : 0;
+        const netCop = offerPriceToUse - commission - fixedFee - shipping - unitCost;
+        const netPercent = Math.round((netCop / offerPriceToUse) * 100);
+        const discountPct = origPrice > 0 ? Math.round(((origPrice - offerPriceToUse) / origPrice) * 100) : c.discount_percent;
+
+        const isLoss = netCop < 0;
+        const marginClass = isLoss ? 'badge-danger' : (netPercent >= 20 ? 'badge-success' : 'badge-warning');
+
         const payloadObj = {
           ml_item_id: item.ml_item_id,
           sku: item.sku || '',
           title: item.title,
-          current_price: c.current_price || item.price,
-          final_offer_price: c.suggested_price,
-          min_price: c.min_price || Math.round((c.current_price || item.price) * 0.4),
-          max_price: c.max_price || (c.current_price || item.price),
-          is_price_editable: c.is_price_editable !== false,
-          unit_cost_cop: c.unit_cost_cop || 9829,
-          discount_percent: c.discount_percent,
+          current_price: origPrice,
+          final_offer_price: offerPriceToUse,
+          min_price: c.min_price || Math.round(origPrice * 0.4),
+          max_price: c.max_price || origPrice,
+          is_price_editable: isEditable,
+          unit_cost_cop: unitCost,
+          discount_percent: discountPct,
           stock_commitment: c.stock_commitment || 5,
-          estimated_net_cop: c.estimated_net_cop,
-          estimated_net_percent: c.estimated_net_percent,
+          estimated_net_cop: Math.round(netCop),
+          estimated_net_percent: netPercent,
           promotion_id: c.promotion_id,
           promotion_type: c.promotion_type
         };
@@ -3087,13 +3149,14 @@ async function loadCatalogCampaigns() {
         window.pendingPromosCache[key] = payloadObj;
 
         return `
-          <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; border: 1px solid rgba(255,255,255,0.06);">
+          <div class="campaign-card-${item.ml_item_id}" data-editable="${isEditable}" data-key="${key}" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; border: 1px solid rgba(255,255,255,0.06);">
             <div>
-              <strong>${escapeHtml(c.name)}</strong> <span style="color:#ef4444; font-weight:700;">(-${c.discount_percent}%)</span><br>
-              <span>Precio Actual: <strong style="text-decoration:line-through; opacity:0.7;">$${(c.current_price || item.price).toLocaleString('es-CO')} COP</strong></span> → 
-              <span>Precio Oferta: <strong style="color:#ffab00;">$${c.suggested_price.toLocaleString('es-CO')} COP</strong></span> | 
-              <span>Stock: <strong>📦 ${c.stock_commitment || 5} unds</strong></span> | 
-              <span>Margen Neto: <strong class="${marginClass}">${c.estimated_net_percent.toFixed(1)}% ($${Math.round(c.estimated_net_cop).toLocaleString('es-CO')} COP)</strong></span>
+              <strong>${escapeHtml(c.name)}</strong> 
+              ${isEditable ? '<span style="color:#38bdf8; font-weight:700; font-size:0.75rem; margin-left:4px;">✏️ (Precio Editable)</span>' : '<span style="color:#ffab00; font-weight:700; font-size:0.75rem; margin-left:4px;">🔒 (Precio Fijo ML)</span>'}
+              <span class="discount-val" style="color:#ef4444; font-weight:700; margin-left:4px;">(-${discountPct}%)</span><br>
+              <span>Precio Lista: <strong style="text-decoration:line-through; opacity:0.7;">$${origPrice.toLocaleString('es-CO')} COP</strong></span> → 
+              <span>Precio Oferta: <strong class="offer-price-val" style="color:#ffab00;">$${offerPriceToUse.toLocaleString('es-CO')} COP</strong></span> | 
+              <span>Margen Neto: <strong class="margin-val ${marginClass}">${netPercent}% ($${Math.round(netCop).toLocaleString('es-CO')} COP)</strong></span>
             </div>
             <button class="btn btn-sm btn-primary" onclick="handlePromoConfirmClick('${key}')" style="padding:8px 14px; font-weight:700;">
               🚀 Revisar & Activar
@@ -3123,7 +3186,7 @@ async function loadCatalogCampaigns() {
               </div>
               <div style="display: flex; gap: 8px; align-items: center;">
                 <label style="font-size: 0.8rem; white-space: nowrap;">Precio Objetivo Oferta ($ COP):</label>
-                <input type="number" id="target_price_${item.ml_item_id}" class="form-input" value="${targetPrice}" style="padding: 4px 8px; font-size: 0.85rem; font-weight: 700; width: 110px;" onchange="saveItemAutoPilotConfig('${item.ml_item_id}', '${escapeHtml(item.title)}')">
+                <input type="number" id="target_price_${item.ml_item_id}" class="form-input" value="${targetPrice}" style="padding: 4px 8px; font-size: 0.85rem; font-weight: 700; width: 110px;" onchange="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}')" onkeyup="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}')">
               </div>
             </div>
           </div>

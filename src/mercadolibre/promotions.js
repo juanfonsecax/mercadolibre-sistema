@@ -61,8 +61,9 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
       ...extraPayload
     };
 
-    if (match && match.offer_id) payload.offer_id = match.offer_id;
-    if (refId) payload.ref_id = refId;
+    const resolvedOfferId = extraPayload.offer_id || (match ? (match.offer_id || match.ref_id || match.id) : null);
+    if (resolvedOfferId) payload.offer_id = resolvedOfferId;
+    if (refId || (match && match.ref_id)) payload.ref_id = refId || match.ref_id;
     if ((promotionType === 'LIGHTNING' || promotionId?.startsWith('LGH-'))) {
       payload.stock = candidateStock || 5;
     }
