@@ -75,6 +75,9 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
     return response;
   } catch (error) {
     console.error(`[Promotions] Error joining promotion for ${mlItemId}:`, error.message);
+    if (error.message.includes('No candidates found') || error.message.includes('ERROR_CREDIBILITY_DISCOUNTED_PRICE')) {
+      throw new Error(`Mercado Libre retiró o expiró la candidatura de Oferta Relámpago para esta publicación en este instante (${mlItemId}). Es necesario esperar a que el algoritmo de ML vuelva a habilitar el cupo flash.`);
+    }
     throw error;
   }
 }
@@ -115,7 +118,10 @@ async function scanEligibleLightningDeals(accountId) {
       const promos = await getItemPromotions(item.ml_item_id, accountId);
       
       if (Array.isArray(promos)) {
-        const lightning = promos.find(p => p.type === 'LIGHTNING' || p.promotion_type === 'LIGHTNING' || p.name?.toLowerCase().includes('relámpago') || p.name?.toLowerCase().includes('relampago'));
+        const lightning = promos.find(p => 
+          (p.type === 'LIGHTNING' || p.promotion_type === 'LIGHTNING' || p.name?.toLowerCase().includes('relámpago') || p.name?.toLowerCase().includes('relampago')) &&
+          (p.status === 'candidate' || p.status === 'active' || p.status === 'eligible' || !p.status)
+        );
         if (lightning) {
           const liveStatus = await fetchItemLivePriceAndOfferStatus(item.ml_item_id, accountId);
           const currentPrice = lightning.original_price || liveStatus?.list_price || liveStatus?.current_ml_price || 50000;
