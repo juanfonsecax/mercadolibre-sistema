@@ -1308,10 +1308,10 @@ function getMlFullInventory(accountId = null) {
   let sql = `
     SELECT f.*, 
            a.name as account_name, 
-           l.units_house as stock_casa, 
-           l.unit_cost_cop,
+           COALESCE(l.units_house, lm.units_house, 0) as stock_casa, 
+           COALESCE(l.unit_cost_cop, lm.unit_cost_cop, 0) as unit_cost_cop,
            m.master_product_title,
-           lm.units_house as master_stock_casa
+           COALESCE(l.units_house, lm.units_house, 0) as master_stock_casa
     FROM ml_full_inventory f 
     LEFT JOIN accounts a ON f.account_id = a.id 
     LEFT JOIN local_inventory l ON f.sku = l.sku 

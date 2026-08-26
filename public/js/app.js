@@ -3007,17 +3007,6 @@ async function loadCatalogCampaigns() {
                 Precio de Lista ML: <strong>$${item.price.toLocaleString('es-CO')} COP</strong> | Stock Full: <strong>${item.units_full} unid.</strong>
               </div>
             </div>
-          </div>
-          <div style="margin-top: 10px;">
-            ${campaignsListHtml || '<div class="text-muted" style="font-size:0.82rem; margin-top:6px;">No hay campañas de descuento adicionales disponibles para este producto en ML hoy.</div>'}
-          </div>
-        </div>`;
-    }).join('');
-
-  } catch (error) {
-    container.innerHTML = `<p class="text-danger">Error cargando catálogo de campañas: ${escapeHtml(error.message)}</p>`;
-  }
-}
 
             <!-- Auto-Pilot Settings Box -->
             <div style="background: rgba(0, 230, 118, 0.06); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 8px; padding: 10px 14px; min-width: 320px;">
@@ -3037,13 +3026,13 @@ async function loadCatalogCampaigns() {
 
           <div style="margin-top: 10px;">
             <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Campañas Disponibles en Mercado Libre:</div>
-            ${campaignsListHtml}
+            ${campaignsListHtml || '<div class="text-muted" style="font-size:0.82rem; margin-top:6px;">No hay campañas de descuento adicionales disponibles para este producto en ML hoy.</div>'}
           </div>
         </div>`;
     }).join('');
 
   } catch (error) {
-    container.innerHTML = `<p class="text-danger">Error escaneando catálogo de campañas: ${escapeHtml(error.message)}</p>`;
+    container.innerHTML = `<p class="text-danger">Error cargando catálogo de campañas: ${escapeHtml(error.message)}</p>`;
   }
 }
 

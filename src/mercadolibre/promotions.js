@@ -126,9 +126,10 @@ async function scanEligibleLightningDeals(accountId) {
           const stockCommitment = lightning.stock?.min || 5;
 
           const commission = finalOfferPrice * 0.13;
-          const shipping = finalOfferPrice > 70000 ? 9500 : 0;
-          const cost = item.unit_cost_cop || Math.round(currentPrice * 0.4);
-          const netCop = finalOfferPrice - commission - shipping - cost;
+          const fixedFee = finalOfferPrice < 70000 ? 2500 : 0;
+          const shipping = finalOfferPrice >= 70000 ? 9500 : 0;
+          const cost = (item.unit_cost_cop && item.unit_cost_cop > 0) ? item.unit_cost_cop : 9829;
+          const netCop = finalOfferPrice - commission - fixedFee - shipping - cost;
           const netPercent = finalOfferPrice > 0 ? Math.round((netCop / finalOfferPrice) * 100) : 0;
 
           eligibleDeals.push({
@@ -189,11 +190,12 @@ async function scanAllPublicationCampaigns(accountId) {
             : (p.suggested_discounted_price || p.max_discounted_price || p.suggested_price || Math.round(pOrigPrice * 0.85));
           const discountPct = pOrigPrice > 0 ? Math.round(((pOrigPrice - suggestedPrice) / pOrigPrice) * 100) : 0;
 
-          // Calculate estimated net margin
+          // Calculate estimated net margin with real COGS
           const commission = suggestedPrice * 0.13;
-          const shipping = suggestedPrice > 70000 ? 9500 : 0;
-          const cost = item.unit_cost_cop || Math.round(pOrigPrice * 0.4);
-          const netCop = suggestedPrice - commission - shipping - cost;
+          const fixedFee = suggestedPrice < 70000 ? 2500 : 0;
+          const shipping = suggestedPrice >= 70000 ? 9500 : 0;
+          const cost = (item.unit_cost_cop && item.unit_cost_cop > 0) ? item.unit_cost_cop : 9829;
+          const netCop = suggestedPrice - commission - fixedFee - shipping - cost;
           const netPercent = suggestedPrice > 0 ? Math.round((netCop / suggestedPrice) * 100) : 0;
 
           availableCampaigns.push({
