@@ -2778,11 +2778,22 @@ function openConfirmPromoModal(payload) {
     </div>
   `;
 
-  document.getElementById('confirmPromoModal').style.display = 'flex';
+  const sendBtn = document.getElementById('btnExecuteSendPromo');
+  if (sendBtn) {
+    sendBtn.onclick = () => executeSendPromo();
+  }
+
+  const modalEl = document.getElementById('confirmPromoModal');
+  if (modalEl) {
+    modalEl.style.display = 'flex';
+  }
 }
 
 function closeConfirmPromoModal() {
-  document.getElementById('confirmPromoModal').style.display = 'none';
+  const modalEl = document.getElementById('confirmPromoModal');
+  if (modalEl) {
+    modalEl.style.display = 'none';
+  }
   currentPendingPromoPayload = null;
 }
 
@@ -2855,42 +2866,36 @@ async function scanLightningDeals() {
       window.pendingPromosCache[key] = d;
 
       return `
-        <div class="card p-3 mb-3" style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08) 0%, rgba(20, 20, 30, 0.95) 100%); border: 1px solid rgba(255, 171, 0, 0.4); border-radius: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
-            <div style="flex: 1; min-width: 280px;">
-              <span class="badge badge-warning" style="font-size: 0.78rem; padding: 4px 8px;">⚡ Oferta Relámpago Candidata</span>
-              <h4 style="margin: 6px 0 4px 0; font-size: 1rem; color: #ffffff;">${escapeHtml(d.title)}</h4>
-              <small style="color: #94a3b8;">SKU: <code>${escapeHtml(d.sku || d.ml_item_id)}</code> | Mercado Libre ID: <code>${d.ml_item_id}</code></small>
-              
-              <div style="display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;">
-                <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
-                  <div style="font-size: 0.72rem; color: #94a3b8;">PRECIO ACTUAL LISTA</div>
-                  <div style="font-size: 1.05rem; font-weight: 700; color: #94a3b8; text-decoration: line-through;">$${d.current_price.toLocaleString('es-CO')} COP</div>
-                </div>
-
-                <div style="background: rgba(255, 171, 0, 0.12); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 171, 0, 0.3);">
-                  <div style="font-size: 0.72rem; color: #ffc107; font-weight:700;">PRECIO OFERTA RELÁMPAGO</div>
-                  <div style="font-size: 1.1rem; font-weight: 800; color: #ffab00;">$${d.final_offer_price.toLocaleString('es-CO')} COP <span style="font-size:0.75rem; color:#ef4444;">(-${d.discount_percent}%)</span></div>
-                </div>
-
-                <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
-                  <div style="font-size: 0.72rem; color: #94a3b8;">STOCK COMPROMETIDO</div>
-                  <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8;">📦 ${d.stock_commitment} Unidades</div>
-                </div>
-
-                <div style="background: ${isLoss ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)'}; padding: 8px 12px; border-radius: 6px; border: 1px solid ${isLoss ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.3)'};">
-                  <div style="font-size: 0.72rem; color: ${isLoss ? '#f87171' : '#34d399'};">GANANCIA NETA ESTIMADA</div>
-                  <div style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${d.estimated_net_cop.toLocaleString('es-CO')} COP (${d.estimated_net_percent}%)</div>
-                </div>
-              </div>
+        <div class="card p-3 mb-3" style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08) 0%, rgba(20, 20, 30, 0.95) 100%); border: 1px solid rgba(255, 171, 0, 0.4); border-radius: 12px;">
+          <span class="badge badge-warning" style="font-size: 0.78rem; padding: 4px 8px; width: fit-content;">⚡ Oferta Relámpago Candidata</span>
+          <h4 style="margin: 8px 0 4px 0; font-size: 1.05rem; color: #ffffff;">${escapeHtml(d.title)}</h4>
+          <small style="color: #94a3b8;">SKU: <code>${escapeHtml(d.sku || d.ml_item_id)}</code> | Mercado Libre ID: <code>${d.ml_item_id}</code></small>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 12px 0;">
+            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <div style="font-size: 0.72rem; color: #94a3b8;">PRECIO ACTUAL LISTA</div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: #94a3b8; text-decoration: line-through;">$${d.current_price.toLocaleString('es-CO')} COP</div>
             </div>
 
-            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-              <button class="btn btn-warning" onclick="handlePromoConfirmClick('${key}')" style="background: #ffab00; color: #12151e; font-weight: 800; font-size: 0.9rem; padding: 10px 18px; border-radius: 8px;">
-                🚀 Revisar & Activar Oferta Relámpago
-              </button>
+            <div style="background: rgba(255, 171, 0, 0.12); padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 171, 0, 0.3);">
+              <div style="font-size: 0.72rem; color: #ffc107; font-weight:700;">PRECIO OFERTA RELÁMPAGO</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #ffab00;">$${d.final_offer_price.toLocaleString('es-CO')} COP <span style="font-size:0.75rem; color:#ef4444;">(-${d.discount_percent}%)</span></div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <div style="font-size: 0.72rem; color: #94a3b8;">STOCK COMPROMETIDO</div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8;">📦 ${d.stock_commitment} Unidades</div>
+            </div>
+
+            <div style="background: ${isLoss ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)'}; padding: 10px; border-radius: 8px; border: 1px solid ${isLoss ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.3)'};">
+              <div style="font-size: 0.72rem; color: ${isLoss ? '#f87171' : '#34d399'};">GANANCIA NETA ESTIMADA</div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${d.estimated_net_cop.toLocaleString('es-CO')} COP (${d.estimated_net_percent}%)</div>
             </div>
           </div>
+
+          <button class="btn btn-warning" onclick="handlePromoConfirmClick('${key}')" style="background: #ffab00; color: #12151e; font-weight: 800; font-size: 0.92rem; padding: 12px; border-radius: 8px; width: 100%; border: none; cursor: pointer; margin-top: 4px;">
+            🚀 Revisar & Activar Oferta Relámpago
+          </button>
         </div>`;
     }).join('');
 
