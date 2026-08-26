@@ -3195,12 +3195,22 @@ async function loadCatalogCampaigns(silent = false) {
         const key = `promo_catalog_${item.ml_item_id}_${c.promotion_id || 'catalog'}`;
         window.pendingPromosCache[key] = payloadObj;
 
-        const isAlreadyActive = c.status === 'started' || c.status === 'active' || c.status === 'joined';
+        const isPending = c.status === 'pending';
+        const isLive = c.status === 'started' || c.status === 'active' || c.status === 'joined';
+        const isAlreadyActive = isPending || isLive;
+
+        const badgeText = isPending 
+          ? '📅 OFERTA PROGRAMADA Y ACEPTADA EN ML' 
+          : '✅ OFERTA APLICADA Y ACTIVA EN MERCADO LIBRE';
+        
+        const badgeTagText = isPending 
+          ? '📅 (Programada por ML)' 
+          : '✅ (Participando En Vivo)';
 
         const actionControlHtml = isAlreadyActive ? `
           <div style="display:flex; align-items:center; gap:8px;">
-            <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; font-size: 0.78rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
-              ✅ OFERTA APLICADA Y ACTIVA EN MERCADO LIBRE
+            <span style="background: ${isPending ? 'rgba(56, 189, 248, 0.15)' : 'rgba(16, 185, 129, 0.15)'}; border: 1px solid ${isPending ? '#38bdf8' : '#10b981'}; color: ${isPending ? '#38bdf8' : '#34d399'}; font-size: 0.78rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+              ${badgeText}
             </span>
             <button class="btn btn-sm" onclick="leaveActivePromotion('${item.ml_item_id}', '${c.promotion_id}', '${c.promotion_type}')" style="padding:6px 10px; font-size: 0.76rem; font-weight:700; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color:#fca5a5; border-radius: 6px;">
               🔴 Retirar Oferta
@@ -3216,7 +3226,7 @@ async function loadCatalogCampaigns(silent = false) {
           <div class="campaign-card-${item.ml_item_id}" data-editable="${isEditable}" data-key="${key}" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; border: ${isAlreadyActive ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255,255,255,0.06)'};">
             <div>
               <strong>${escapeHtml(c.name)}</strong> 
-              ${isAlreadyActive ? '<span style="color:#34d399; font-weight:700; font-size:0.75rem; margin-left:4px;">✅ (Participando En Vivo)</span>' : (isEditable ? '<span style="color:#38bdf8; font-weight:700; font-size:0.75rem; margin-left:4px;">✏️ (Precio Editable)</span>' : '<span style="color:#ffab00; font-weight:700; font-size:0.75rem; margin-left:4px;">🔒 (Precio Fijo ML)</span>')}
+              ${isAlreadyActive ? `<span style="color:${isPending ? '#38bdf8' : '#34d399'}; font-weight:700; font-size:0.75rem; margin-left:4px;">${badgeTagText}</span>` : (isEditable ? '<span style="color:#38bdf8; font-weight:700; font-size:0.75rem; margin-left:4px;">✏️ (Precio Editable)</span>' : '<span style="color:#ffab00; font-weight:700; font-size:0.75rem; margin-left:4px;">🔒 (Precio Fijo ML)</span>')}
               <span class="discount-val" style="color:#ef4444; font-weight:700; margin-left:4px;">(-${discountPct}%)</span><br>
               <span>Precio Lista: <strong style="text-decoration:line-through; opacity:0.7;">$${origPrice.toLocaleString('es-CO')} COP</strong></span> → 
               <span>Precio Oferta: <strong class="offer-price-val" style="color:#ffab00;">$${offerPriceToUse.toLocaleString('es-CO')} COP</strong></span> | 
