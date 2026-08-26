@@ -2893,8 +2893,28 @@ async function executeSendPromo() {
     });
     closeConfirmPromoModal();
     showToast(`🚀 ¡Éxito! Publicación ${p.ml_item_id} postulada correctamente a la oferta en Mercado Libre.`, 'success');
-    scanLightningDeals();
-    loadCatalogCampaigns();
+
+    // Instant smooth DOM update for the card without page reset
+    const key = `promo_catalog_${p.ml_item_id}_${p.promotion_id || 'catalog'}`;
+    const cardEl = document.querySelector(`[data-key="${key}"]`);
+    if (cardEl) {
+      cardEl.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      const btnEl = cardEl.querySelector('button');
+      if (btnEl) {
+        btnEl.outerHTML = `
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; font-size: 0.78rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+              ✅ OFERTA APLICADA Y ACTIVA EN MERCADO LIBRE
+            </span>
+            <button class="btn btn-sm" onclick="leaveActivePromotion('${p.ml_item_id}', '${p.promotion_id}', '${p.promotion_type}')" style="padding:6px 10px; font-size: 0.76rem; font-weight:700; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color:#fca5a5; border-radius: 6px;">
+              🔴 Retirar Oferta
+            </button>
+          </div>`;
+      }
+    }
+
+    scanLightningDeals(true);
+    loadCatalogCampaigns(true);
   } catch (error) {
     showToast(`Error al activar la oferta: ${error.message}`, 'error');
   } finally {
@@ -2905,15 +2925,17 @@ async function executeSendPromo() {
   }
 }
 
-async function scanLightningDeals() {
+async function scanLightningDeals(silent = false) {
   const container = document.getElementById('lightningDealsContainer');
   if (!container) return;
 
-  container.innerHTML = `
-    <div class="empty-state" style="padding: 20px;">
-      <div class="spinner"></div>
-      <p style="margin-top:10px">Consultando la API oficial de Promociones de Mercado Libre para tus publicaciones...</p>
-    </div>`;
+  if (!silent) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 20px;">
+        <div class="spinner"></div>
+        <p style="margin-top:10px">Consultando la API oficial de Promociones de Mercado Libre para tus publicaciones...</p>
+      </div>`;
+  }
 
   try {
     const res = await apiFetch(`/api/promotions/lightning-scan?accountId=${activeAccountId}`);
@@ -3104,15 +3126,17 @@ function updateProductTargetPromoPrice(itemId, title) {
   showToast(`🤖 Piloto Automático y ofertas editables actualizadas a $${targetPrice.toLocaleString('es-CO')} COP`, 'info');
 }
 
-async function loadCatalogCampaigns() {
+async function loadCatalogCampaigns(silent = false) {
   const container = document.getElementById('catalogCampaignsContainer');
   if (!container) return;
 
-  container.innerHTML = `
-    <div class="empty-state" style="padding: 20px;">
-      <div class="spinner"></div>
-      <p style="margin-top:10px">Analizando publicaciones y configuraciones de Piloto Automático 24/7...</p>
-    </div>`;
+  if (!silent) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 20px;">
+        <div class="spinner"></div>
+        <p style="margin-top:10px">Analizando publicaciones y configuraciones de Piloto Automático 24/7...</p>
+      </div>`;
+  }
 
   try {
     const res = await apiFetch(`/api/promotions/catalog-campaigns?accountId=${activeAccountId}`);
