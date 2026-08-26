@@ -147,6 +147,8 @@ function initSchema() {
   try { db.run('ALTER TABLE claims ADD COLUMN account_id INTEGER'); } catch {}
   try { db.run('ALTER TABLE activity_log ADD COLUMN account_id INTEGER'); } catch {}
   try { db.run('ALTER TABLE daily_stats ADD COLUMN account_id INTEGER'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN messages_received INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN messages_auto_answered INTEGER DEFAULT 0'); } catch {}
 
 
   // Default redirect URI for Render or local
