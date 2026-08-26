@@ -21,16 +21,49 @@ async function getItemPromotions(mlItemId, accountId) {
  */
 async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, accountId, extraPayload = {}) {
   try {
+    let finalDealPrice = parseFloat(dealPrice);
+    let candidateStock = extraPayload.stock;
+    let refId = extraPayload.ref_id;
+
+    // Fetch candidate promotions from ML API to resolve exact allowed price & stock bounds
+    const candidates = await getItemPromotions(mlItemId, accountId);
+    const candidateList = Array.isArray(candidates) ? candidates : (candidates?.results || candidates?.promotions || []);
+    const match = candidateList.find(c => c.id === promotionId || c.type === promotionType);
+
+    if (match) {
+      if (match.price && match.price > 0) {
+        finalDealPrice = match.price;
+      } else if (match.suggested_discounted_price) {
+        finalDealPrice = match.suggested_discounted_price;
+      } else if (match.max_discounted_price && finalDealPrice > match.max_discounted_price) {
+        finalDealPrice = match.max_discounted_price;
+      }
+
+      if (match.ref_id && !refId) {
+        refId = match.ref_id;
+      }
+
+      if ((promotionType === 'LIGHTNING' || promotionId?.startsWith('LGH-'))) {
+        const minStock = match.stock?.min || 5;
+        const maxStock = match.stock?.max || 10;
+        if (!candidateStock || candidateStock < minStock) {
+          candidateStock = minStock;
+        } else if (candidateStock > maxStock) {
+          candidateStock = maxStock;
+        }
+      }
+    }
+
     const payload = {
       promotion_id: promotionId,
       promotion_type: promotionType,
-      deal_price: parseFloat(dealPrice),
+      deal_price: finalDealPrice,
       ...extraPayload
     };
 
-    // Mercado Libre API requiere parámetro de stock para Ofertas Relámpago (LIGHTNING)
-    if ((promotionType === 'LIGHTNING' || promotionId?.startsWith('LGH-')) && !payload.stock) {
-      payload.stock = 10;
+    if (refId) payload.ref_id = refId;
+    if ((promotionType === 'LIGHTNING' || promotionId?.startsWith('LGH-'))) {
+      payload.stock = candidateStock || 5;
     }
 
     const response = await mlFetch(`/seller-promotions/items/${mlItemId}?app_version=v2`, accountId, {
