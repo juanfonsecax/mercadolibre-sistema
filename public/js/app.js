@@ -2712,6 +2712,16 @@ async function runAiMarginEvaluation() {
 }
 
 let currentPendingPromoPayload = null;
+window.pendingPromosCache = {};
+
+function handlePromoConfirmClick(key) {
+  const payload = window.pendingPromosCache[key];
+  if (!payload) {
+    showToast('Error: No se encontró la información de la oferta.', 'error');
+    return;
+  }
+  openConfirmPromoModal(payload);
+}
 
 function openConfirmPromoModal(payload) {
   currentPendingPromoPayload = payload;
@@ -2777,9 +2787,16 @@ function closeConfirmPromoModal() {
 }
 
 async function executeSendPromo() {
-  if (!currentPendingPromoPayload) return;
+  if (!currentPendingPromoPayload) {
+    showToast('No hay ninguna oferta seleccionada para enviar.', 'error');
+    return;
+  }
   const p = currentPendingPromoPayload;
-  closeConfirmPromoModal();
+  const btn = document.getElementById('btnExecuteSendPromo');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⌛ Enviando a Mercado Libre...';
+  }
 
   try {
     showToast(`⚡ Enviando oferta para ${p.ml_item_id} a Mercado Libre...`, 'info');
@@ -2794,11 +2811,17 @@ async function executeSendPromo() {
         accountId: activeAccountId
       })
     });
+    closeConfirmPromoModal();
     showToast(`🚀 ¡Éxito! Publicación ${p.ml_item_id} postulada correctamente a la oferta en Mercado Libre.`, 'success');
     scanLightningDeals();
     loadCatalogCampaigns();
   } catch (error) {
     showToast(`Error al activar la oferta: ${error.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '🚀 Confirmar y Enviar a Mercado Libre';
+    }
   }
 }
 
@@ -2828,8 +2851,8 @@ async function scanLightningDeals() {
 
     container.innerHTML = deals.map(d => {
       const isLoss = d.estimated_net_cop < 0;
-      const netClass = isLoss ? 'text-danger' : 'text-success';
-      const payloadStr = escapeAttr(JSON.stringify(d));
+      const key = `promo_lightning_${d.ml_item_id}_${d.promotion_id || 'lightning'}`;
+      window.pendingPromosCache[key] = d;
 
       return `
         <div class="card p-3 mb-3" style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08) 0%, rgba(20, 20, 30, 0.95) 100%); border: 1px solid rgba(255, 171, 0, 0.4); border-radius: 10px;">
@@ -2863,7 +2886,7 @@ async function scanLightningDeals() {
             </div>
 
             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-              <button class="btn btn-warning" onclick='openConfirmPromoModal(${JSON.stringify(d)})' style="background: #ffab00; color: #12151e; font-weight: 800; font-size: 0.9rem; padding: 10px 18px; border-radius: 8px;">
+              <button class="btn btn-warning" onclick="handlePromoConfirmClick('${key}')" style="background: #ffab00; color: #12151e; font-weight: 800; font-size: 0.9rem; padding: 10px 18px; border-radius: 8px;">
                 🚀 Revisar & Activar Oferta Relámpago
               </button>
             </div>
@@ -2982,6 +3005,9 @@ async function loadCatalogCampaigns() {
           promotion_type: c.promotion_type
         };
 
+        const key = `promo_catalog_${item.ml_item_id}_${c.promotion_id || 'catalog'}`;
+        window.pendingPromosCache[key] = payloadObj;
+
         return `
           <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; border: 1px solid rgba(255,255,255,0.06);">
             <div>
@@ -2991,7 +3017,7 @@ async function loadCatalogCampaigns() {
               <span>Stock: <strong>📦 ${c.stock_commitment || 5} unds</strong></span> | 
               <span>Margen Neto: <strong class="${marginClass}">${c.estimated_net_percent.toFixed(1)}% ($${Math.round(c.estimated_net_cop).toLocaleString('es-CO')} COP)</strong></span>
             </div>
-            <button class="btn btn-sm btn-primary" onclick='openConfirmPromoModal(${JSON.stringify(payloadObj)})' style="padding:8px 14px; font-weight:700;">
+            <button class="btn btn-sm btn-primary" onclick="handlePromoConfirmClick('${key}')" style="padding:8px 14px; font-weight:700;">
               🚀 Revisar & Activar
             </button>
           </div>`;
