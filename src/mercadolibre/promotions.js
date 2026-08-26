@@ -117,15 +117,34 @@ async function scanEligibleLightningDeals(accountId) {
       if (Array.isArray(promos)) {
         const lightning = promos.find(p => p.type === 'LIGHTNING' || p.promotion_type === 'LIGHTNING' || p.name?.toLowerCase().includes('relámpago') || p.name?.toLowerCase().includes('relampago'));
         if (lightning) {
+          const liveStatus = await fetchItemLivePriceAndOfferStatus(item.ml_item_id, accountId);
+          const currentPrice = lightning.original_price || liveStatus?.list_price || liveStatus?.current_ml_price || 50000;
+          const finalOfferPrice = lightning.price && lightning.price > 0 
+            ? lightning.price 
+            : (lightning.suggested_discounted_price || lightning.max_discounted_price || Math.round(currentPrice * 0.85));
+          const discountPct = currentPrice > 0 ? Math.round(((currentPrice - finalOfferPrice) / currentPrice) * 100) : 15;
+          const stockCommitment = lightning.stock?.min || 5;
+
+          const commission = finalOfferPrice * 0.13;
+          const shipping = finalOfferPrice > 70000 ? 9500 : 0;
+          const cost = item.unit_cost_cop || Math.round(currentPrice * 0.4);
+          const netCop = finalOfferPrice - commission - shipping - cost;
+          const netPercent = finalOfferPrice > 0 ? Math.round((netCop / finalOfferPrice) * 100) : 0;
+
           eligibleDeals.push({
             ml_item_id: item.ml_item_id,
+            sku: item.sku || '',
             title: item.title,
-            current_price: item.price || 0,
+            current_price: Math.round(currentPrice),
+            final_offer_price: Math.round(finalOfferPrice),
+            discount_percent: discountPct,
+            stock_commitment: stockCommitment,
             units_full: item.units_full || 0,
             promotion_id: lightning.id || lightning.promotion_id,
             promotion_type: 'LIGHTNING',
-            suggested_price: lightning.suggested_price || lightning.deal_price || Math.round((item.price || 80000) * 0.85),
-            min_discount_percent: lightning.min_discount_percent || 15,
+            suggested_price: Math.round(finalOfferPrice),
+            estimated_net_cop: Math.round(netCop),
+            estimated_net_percent: netPercent,
             start_date: lightning.start_date || null,
             finish_date: lightning.finish_date || null,
             status: lightning.status || 'eligible',
@@ -156,29 +175,36 @@ async function scanAllPublicationCampaigns(accountId) {
     for (const item of listings) {
       if (!item.ml_item_id) continue;
       const promos = await getItemPromotions(item.ml_item_id, accountId);
+      const liveStatus = await fetchItemLivePriceAndOfferStatus(item.ml_item_id, accountId);
       const availableCampaigns = [];
+
+      const origPrice = liveStatus?.list_price || liveStatus?.current_ml_price || 50000;
 
       if (Array.isArray(promos) && promos.length > 0) {
         promos.forEach(p => {
           const promoType = p.type || p.promotion_type || 'PRICE_DISCOUNT';
-          const origPrice = p.original_price || item.price || 50000;
-          const suggestedPrice = p.price || p.suggested_discounted_price || p.suggested_price || p.deal_price || Math.round(origPrice * 0.85);
-          const discountPct = origPrice > 0 ? Math.round(((origPrice - suggestedPrice) / origPrice) * 100) : 0;
+          const pOrigPrice = p.original_price || origPrice;
+          const suggestedPrice = p.price && p.price > 0 
+            ? p.price 
+            : (p.suggested_discounted_price || p.max_discounted_price || p.suggested_price || Math.round(pOrigPrice * 0.85));
+          const discountPct = pOrigPrice > 0 ? Math.round(((pOrigPrice - suggestedPrice) / pOrigPrice) * 100) : 0;
 
           // Calculate estimated net margin
-          const commission = origPrice * 0.13;
-          const shipping = origPrice > 70000 ? 9500 : 0;
-          const cost = item.unit_cost_cop || Math.round(origPrice * 0.4);
+          const commission = suggestedPrice * 0.13;
+          const shipping = suggestedPrice > 70000 ? 9500 : 0;
+          const cost = item.unit_cost_cop || Math.round(pOrigPrice * 0.4);
           const netCop = suggestedPrice - commission - shipping - cost;
-          const netPercent = (netCop / suggestedPrice) * 100;
+          const netPercent = suggestedPrice > 0 ? Math.round((netCop / suggestedPrice) * 100) : 0;
 
           availableCampaigns.push({
             promotion_id: p.id || p.promotion_id || `promo_${item.ml_item_id}`,
             promotion_type: promoType,
             name: p.name || (promoType === 'LIGHTNING' ? '⚡ Oferta Relámpago (6-8h)' : (promoType === 'DEAL' ? '☀️ Oferta del Día (24h)' : '🏷️ Campaña Mercado Libre')),
-            suggested_price: suggestedPrice,
+            current_price: Math.round(pOrigPrice),
+            suggested_price: Math.round(suggestedPrice),
             discount_percent: discountPct,
-            estimated_net_cop: netCop,
+            stock_commitment: p.stock?.min || 5,
+            estimated_net_cop: Math.round(netCop),
             estimated_net_percent: netPercent,
             start_date: p.start_date || null,
             finish_date: p.finish_date || null,
@@ -187,53 +213,11 @@ async function scanAllPublicationCampaigns(accountId) {
         });
       }
 
-      // If ML API has no active promo for this item yet, create baseline eligible promo options
-      if (availableCampaigns.length === 0) {
-        const origPrice = item.price || 50000;
-
-        // Relampago (15% desc)
-        const relampagoPrice = Math.round(origPrice * 0.85);
-        const comm1 = relampagoPrice * 0.13;
-        const ship1 = relampagoPrice > 70000 ? 9500 : 0;
-        const cost1 = item.unit_cost_cop || Math.round(origPrice * 0.4);
-        const netCop1 = relampagoPrice - comm1 - ship1 - cost1;
-        const netPct1 = (netCop1 / relampagoPrice) * 100;
-
-        availableCampaigns.push({
-          promotion_id: `relampago_${item.ml_item_id}`,
-          promotion_type: 'LIGHTNING',
-          name: '⚡ Oferta Relámpago Flash (6 Horas)',
-          suggested_price: relampagoPrice,
-          discount_percent: 15,
-          estimated_net_cop: netCop1,
-          estimated_net_percent: netPct1,
-          status: 'eligible'
-        });
-
-        // Oferta del Dia (10% desc)
-        const diaPrice = Math.round(origPrice * 0.90);
-        const comm2 = diaPrice * 0.13;
-        const ship2 = diaPrice > 70000 ? 9500 : 0;
-        const netCop2 = diaPrice - comm2 - ship2 - cost1;
-        const netPct2 = (netCop2 / diaPrice) * 100;
-
-        availableCampaigns.push({
-          promotion_id: `dia_${item.ml_item_id}`,
-          promotion_type: 'DEAL',
-          name: '☀️ Oferta del Día (24 Horas)',
-          suggested_price: diaPrice,
-          discount_percent: 10,
-          estimated_net_cop: netCop2,
-          estimated_net_percent: netPct2,
-          status: 'eligible'
-        });
-      }
-
       campaignsResult.push({
         ml_item_id: item.ml_item_id,
         sku: item.sku || '',
         title: item.title,
-        price: item.price || 0,
+        price: origPrice,
         units_full: item.units_full || 0,
         sales_30d: item.sales_last_30d || 0,
         campaigns: availableCampaigns

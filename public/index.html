@@ -1667,6 +1667,29 @@
     </div>
   </div>
 
+  <!-- Modal de Confirmación Transparente de Seguridad para Ofertas Relámpago y Campañas -->
+  <div id="confirmPromoModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); z-index: 9999;">
+    <div class="modal-card" style="max-width: 600px; width: 92%; background: #0f172a; border: 1px solid #334155; border-radius: 16px; color: #f8fafc; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:14px; margin-bottom:18px;">
+        <h3 style="margin:0; color:#ffab00; font-size:1.25rem; display:flex; align-items:center; gap:8px;">
+          ⚡ Confirmar Datos de la Oferta antes de Publicar
+        </h3>
+        <button onclick="closeConfirmPromoModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.6rem; cursor:pointer; line-height:1;">&times;</button>
+      </div>
+
+      <div id="confirmPromoModalContent">
+        <!-- Contenido dinámico con precios exactos, stock y ganancia neta -->
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:22px; border-top:1px solid #334155; padding-top:16px;">
+        <button onclick="closeConfirmPromoModal()" class="btn btn-secondary" style="padding:10px 18px; font-weight:600; background:#334155; border:none; color:#f8fafc; border-radius:8px; cursor:pointer;">❌ Cancelar</button>
+        <button id="btnExecuteSendPromo" class="btn btn-warning" style="background:#ffab00; color:#12151e; font-weight:800; padding:10px 22px; border-radius:8px; border:none; cursor:pointer; font-size:0.95rem;">
+          🚀 Confirmar y Enviar a Mercado Libre
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 

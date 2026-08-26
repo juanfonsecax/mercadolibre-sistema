@@ -2711,6 +2711,97 @@ async function runAiMarginEvaluation() {
   }
 }
 
+let currentPendingPromoPayload = null;
+
+function openConfirmPromoModal(payload) {
+  currentPendingPromoPayload = payload;
+  const contentEl = document.getElementById('confirmPromoModalContent');
+  if (!contentEl) return;
+
+  const isLoss = payload.estimated_net_cop < 0;
+  const warningHtml = isLoss ? `
+    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 10px; padding: 14px; margin-bottom: 16px; color: #fca5a5; font-size: 0.88rem;">
+      <strong style="color: #ef4444; font-size: 1rem; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        ⚠️ ADVERTENCIA DE RIESGO DE PÉRDIDA
+      </strong>
+      El precio de oferta propuesto (<strong>$${payload.final_offer_price.toLocaleString('es-CO')} COP</strong>) genera un 
+      <strong>Margen Neto Negativo (${payload.estimated_net_percent}%)</strong>, lo que resultaría en una pérdida estimada de 
+      <strong>$${Math.abs(payload.estimated_net_cop).toLocaleString('es-CO')} COP por unidad vendida</strong> tras restar comisiones y costo de producto.
+    </div>
+  ` : `
+    <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 12px; margin-bottom: 16px; color: #6ee7b7; font-size: 0.88rem;">
+      <strong style="color: #34d399; font-size: 0.95rem;">✅ Oferta Rentable Garantizada</strong><br>
+      Esta oferta dejará una utilidad neta estimada de <strong>+$${payload.estimated_net_cop.toLocaleString('es-CO')} COP por unidad</strong> (${payload.estimated_net_percent}% de margen neto).
+    </div>
+  `;
+
+  contentEl.innerHTML = `
+    ${warningHtml}
+
+    <div style="background: rgba(255,255,255,0.03); padding: 14px; border-radius: 10px; border: 1px solid #334155;">
+      <h4 style="margin: 0 0 8px 0; color: #f8fafc; font-size: 0.98rem;">${escapeHtml(payload.title)}</h4>
+      <div style="font-size: 0.83rem; color: #94a3b8; margin-bottom: 12px;">
+        SKU: <code>${escapeHtml(payload.sku || payload.ml_item_id)}</code> | Mercado Libre ID: <code>${payload.ml_item_id}</code>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+        <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+          <div style="font-size: 0.73rem; color: #94a3b8;">PRECIO ACTUAL DE LISTA</div>
+          <div style="font-size: 1.1rem; font-weight: 700; color: #94a3b8; text-decoration: line-through;">$${payload.current_price.toLocaleString('es-CO')} COP</div>
+        </div>
+
+        <div style="background: rgba(255, 171, 0, 0.1); padding: 10px; border-radius: 8px; border: 1px solid #ffab00;">
+          <div style="font-size: 0.73rem; color: #ffab00; font-weight: 700;">PRECIO FINAL EN OFERTA</div>
+          <div style="font-size: 1.15rem; font-weight: 800; color: #ffab00;">$${payload.final_offer_price.toLocaleString('es-CO')} COP <span style="font-size:0.75rem; color:#ef4444;">(-${payload.discount_percent}%)</span></div>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+          <div style="font-size: 0.73rem; color: #94a3b8;">STOCK COMPROMETIDO</div>
+          <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8;">📦 ${payload.stock_commitment} Unidades</div>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+          <div style="font-size: 0.73rem; color: #94a3b8;">GANANCIA NETA LÍQUIDA</div>
+          <div style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${payload.estimated_net_cop.toLocaleString('es-CO')} COP (${payload.estimated_net_percent}%)</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('confirmPromoModal').style.display = 'flex';
+}
+
+function closeConfirmPromoModal() {
+  document.getElementById('confirmPromoModal').style.display = 'none';
+  currentPendingPromoPayload = null;
+}
+
+async function executeSendPromo() {
+  if (!currentPendingPromoPayload) return;
+  const p = currentPendingPromoPayload;
+  closeConfirmPromoModal();
+
+  try {
+    showToast(`⚡ Enviando oferta para ${p.ml_item_id} a Mercado Libre...`, 'info');
+    await apiFetch('/api/promotions/join-lightning', {
+      method: 'POST',
+      body: JSON.stringify({
+        ml_item_id: p.ml_item_id,
+        promotion_id: p.promotion_id,
+        promotion_type: p.promotion_type || 'LIGHTNING',
+        deal_price: p.final_offer_price,
+        stock: p.stock_commitment,
+        accountId: activeAccountId
+      })
+    });
+    showToast(`🚀 ¡Éxito! Publicación ${p.ml_item_id} postulada correctamente a la oferta en Mercado Libre.`, 'success');
+    scanLightningDeals();
+    loadCatalogCampaigns();
+  } catch (error) {
+    showToast(`Error al activar la oferta: ${error.message}`, 'error');
+  }
+}
+
 async function scanLightningDeals() {
   const container = document.getElementById('lightningDealsContainer');
   if (!container) return;
@@ -2735,20 +2826,50 @@ async function scanLightningDeals() {
       return;
     }
 
-    container.innerHTML = deals.map(d => `
-      <div class="card p-3 mb-2" style="background: rgba(255, 171, 0, 0.05); border: 1px solid rgba(255, 171, 0, 0.25); display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <span class="badge badge-warning">⚡ Oferta Relámpago Disponible</span>
-          <strong style="display: block; margin-top: 4px; font-size: 0.95rem;">${escapeHtml(d.title)}</strong>
-          <div style="font-size: 0.82rem; opacity: 0.8; margin-top: 4px;">
-            Precio Actual: $${(d.current_price || 0).toLocaleString('es-CO')} COP | Precio Relámpago Sugerido: <strong>$${(d.suggested_price || 0).toLocaleString('es-CO')} COP</strong> (Descuento -${d.min_discount_percent}%)
+    container.innerHTML = deals.map(d => {
+      const isLoss = d.estimated_net_cop < 0;
+      const netClass = isLoss ? 'text-danger' : 'text-success';
+      const payloadStr = escapeAttr(JSON.stringify(d));
+
+      return `
+        <div class="card p-3 mb-3" style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08) 0%, rgba(20, 20, 30, 0.95) 100%); border: 1px solid rgba(255, 171, 0, 0.4); border-radius: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+            <div style="flex: 1; min-width: 280px;">
+              <span class="badge badge-warning" style="font-size: 0.78rem; padding: 4px 8px;">⚡ Oferta Relámpago Candidata</span>
+              <h4 style="margin: 6px 0 4px 0; font-size: 1rem; color: #ffffff;">${escapeHtml(d.title)}</h4>
+              <small style="color: #94a3b8;">SKU: <code>${escapeHtml(d.sku || d.ml_item_id)}</code> | Mercado Libre ID: <code>${d.ml_item_id}</code></small>
+              
+              <div style="display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;">
+                <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 0.72rem; color: #94a3b8;">PRECIO ACTUAL LISTA</div>
+                  <div style="font-size: 1.05rem; font-weight: 700; color: #94a3b8; text-decoration: line-through;">$${d.current_price.toLocaleString('es-CO')} COP</div>
+                </div>
+
+                <div style="background: rgba(255, 171, 0, 0.12); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 171, 0, 0.3);">
+                  <div style="font-size: 0.72rem; color: #ffc107; font-weight:700;">PRECIO OFERTA RELÁMPAGO</div>
+                  <div style="font-size: 1.1rem; font-weight: 800; color: #ffab00;">$${d.final_offer_price.toLocaleString('es-CO')} COP <span style="font-size:0.75rem; color:#ef4444;">(-${d.discount_percent}%)</span></div>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 0.72rem; color: #94a3b8;">STOCK COMPROMETIDO</div>
+                  <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8;">📦 ${d.stock_commitment} Unidades</div>
+                </div>
+
+                <div style="background: ${isLoss ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)'}; padding: 8px 12px; border-radius: 6px; border: 1px solid ${isLoss ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.3)'};">
+                  <div style="font-size: 0.72rem; color: ${isLoss ? '#f87171' : '#34d399'};">GANANCIA NETA ESTIMADA</div>
+                  <div style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${d.estimated_net_cop.toLocaleString('es-CO')} COP (${d.estimated_net_percent}%)</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+              <button class="btn btn-warning" onclick='openConfirmPromoModal(${JSON.stringify(d)})' style="background: #ffab00; color: #12151e; font-weight: 800; font-size: 0.9rem; padding: 10px 18px; border-radius: 8px;">
+                🚀 Revisar & Activar Oferta Relámpago
+              </button>
+            </div>
           </div>
-        </div>
-        <button class="btn btn-warning" onclick="joinLightningDeal('${d.ml_item_id}', '${d.promotion_id}', ${d.suggested_price})" style="background: #ffab00; color: #12151e; font-weight: 700;">
-          🚀 Activar Oferta Relámpago
-        </button>
-      </div>
-    `).join('');
+        </div>`;
+    }).join('');
 
   } catch (error) {
     container.innerHTML = `<p class="text-danger" style="padding: 10px;">Error escaneando Ofertas Relámpago: ${escapeHtml(error.message)}</p>`;
@@ -2844,16 +2965,34 @@ async function loadCatalogCampaigns() {
       const isAutoPilotOn = cfg.auto_pilot_enabled !== undefined ? Boolean(cfg.auto_pilot_enabled) : true;
 
       const campaignsListHtml = item.campaigns.map(c => {
+        const isLoss = c.estimated_net_cop < 0;
         const marginClass = c.estimated_net_percent >= 20 ? 'badge-success' : (c.estimated_net_percent >= 10 ? 'badge-warning' : 'badge-danger');
+        
+        const payloadObj = {
+          ml_item_id: item.ml_item_id,
+          sku: item.sku || '',
+          title: item.title,
+          current_price: c.current_price || item.price,
+          final_offer_price: c.suggested_price,
+          discount_percent: c.discount_percent,
+          stock_commitment: c.stock_commitment || 5,
+          estimated_net_cop: c.estimated_net_cop,
+          estimated_net_percent: c.estimated_net_percent,
+          promotion_id: c.promotion_id,
+          promotion_type: c.promotion_type
+        };
+
         return `
-          <div style="background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 6px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.84rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; border: 1px solid rgba(255,255,255,0.06);">
             <div>
-              <strong>${escapeHtml(c.name)}</strong> (-${c.discount_percent}%)<br>
-              <span>Precio Oferta: <strong>$${c.suggested_price.toLocaleString('es-CO')} COP</strong></span> | 
-              <span>Margen Neto Estimado: <strong class="${marginClass}">${c.estimated_net_percent.toFixed(1)}% ($${Math.round(c.estimated_net_cop).toLocaleString('es-CO')} COP)</strong></span>
+              <strong>${escapeHtml(c.name)}</strong> <span style="color:#ef4444; font-weight:700;">(-${c.discount_percent}%)</span><br>
+              <span>Precio Actual: <strong style="text-decoration:line-through; opacity:0.7;">$${(c.current_price || item.price).toLocaleString('es-CO')} COP</strong></span> → 
+              <span>Precio Oferta: <strong style="color:#ffab00;">$${c.suggested_price.toLocaleString('es-CO')} COP</strong></span> | 
+              <span>Stock: <strong>📦 ${c.stock_commitment || 5} unds</strong></span> | 
+              <span>Margen Neto: <strong class="${marginClass}">${c.estimated_net_percent.toFixed(1)}% ($${Math.round(c.estimated_net_cop).toLocaleString('es-CO')} COP)</strong></span>
             </div>
-            <button class="btn btn-sm btn-primary" onclick="joinLightningDeal('${item.ml_item_id}', '${c.promotion_id}', ${targetPrice})">
-              🚀 Aplicar a $${targetPrice.toLocaleString('es-CO')} COP
+            <button class="btn btn-sm btn-primary" onclick='openConfirmPromoModal(${JSON.stringify(payloadObj)})' style="padding:8px 14px; font-weight:700;">
+              🚀 Revisar & Activar
             </button>
           </div>`;
       }).join('');
@@ -2865,9 +3004,20 @@ async function loadCatalogCampaigns() {
               <span class="account-tag"><code>${escapeHtml(item.ml_item_id)}</code></span>
               <strong style="font-size: 0.98rem; margin-left: 6px;">${escapeHtml(item.title)}</strong>
               <div style="font-size: 0.84rem; opacity: 0.85; margin-top: 4px;">
-                Precio de Lista ML: <strong style="text-decoration: line-through; opacity:0.7;">$${item.price.toLocaleString('es-CO')} COP</strong> | Stock Full: <strong>${item.units_full} unid.</strong>
+                Precio de Lista ML: <strong>$${item.price.toLocaleString('es-CO')} COP</strong> | Stock Full: <strong>${item.units_full} unid.</strong>
               </div>
             </div>
+          </div>
+          <div style="margin-top: 10px;">
+            ${campaignsListHtml || '<div class="text-muted" style="font-size:0.82rem; margin-top:6px;">No hay campañas de descuento adicionales disponibles para este producto en ML hoy.</div>'}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (error) {
+    container.innerHTML = `<p class="text-danger">Error cargando catálogo de campañas: ${escapeHtml(error.message)}</p>`;
+  }
+}
 
             <!-- Auto-Pilot Settings Box -->
             <div style="background: rgba(0, 230, 118, 0.06); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 8px; padding: 10px 14px; min-width: 320px;">
