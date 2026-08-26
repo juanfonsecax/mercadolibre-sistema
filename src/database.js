@@ -2218,8 +2218,8 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   productBreakdown.sort((a, b) => b.net_profit_cop - a.net_profit_cop);
 
   const expenses = getFinancialExpenses(accId || 1, targetMonth, targetYear);
-  const adSpendCop = parseFloat(expenses.ad_spend_cop || 0) > 0 ? parseFloat(expenses.ad_spend_cop) : Math.round(grossSalesCop * 0.075);
-  const returnsCostCop = parseFloat(expenses.returns_cost_cop || 0) > 0 ? parseFloat(expenses.returns_cost_cop) : Math.round(grossSalesCop * 0.018);
+  const adSpendCop = parseFloat(expenses.ad_spend_cop || 0);
+  const returnsCostCop = parseFloat(expenses.returns_cost_cop || 0);
   const extraExpensesCop = parseFloat(expenses.extra_expenses_cop || 0);
 
   const totalDeductionsCop = totalCommissionsCop + totalCogsCop + adSpendCop + returnsCostCop + extraExpensesCop;
