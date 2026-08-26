@@ -2728,51 +2728,72 @@ function openConfirmPromoModal(payload) {
   const contentEl = document.getElementById('confirmPromoModalContent');
   if (!contentEl) return;
 
+  const isEditable = payload.is_price_editable !== false;
   const isLoss = payload.estimated_net_cop < 0;
-  const warningHtml = isLoss ? `
-    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 10px; padding: 14px; margin-bottom: 16px; color: #fca5a5; font-size: 0.88rem;">
-      <strong style="color: #ef4444; font-size: 1rem; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-        ⚠️ ADVERTENCIA DE RIESGO DE PÉRDIDA
-      </strong>
-      El precio de oferta propuesto (<strong>$${payload.final_offer_price.toLocaleString('es-CO')} COP</strong>) genera un 
-      <strong>Margen Neto Negativo (${payload.estimated_net_percent}%)</strong>, lo que resultaría en una pérdida estimada de 
-      <strong>$${Math.abs(payload.estimated_net_cop).toLocaleString('es-CO')} COP por unidad vendida</strong> tras restar comisiones y costo de producto.
-    </div>
+
+  const restrictionBadgeHtml = isEditable ? `
+    <span style="background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.76rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+      ✏️ PRECIO PERSONALIZABLE POR EL VENDEDOR
+    </span>
   ` : `
-    <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 12px; margin-bottom: 16px; color: #6ee7b7; font-size: 0.88rem;">
-      <strong style="color: #34d399; font-size: 0.95rem;">✅ Oferta Rentable Garantizada</strong><br>
-      Esta oferta dejará una utilidad neta estimada de <strong>+$${payload.estimated_net_cop.toLocaleString('es-CO')} COP por unidad</strong> (${payload.estimated_net_percent}% de margen neto).
-    </div>
+    <span style="background: rgba(255, 171, 0, 0.15); border: 1px solid #ffab00; color: #ffab00; font-size: 0.76rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+      🔒 PRECIO FIJO OBLIGATORIO MERCADO LIBRE
+    </span>
   `;
 
   contentEl.innerHTML = `
-    ${warningHtml}
+    <div style="margin-bottom: 12px;">
+      ${restrictionBadgeHtml}
+    </div>
+
+    <div id="confirmModalStatusBanner">
+      ${isLoss ? `
+        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 10px; padding: 12px; margin-bottom: 14px; color: #fca5a5; font-size: 0.86rem;">
+          <strong style="color: #ef4444; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            ⚠️ ADVERTENCIA DE RIESGO DE PÉRDIDA
+          </strong>
+          El precio propuesto genera un <strong>Margen Neto Negativo (${payload.estimated_net_percent}%)</strong>, con una pérdida estimada de 
+          <strong>$${Math.abs(payload.estimated_net_cop).toLocaleString('es-CO')} COP por unidad</strong>.
+        </div>
+      ` : `
+        <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 12px; margin-bottom: 14px; color: #6ee7b7; font-size: 0.86rem;">
+          <strong style="color: #34d399; font-size: 0.92rem;">✅ Oferta Rentable Garantizada</strong><br>
+          Esta oferta dejará una utilidad neta estimada de <strong>+$${payload.estimated_net_cop.toLocaleString('es-CO')} COP por unidad</strong> (${payload.estimated_net_percent}% de margen neto).
+        </div>
+      `}
+    </div>
 
     <div style="background: rgba(255,255,255,0.03); padding: 14px; border-radius: 10px; border: 1px solid #334155;">
-      <h4 style="margin: 0 0 8px 0; color: #f8fafc; font-size: 0.98rem;">${escapeHtml(payload.title)}</h4>
-      <div style="font-size: 0.83rem; color: #94a3b8; margin-bottom: 12px;">
+      <h4 style="margin: 0 0 6px 0; color: #f8fafc; font-size: 0.98rem;">${escapeHtml(payload.title)}</h4>
+      <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 14px;">
         SKU: <code>${escapeHtml(payload.sku || payload.ml_item_id)}</code> | Mercado Libre ID: <code>${payload.ml_item_id}</code>
       </div>
 
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
         <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
-          <div style="font-size: 0.73rem; color: #94a3b8;">PRECIO ACTUAL DE LISTA</div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">PRECIO ACTUAL LISTA</div>
           <div style="font-size: 1.1rem; font-weight: 700; color: #94a3b8; text-decoration: line-through;">$${payload.current_price.toLocaleString('es-CO')} COP</div>
         </div>
 
         <div style="background: rgba(255, 171, 0, 0.1); padding: 10px; border-radius: 8px; border: 1px solid #ffab00;">
-          <div style="font-size: 0.73rem; color: #ffab00; font-weight: 700;">PRECIO FINAL EN OFERTA</div>
-          <div style="font-size: 1.15rem; font-weight: 800; color: #ffab00;">$${payload.final_offer_price.toLocaleString('es-CO')} COP <span style="font-size:0.75rem; color:#ef4444;">(-${payload.discount_percent}%)</span></div>
+          <div style="font-size: 0.72rem; color: #ffab00; font-weight: 700;">PRECIO OFERTA ($ COP)</div>
+          ${isEditable ? `
+            <input type="number" id="inputPromoCustomPrice" value="${payload.final_offer_price}" min="${payload.min_price || 1000}" max="${payload.max_price || payload.current_price}" style="width: 100%; background: #0f172a; border: 1px solid #ffab00; color: #ffab00; font-weight: 800; font-size: 1.05rem; padding: 4px 8px; border-radius: 6px; margin-top: 2px;" oninput="recalculatePromoModalMargin()">
+            <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 2px;">Rango permitido: $${(payload.min_price || 1000).toLocaleString('es-CO')} - $${(payload.max_price || payload.current_price).toLocaleString('es-CO')} COP</div>
+          ` : `
+            <div style="font-size: 1.15rem; font-weight: 800; color: #ffab00;">$${payload.final_offer_price.toLocaleString('es-CO')} COP <span style="font-size:0.75rem; color:#ef4444;">(-${payload.discount_percent}%)</span></div>
+            <div style="font-size: 0.68rem; color: #ffab00; margin-top: 2px;">🔒 Exigido por algoritmo ML</div>
+          `}
         </div>
 
         <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
-          <div style="font-size: 0.73rem; color: #94a3b8;">STOCK COMPROMETIDO</div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">STOCK COMPROMETIDO</div>
           <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8;">📦 ${payload.stock_commitment} Unidades</div>
         </div>
 
         <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
-          <div style="font-size: 0.73rem; color: #94a3b8;">GANANCIA NETA LÍQUIDA</div>
-          <div style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${payload.estimated_net_cop.toLocaleString('es-CO')} COP (${payload.estimated_net_percent}%)</div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">GANANCIA NETA LÍQUIDA</div>
+          <div id="modalNetMarginDisplay" style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${payload.estimated_net_cop.toLocaleString('es-CO')} COP (${payload.estimated_net_percent}%)</div>
         </div>
       </div>
     </div>
@@ -2786,6 +2807,54 @@ function openConfirmPromoModal(payload) {
   const modalEl = document.getElementById('confirmPromoModal');
   if (modalEl) {
     modalEl.style.display = 'flex';
+  }
+}
+
+function recalculatePromoModalMargin() {
+  if (!currentPendingPromoPayload) return;
+  const inputEl = document.getElementById('inputPromoCustomPrice');
+  if (!inputEl) return;
+
+  const newPrice = parseFloat(inputEl.value || 0);
+  if (newPrice <= 0) return;
+
+  const p = currentPendingPromoPayload;
+  p.final_offer_price = newPrice;
+
+  const commission = newPrice * 0.13;
+  const fixedFee = newPrice < 70000 ? 2500 : 0;
+  const shipping = newPrice >= 70000 ? 9500 : 0;
+  const cost = p.unit_cost_cop || 9829;
+  const netCop = newPrice - commission - fixedFee - shipping - cost;
+  const netPercent = Math.round((netCop / newPrice) * 100);
+
+  p.estimated_net_cop = Math.round(netCop);
+  p.estimated_net_percent = netPercent;
+  p.discount_percent = p.current_price > 0 ? Math.round(((p.current_price - newPrice) / p.current_price) * 100) : 0;
+
+  const displayEl = document.getElementById('modalNetMarginDisplay');
+  const isLoss = netCop < 0;
+  if (displayEl) {
+    displayEl.style.color = isLoss ? '#ef4444' : '#10b981';
+    displayEl.innerHTML = `$${Math.round(netCop).toLocaleString('es-CO')} COP (${netPercent}%)`;
+  }
+
+  const bannerEl = document.getElementById('confirmModalStatusBanner');
+  if (bannerEl) {
+    bannerEl.innerHTML = isLoss ? `
+      <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 10px; padding: 12px; margin-bottom: 14px; color: #fca5a5; font-size: 0.86rem;">
+        <strong style="color: #ef4444; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          ⚠️ ADVERTENCIA DE RIESGO DE PÉRDIDA
+        </strong>
+        El precio propuesto genera un <strong>Margen Neto Negativo (${netPercent}%)</strong>, con una pérdida estimada de 
+        <strong>$${Math.abs(Math.round(netCop)).toLocaleString('es-CO')} COP por unidad</strong>.
+      </div>
+    ` : `
+      <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 12px; margin-bottom: 14px; color: #6ee7b7; font-size: 0.86rem;">
+        <strong style="color: #34d399; font-size: 0.92rem;">✅ Oferta Rentable Garantizada</strong><br>
+        Esta oferta dejará una utilidad neta estimada de <strong>+$${Math.round(netCop).toLocaleString('es-CO')} COP por unidad</strong> (${netPercent}% de margen neto).
+      </div>
+    `;
   }
 }
 
@@ -3002,6 +3071,10 @@ async function loadCatalogCampaigns() {
           title: item.title,
           current_price: c.current_price || item.price,
           final_offer_price: c.suggested_price,
+          min_price: c.min_price || Math.round((c.current_price || item.price) * 0.4),
+          max_price: c.max_price || (c.current_price || item.price),
+          is_price_editable: c.is_price_editable !== false,
+          unit_cost_cop: c.unit_cost_cop || 9829,
           discount_percent: c.discount_percent,
           stock_commitment: c.stock_commitment || 5,
           estimated_net_cop: c.estimated_net_cop,

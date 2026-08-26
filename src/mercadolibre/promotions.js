@@ -138,12 +138,18 @@ async function scanEligibleLightningDeals(accountId) {
           const netCop = finalOfferPrice - commission - fixedFee - shipping - cost;
           const netPercent = finalOfferPrice > 0 ? Math.round((netCop / finalOfferPrice) * 100) : 0;
 
+          const isPriceEditable = !(lightning.price && lightning.price > 0 && !lightning.min_discounted_price);
+
           eligibleDeals.push({
             ml_item_id: item.ml_item_id,
             sku: item.sku || '',
             title: item.title,
             current_price: Math.round(currentPrice),
             final_offer_price: Math.round(finalOfferPrice),
+            min_price: lightning.min_discounted_price ? Math.round(lightning.min_discounted_price) : Math.round(currentPrice * 0.4),
+            max_price: lightning.max_discounted_price ? Math.round(lightning.max_discounted_price) : Math.round(currentPrice),
+            is_price_editable: isPriceEditable,
+            unit_cost_cop: Math.round(cost),
             discount_percent: discountPct,
             stock_commitment: stockCommitment,
             units_full: item.units_full || 0,
@@ -204,12 +210,18 @@ async function scanAllPublicationCampaigns(accountId) {
           const netCop = suggestedPrice - commission - fixedFee - shipping - cost;
           const netPercent = suggestedPrice > 0 ? Math.round((netCop / suggestedPrice) * 100) : 0;
 
+          const isPriceEditable = !(p.price && p.price > 0 && !p.min_discounted_price);
+
           availableCampaigns.push({
             promotion_id: p.id || p.promotion_id || `promo_${item.ml_item_id}`,
             promotion_type: promoType,
             name: p.name || (promoType === 'LIGHTNING' ? '⚡ Oferta Relámpago (6-8h)' : (promoType === 'DEAL' ? '☀️ Oferta del Día (24h)' : '🏷️ Campaña Mercado Libre')),
             current_price: Math.round(pOrigPrice),
             suggested_price: Math.round(suggestedPrice),
+            min_price: p.min_discounted_price ? Math.round(p.min_discounted_price) : Math.round(pOrigPrice * 0.4),
+            max_price: p.max_discounted_price ? Math.round(p.max_discounted_price) : Math.round(pOrigPrice),
+            is_price_editable: isPriceEditable,
+            unit_cost_cop: Math.round(cost),
             discount_percent: discountPct,
             stock_commitment: p.stock?.min || 5,
             estimated_net_cop: Math.round(netCop),
