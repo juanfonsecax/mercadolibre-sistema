@@ -1071,6 +1071,38 @@ function getOverviewStats(accountId = null) {
   };
 }
 
+// ── Modulo de Ofertas & Márgenes DB Operations ──
+
+function saveProductPromotion(data) {
+  try {
+    runSql(`
+      INSERT INTO product_promotions (account_id, ml_item_id, title, original_price, promo_price, discount_percent, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      data.account_id || 1,
+      data.ml_item_id,
+      data.title || data.ml_item_id,
+      parseFloat(data.original_price || 0),
+      parseFloat(data.promo_price || 0),
+      parseFloat(data.discount_percent || 0),
+      data.status || 'activa'
+    ]);
+  } catch (e) {
+    console.error('[DB] Error saving product promotion:', e.message);
+  }
+}
+
+function getProductPromotions(accountId = null) {
+  let sql = 'SELECT p.*, a.name as account_name FROM product_promotions p LEFT JOIN accounts a ON p.account_id = a.id WHERE 1=1';
+  const params = [];
+  if (accountId) {
+    sql += ' AND p.account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY p.created_at DESC LIMIT 100';
+  return queryAll(sql, params);
+}
+
 // ── Fase 1: Importaciones China Operations ──
 
 function computeShipmentFormulas(s) {

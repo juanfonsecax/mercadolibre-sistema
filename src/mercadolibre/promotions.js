@@ -72,6 +72,17 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
       method: 'POST',
       body: JSON.stringify(payload),
     });
+
+    db.saveProductPromotion({
+      account_id: accountId,
+      ml_item_id: mlItemId,
+      title: match?.name || extraPayload.title || mlItemId,
+      original_price: match?.original_price || finalDealPrice,
+      promo_price: finalDealPrice,
+      discount_percent: match?.original_price > 0 ? Math.round(((match.original_price - finalDealPrice) / match.original_price) * 100) : 15,
+      status: 'activa'
+    });
+
     db.logActivity('promotion_join', `Producto ${mlItemId} ingresado a oferta ${promotionType}`, payload, accountId);
     return response;
   } catch (error) {

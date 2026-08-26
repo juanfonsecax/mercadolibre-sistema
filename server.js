@@ -1003,6 +1003,17 @@ app.post('/api/promotions/join-lightning', async (req, res) => {
   }
 });
 
+app.post('/api/promotions/leave', async (req, res) => {
+  try {
+    const { ml_item_id, promotion_id, promotion_type, accountId } = req.body;
+    const accId = accountId ? parseInt(accountId) : 1;
+    const result = await promotionsApi.leavePromotion(ml_item_id, promotion_id, promotion_type, accId);
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/promotions/catalog-campaigns', async (req, res) => {
   try {
     const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
