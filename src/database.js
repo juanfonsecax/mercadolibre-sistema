@@ -149,6 +149,12 @@ function initSchema() {
   try { db.run('ALTER TABLE daily_stats ADD COLUMN account_id INTEGER'); } catch {}
   try { db.run('ALTER TABLE daily_stats ADD COLUMN messages_received INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE daily_stats ADD COLUMN messages_auto_answered INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN messages_responded INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN questions_received INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN questions_answered INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN claims_received INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN claims_responded INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE daily_stats ADD COLUMN avg_response_time_seconds REAL DEFAULT 0'); } catch {}
 
 
   // Default redirect URI for Render or local
