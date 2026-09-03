@@ -171,13 +171,13 @@
           </div>
 
           <!-- 4. Publicidad (Product Ads) -->
-          <div class="fin-card fin-card-ads">
+          <div class="fin-card fin-card-ads" style="cursor: pointer;" onclick="openAdBudgetHistoryModal()" title="Clic para ver o cambiar presupuestos de publicidad por fechas">
             <div class="fin-card-top">
               <span class="fin-icon">📣</span>
               <span class="fin-tag blue">Gastos Publicidad (Ads)</span>
             </div>
             <div class="fin-amount" id="fin-ad-spend">$0</div>
-            <div class="fin-subtext">Campañas Mercado Clics</div>
+            <div class="fin-subtext" id="fin-ad-subtext">Campañas Mercado Clics ⚙️</div>
           </div>
 
           <!-- 5. Devoluciones / Reclamos -->
@@ -1027,6 +1027,7 @@
         <h1>📢 Publicidad Inteligente (Estrategia de 3 Grupos)</h1>
         <div class="header-actions">
           <button class="btn btn-secondary" onclick="loadAdGroups()">🔄 Recalcular / Actualizar</button>
+          <button class="btn btn-primary" onclick="openAdBudgetHistoryModal()">📅 Historial de Presupuestos por Fecha</button>
         </div>
       </div>
       
@@ -1049,6 +1050,7 @@
             <input type="number" id="inputCustomAdBudget" class="form-input" style="width: 130px; padding: 6px 10px; font-weight: 600; border-radius: 0 6px 6px 0;" placeholder="9524">
           </div>
           <button class="btn btn-primary btn-sm" id="btnSaveAdBudget" onclick="saveAdBudget()">💾 Guardar Presupuesto</button>
+          <button class="btn btn-secondary btn-sm" onclick="openAdBudgetHistoryModal()">📅 Gestionar por Fechas</button>
         </div>
       </div>
 
@@ -1721,6 +1723,75 @@
             <button type="submit" class="btn btn-primary">💾 Guardar y Recalcular Neta</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Modal de Gestión de Presupuestos Diarios por Fechas -->
+  <div class="modal-backdrop" id="modalAdBudgetHistory" style="display:none">
+    <div class="modal-dialog" style="max-width: 740px; width: 95%;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          📅 Presupuestos de Publicidad por Fecha — <span id="budgetModalAccountName" style="color: #38bdf8;">Tienda</span>
+        </h3>
+        <button class="modal-close" onclick="closeAdBudgetHistoryModal()">×</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        <!-- Nuevo Intervalo Form -->
+        <div class="card" style="background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; padding: 16px; border-radius: 10px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px 0; color: #f8fafc; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+            <span>➕</span> Establecer Nuevo Presupuesto Diario desde una Fecha
+          </h4>
+          <form id="formNewAdBudgetPeriod" onsubmit="saveNewBudgetPeriod(event)" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: flex-end;">
+            <div>
+              <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 4px;">Presupuesto Diario (COP):</label>
+              <div style="display: flex; align-items: center;">
+                <span style="background: rgba(255,255,255,0.08); padding: 7px 10px; border-radius: 6px 0 0 6px; font-weight:600; color:#94a3b8; border: 1px solid var(--border-color); border-right:none;">$</span>
+                <input type="number" id="inputNewPeriodBudget" class="form-input" style="border-radius: 0 6px 6px 0; font-weight: 700; width: 100%;" placeholder="Ej: 15000" min="1000" required>
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 4px;">Aplica Desde (Fecha Inicio):</label>
+              <input type="date" id="inputNewPeriodStartDate" class="form-input" required>
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 4px;">Nota / Motivo (Opcional):</label>
+              <input type="text" id="inputNewPeriodNotes" class="form-input" placeholder="Ej: Escalamiento campaña">
+            </div>
+            <div>
+              <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; height: 38px;">
+                💾 Aplicar Presupuesto
+              </button>
+            </div>
+          </form>
+          <small style="color: #64748b; margin-top: 8px; display: block;">
+            💡 <em>Al ingresar una nueva fecha, el presupuesto anterior se cierra el día anterior y este nuevo valor correrá de forma continua hasta que vuelvas a cambiarlo.</em>
+          </small>
+        </div>
+
+        <!-- Tabla de Historial -->
+        <h4 style="margin: 0 0 10px 0; color: #f8fafc; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center;">
+          <span>📋 Historial de Periodos Registrados</span>
+          <span id="budgetHistoryActiveBadge" class="badge-primary">Presupuesto Vigente</span>
+        </h4>
+        <div class="table-container" style="max-height: 280px; overflow-y: auto;">
+          <table class="data-table" style="font-size: 0.85rem; width: 100%;">
+            <thead>
+              <tr>
+                <th>Desde</th>
+                <th>Hasta</th>
+                <th>Presupuesto Diario</th>
+                <th>Estado</th>
+                <th>Notas</th>
+                <th style="text-align: right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="budgetHistoryTableBody">
+              <tr><td colspan="6" class="empty-cell">Cargando historial...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

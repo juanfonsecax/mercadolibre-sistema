@@ -624,6 +624,27 @@ function initSchema() {
     )
   `);
 
+  // ── Historial de Presupuestos Diarios de Publicidad (Intervalos de Fechas) ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ad_budgets_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      daily_budget_cop REAL NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  try {
+    const countBudgets = queryOne('SELECT COUNT(*) as count FROM ad_budgets_history');
+    if (!countBudgets || countBudgets.count === 0) {
+      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (1, 20000, '2026-08-01', NULL, 'Presupuesto inicial Tienda Juan')");
+      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (2, 9524, '2026-08-01', NULL, 'Presupuesto inicial Tienda Carlos')");
+    }
+  } catch {}
+
   // ── Historial de Peticiones a Mercado Libre (Ofertas) ──
   db.run(`
     CREATE TABLE IF NOT EXISTS ml_api_logs (
@@ -2343,6 +2364,145 @@ function getFinancialExpenses(accountId = 1, month = null, year = null) {
   return row || { account_id: accId, period_month: currentMonth, period_year: currentYear, ad_spend_cop: 0, returns_cost_cop: 0, extra_expenses_cop: 0, notes: '' };
 }
 
+// ── Historial de Presupuestos Diarios de Publicidad (Intervalos de Fechas) ──
+
+function getAdBudgetHistory(accountId = null) {
+  const accId = accountId ? parseInt(accountId) : null;
+  if (accId) {
+    return queryAll('SELECT * FROM ad_budgets_history WHERE account_id = ? ORDER BY start_date DESC, id DESC', [accId]);
+  }
+  return queryAll('SELECT h.*, a.name as account_name FROM ad_budgets_history h LEFT JOIN accounts a ON h.account_id = a.id ORDER BY h.account_id ASC, h.start_date DESC, h.id DESC');
+}
+
+function saveAdBudgetPeriod(accountId, dailyBudget, startDate = null, notes = '') {
+  const accId = parseInt(accountId);
+  const budget = parseFloat(dailyBudget);
+  if (!startDate) {
+    startDate = new Date().toISOString().split('T')[0];
+  }
+
+  // Calculate day before startDate
+  const startObj = new Date(startDate + 'T12:00:00Z');
+  const prevDayObj = new Date(startObj.getTime() - 86400000);
+  const prevDayStr = prevDayObj.toISOString().split('T')[0];
+
+  // Close previous open period(s) that started before or on startDate
+  runSql(
+    'UPDATE ad_budgets_history SET end_date = ? WHERE account_id = ? AND (end_date IS NULL OR end_date >= ?) AND start_date <= ?',
+    [prevDayStr, accId, startDate, prevDayStr]
+  );
+
+  // Insert new period
+  runSql(
+    'INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (?, ?, ?, NULL, ?)',
+    [accId, budget, startDate, notes || null]
+  );
+
+  // Keep quick reference updated on accounts table
+  updateAccountAdBudget(accId, budget);
+  saveDbToFile();
+  return getAdBudgetHistory(accId);
+}
+
+function updateAdBudgetPeriod(id, dailyBudget, startDate, endDate, notes) {
+  runSql(
+    'UPDATE ad_budgets_history SET daily_budget_cop = ?, start_date = ?, end_date = ?, notes = ? WHERE id = ?',
+    [parseFloat(dailyBudget), startDate, endDate || null, notes || null, parseInt(id)]
+  );
+  saveDbToFile();
+  return true;
+}
+
+function deleteAdBudgetPeriod(id) {
+  const row = queryOne('SELECT * FROM ad_budgets_history WHERE id = ?', [parseInt(id)]);
+  if (row) {
+    runSql('DELETE FROM ad_budgets_history WHERE id = ?', [parseInt(id)]);
+    // If deleted period was active (end_date is NULL), reopen the most recent previous period
+    if (!row.end_date) {
+      const prev = queryOne('SELECT * FROM ad_budgets_history WHERE account_id = ? ORDER BY start_date DESC, id DESC LIMIT 1', [row.account_id]);
+      if (prev) {
+        runSql('UPDATE ad_budgets_history SET end_date = NULL WHERE id = ?', [prev.id]);
+        updateAccountAdBudget(row.account_id, prev.daily_budget_cop);
+      }
+    }
+    saveDbToFile();
+  }
+  return true;
+}
+
+function calculateMonthlyAdSpend(accountId, month = null, year = null) {
+  const targetMonth = month ? parseInt(month) : (new Date().getMonth() + 1);
+  const targetYear = year ? parseInt(year) : new Date().getFullYear();
+  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+  const accId = parseInt(accountId);
+
+  const history = queryAll(
+    'SELECT * FROM ad_budgets_history WHERE account_id = ? ORDER BY start_date ASC, id ASC',
+    [accId]
+  );
+
+  const account = getAccountById(accId);
+  const defaultBudget = account?.daily_ad_budget_cop || (accId === 2 ? 9524 : 20000);
+
+  const now = new Date();
+  const isCurrentMonth = (now.getFullYear() === targetYear && (now.getMonth() + 1) === targetMonth);
+  const currentDay = isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
+
+  let totalSpendMonth = 0;
+  let spendUpToToday = 0;
+  const dayLogs = [];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    let dayBudget = defaultBudget;
+
+    const matching = history.filter(h => h.start_date <= dayStr && (!h.end_date || h.end_date >= dayStr));
+    if (matching.length > 0) {
+      matching.sort((a, b) => b.start_date.localeCompare(a.start_date) || (b.id - a.id));
+      dayBudget = parseFloat(matching[0].daily_budget_cop);
+    }
+
+    totalSpendMonth += dayBudget;
+    if (d <= currentDay) {
+      spendUpToToday += dayBudget;
+    }
+    dayLogs.push({ date: dayStr, day: d, budget: dayBudget });
+  }
+
+  const breakdown = [];
+  let cur = null;
+  dayLogs.forEach(l => {
+    if (!cur || cur.daily_budget !== l.budget) {
+      if (cur) breakdown.push(cur);
+      cur = {
+        daily_budget: l.budget,
+        start_date: l.date,
+        end_date: l.date,
+        days: 1,
+        subtotal: l.budget
+      };
+    } else {
+      cur.end_date = l.date;
+      cur.days++;
+      cur.subtotal += l.budget;
+    }
+  });
+  if (cur) breakdown.push(cur);
+
+  return {
+    account_id: accId,
+    account_name: account?.name || `Cuenta #${accId}`,
+    month: targetMonth,
+    year: targetYear,
+    days_in_month: daysInMonth,
+    days_elapsed: currentDay,
+    is_current_month: isCurrentMonth,
+    total_spend_month: Math.round(totalSpendMonth),
+    spend_up_to_today: Math.round(spendUpToToday),
+    breakdown
+  };
+}
+
 function getFinancialSummary(accountId = null, month = null, year = null) {
   const targetMonth = month ? parseInt(month) : (new Date().getMonth() + 1);
   const targetYear = year ? parseInt(year) : new Date().getFullYear();
@@ -2440,22 +2600,51 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   const expenses = getFinancialExpenses(accId || 1, targetMonth, targetYear);
   
   let adSpendCop = parseFloat(expenses.ad_spend_cop || 0);
-  // If ad_spend_cop is not manually entered, compute from account's daily_ad_budget_cop
-  if (adSpendCop === 0) {
+  let adSpendElapsedCop = 0;
+  let adBreakdown = [];
+
+  // If ad_spend_cop is not manually entered, compute dynamically from date intervals history
+  if (adSpendCop > 0) {
+    adSpendElapsedCop = adSpendCop;
+    adBreakdown.push({
+      account_name: accId ? (getAccountById(accId)?.name || `Cuenta #${accId}`) : 'Todas las cuentas',
+      daily_budget: Math.round(adSpendCop / daysInMonth),
+      days: daysInMonth,
+      subtotal: adSpendCop,
+      is_manual: true,
+      notes: 'Ajuste manual de gastos'
+    });
+  } else {
     if (accId) {
-      const acc = getAccountById(accId);
-      const dailyBudget = acc?.daily_ad_budget_cop || (accId === 2 ? 9524 : 20000);
-      adSpendCop = Math.round(dailyBudget * daysInMonth);
+      const calc = calculateMonthlyAdSpend(accId, targetMonth, targetYear);
+      adSpendCop = calc.total_spend_month;
+      adSpendElapsedCop = calc.spend_up_to_today;
+      adBreakdown = calc.breakdown.map(b => ({ account_name: calc.account_name, ...b }));
     } else {
       const accounts = getAccounts();
-      adSpendCop = accounts.reduce((sum, acc) => {
+      accounts.forEach(acc => {
         const exp = getFinancialExpenses(acc.id, targetMonth, targetYear);
         if (exp && exp.ad_spend_cop && parseFloat(exp.ad_spend_cop) > 0) {
-          return sum + parseFloat(exp.ad_spend_cop);
+          const manualVal = parseFloat(exp.ad_spend_cop);
+          adSpendCop += manualVal;
+          adSpendElapsedCop += manualVal;
+          adBreakdown.push({
+            account_name: acc.name,
+            daily_budget: Math.round(manualVal / daysInMonth),
+            days: daysInMonth,
+            subtotal: manualVal,
+            is_manual: true,
+            notes: 'Ajuste manual'
+          });
+        } else {
+          const calc = calculateMonthlyAdSpend(acc.id, targetMonth, targetYear);
+          adSpendCop += calc.total_spend_month;
+          adSpendElapsedCop += calc.spend_up_to_today;
+          calc.breakdown.forEach(b => {
+            adBreakdown.push({ account_name: acc.name, ...b });
+          });
         }
-        const dailyBudget = acc.daily_ad_budget_cop || (acc.id === 2 ? 9524 : 20000);
-        return sum + Math.round(dailyBudget * daysInMonth);
-      }, 0);
+      });
     }
   }
   
@@ -2481,6 +2670,8 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
     cogs_cop: Math.round(totalCogsCop),
     meli_commissions_cop: Math.round(totalCommissionsCop),
     ad_spend_cop: Math.round(adSpendCop),
+    ad_spend_elapsed_cop: Math.round(adSpendElapsedCop),
+    ad_breakdown: adBreakdown,
     returns_cost_cop: Math.round(returnsCostCop),
     extra_expenses_cop: Math.round(extraExpensesCop),
     total_deductions_cop: Math.round(totalDeductionsCop),
@@ -2644,6 +2835,8 @@ module.exports = {
   getProductContexts, getProductContextByItemId, saveProductContext, updateProductContext,
   // Financial Analytics & Profitability Engine
   saveFinancialExpense, getFinancialExpenses, getFinancialSummary,
+  // Ad Budgets History (Date Intervals)
+  getAdBudgetHistory, saveAdBudgetPeriod, updateAdBudgetPeriod, deleteAdBudgetPeriod, calculateMonthlyAdSpend,
   // ML Orders
   saveMlOrder, getLatestOrderDate,
   // ML API Logs

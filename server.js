@@ -1312,6 +1312,59 @@ app.post('/api/ads/budget', (req, res) => {
   }
 });
 
+app.get('/api/ads/budget-history', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    const history = db.getAdBudgetHistory(accountId || null);
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ads/budget-history', (req, res) => {
+  try {
+    const { accountId, dailyBudget, startDate, notes } = req.body;
+    if (!accountId || dailyBudget === undefined) {
+      return res.status(400).json({ error: 'accountId y dailyBudget son requeridos' });
+    }
+    const history = db.saveAdBudgetPeriod(parseInt(accountId), parseFloat(dailyBudget), startDate || null, notes || '');
+    res.json({ success: true, history });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/ads/budget-history/:id', (req, res) => {
+  try {
+    const { dailyBudget, startDate, endDate, notes } = req.body;
+    db.updateAdBudgetPeriod(parseInt(req.params.id), parseFloat(dailyBudget), startDate, endDate, notes);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/ads/budget-history/:id', (req, res) => {
+  try {
+    db.deleteAdBudgetPeriod(parseInt(req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ads/monthly-calculation', (req, res) => {
+  try {
+    const { accountId, month, year } = req.query;
+    if (!accountId) return res.status(400).json({ error: 'accountId es requerido' });
+    const calc = db.calculateMonthlyAdSpend(parseInt(accountId), month, year);
+    res.json(calc);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ══════════════════════════════════════════
 // ── Financial Analytics & Profitability Routes ──
 // ══════════════════════════════════════════

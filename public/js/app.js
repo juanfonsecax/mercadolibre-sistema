@@ -233,6 +233,20 @@ async function loadFinancialSummary() {
     if (elCogsCost) elCogsCost.textContent = formatCop(fin.cogs_cop);
     if (elCommissions) elCommissions.textContent = formatCop(fin.meli_commissions_cop);
     if (elAdSpend) elAdSpend.textContent = formatCop(fin.ad_spend_cop);
+    const elAdSubtext = document.getElementById('fin-ad-subtext');
+    if (elAdSubtext) {
+      if (fin.ad_breakdown && fin.ad_breakdown.length > 0) {
+        if (fin.ad_breakdown.length === 1 && fin.ad_breakdown[0].daily_budget) {
+          elAdSubtext.innerHTML = `📅 ${Math.round(fin.ad_breakdown[0].daily_budget).toLocaleString('es-CO')}/día · ${fin.ad_breakdown[0].days} días`;
+        } else if (fin.ad_breakdown.length > 1) {
+          elAdSubtext.innerHTML = `📅 ${fin.ad_breakdown.length} periodos de gasto · Clic para ver`;
+        } else {
+          elAdSubtext.innerHTML = '📅 Presupuestos por fecha ⚙️';
+        }
+      } else {
+        elAdSubtext.innerHTML = 'Campañas Mercado Clics ⚙️';
+      }
+    }
     if (elReturnsCost) elReturnsCost.textContent = formatCop(fin.returns_cost_cop);
     if (elNetProfit) elNetProfit.textContent = formatCop(fin.net_profit_cop);
 
@@ -4211,3 +4225,196 @@ function showSyncScheduleInfo() {
     modal.style.display = 'flex';
   }
 }
+
+
+// ── Modal de Gestión de Presupuestos de Publicidad por Fecha ──
+
+function openAdBudgetHistoryModal() {
+  const modal = document.getElementById('modalAdBudgetHistory');
+  if (!modal) return;
+
+  const inputDate = document.getElementById('inputNewPeriodStartDate');
+  if (inputDate) {
+    inputDate.value = new Date().toISOString().split('T')[0];
+  }
+
+  modal.style.display = 'flex';
+  loadAdBudgetHistory();
+}
+
+function closeAdBudgetHistoryModal() {
+  const modal = document.getElementById('modalAdBudgetHistory');
+  if (modal) modal.style.display = 'none';
+}
+
+async function loadAdBudgetHistory() {
+  const accountId = (!activeAccountId || activeAccountId === 'all') ? 1 : parseInt(activeAccountId);
+  const tbody = document.getElementById('budgetHistoryTableBody');
+  const modalTitle = document.getElementById('budgetModalAccountName');
+  const activeBadge = document.getElementById('budgetHistoryActiveBadge');
+  const inputBudget = document.getElementById('inputNewPeriodBudget');
+
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">Cargando periodos...</td></tr>';
+
+  try {
+    const history = await apiFetch(`/api/ads/budget-history?accountId=${accountId}`);
+    const account = (typeof allAccounts !== 'undefined' && Array.isArray(allAccounts)) ? allAccounts.find(a => String(a.id) === String(accountId)) : null;
+    const accName = account?.name || (accountId === 2 ? 'Tienda Carlos' : 'Tienda Juan');
+
+    if (modalTitle) modalTitle.textContent = accName;
+
+    if (!history || history.length === 0) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">No hay periodos registrados aún. Ingresa uno arriba.</td></tr>';
+      return;
+    }
+
+    let activeBudget = null;
+    let html = '';
+
+    history.forEach(item => {
+      const isCurrentActive = !item.end_date;
+      if (isCurrentActive && !activeBudget) {
+        activeBudget = item.daily_budget_cop;
+      }
+
+      const statusBadge = isCurrentActive
+        ? '<span class="badge-success" style="padding: 3px 8px; font-size: 0.75rem; background:#10b981; color:#022c22; border-radius:4px; font-weight:700;">🟢 Activo / Vigente</span>'
+        : '<span class="badge-secondary" style="padding: 3px 8px; font-size: 0.75rem; background:rgba(255,255,255,0.1); color:#94a3b8; border-radius:4px;">Finalizado</span>';
+
+      html += `
+        <tr style="${isCurrentActive ? 'background: rgba(16, 185, 129, 0.08); font-weight: 500;' : ''}">
+          <td><strong>${item.start_date}</strong></td>
+          <td>${item.end_date ? item.end_date : '<em style="color: #10b981;">Actualmente en curso</em>'}</td>
+          <td style="color: #38bdf8; font-weight: 700;">$${Math.round(item.daily_budget_cop).toLocaleString('es-CO')} COP / día</td>
+          <td>${statusBadge}</td>
+          <td style="color: #94a3b8; font-size: 0.8rem;">${escapeHtml(item.notes || '—')}</td>
+          <td style="text-align: right; white-space: nowrap;">
+            <button class="btn btn-sm btn-secondary" onclick="promptEditBudgetPeriod(${item.id}, ${item.daily_budget_cop}, '${item.start_date}', '${item.end_date || ''}', '${escapeHtml(item.notes || '')}')" title="Editar periodo" style="padding: 3px 8px; font-size: 0.75rem;">✏️</button>
+            ${!isCurrentActive ? `<button class="btn btn-sm btn-danger" onclick="deleteBudgetPeriod(${item.id})" title="Eliminar periodo" style="padding: 3px 8px; font-size: 0.75rem; margin-left: 4px; background:#ef4444; color:#fff; border:none; border-radius:4px;">🗑️</button>` : ''}
+          </td>
+        </tr>
+      `;
+    });
+
+    if (tbody) tbody.innerHTML = html;
+
+    if (activeBadge) {
+      if (activeBudget) {
+        activeBadge.textContent = `Presupuesto Vigente: $${Math.round(activeBudget).toLocaleString('es-CO')} COP/día`;
+      } else {
+        activeBadge.textContent = 'Sin periodo abierto';
+      }
+    }
+
+    if (inputBudget && activeBudget && !inputBudget.value) {
+      inputBudget.value = activeBudget;
+    }
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-cell" style="color:#ef4444;">Error: ${err.message}</td></tr>`;
+  }
+}
+
+async function saveNewBudgetPeriod(e) {
+  if (e) e.preventDefault();
+  const accountId = (!activeAccountId || activeAccountId === 'all') ? 1 : parseInt(activeAccountId);
+  const budget = parseFloat(document.getElementById('inputNewPeriodBudget')?.value || 0);
+  const startDate = document.getElementById('inputNewPeriodStartDate')?.value;
+  const notes = document.getElementById('inputNewPeriodNotes')?.value || '';
+
+  if (!budget || budget <= 0) {
+    showToast('Ingresa un presupuesto diario válido mayor a 0', 'error');
+    return;
+  }
+  if (!startDate) {
+    showToast('Selecciona una fecha de inicio', 'error');
+    return;
+  }
+
+  try {
+    const res = await apiFetch('/api/ads/budget-history', {
+      method: 'POST',
+      body: JSON.stringify({ accountId, dailyBudget: budget, startDate, notes })
+    });
+
+    if (res && res.success) {
+      showToast(`Nuevo presupuesto de $${budget.toLocaleString('es-CO')} COP/día activado desde ${startDate}`, 'success');
+      const notesEl = document.getElementById('inputNewPeriodNotes');
+      if (notesEl) notesEl.value = '';
+
+      await loadAdBudgetHistory();
+      await loadAdGroups();
+      if (typeof loadFinancialSummary === 'function') {
+        loadFinancialSummary();
+      }
+    } else {
+      showToast('Error guardando periodo: ' + (res?.error || 'Falló operación'), 'error');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function deleteBudgetPeriod(id) {
+  if (!confirm('¿Estás seguro de eliminar este registro histórico de presupuesto?')) return;
+
+  try {
+    const res = await apiFetch(`/api/ads/budget-history/${id}`, { method: 'DELETE' });
+    if (res && res.success) {
+      showToast('Periodo eliminado', 'success');
+      await loadAdBudgetHistory();
+      await loadAdGroups();
+      if (typeof loadFinancialSummary === 'function') {
+        loadFinancialSummary();
+      }
+    } else {
+      showToast('Error eliminando: ' + (res?.error || 'Falló'), 'error');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function promptEditBudgetPeriod(id, currentBudget, currentStart, currentEnd, currentNotes) {
+  const newBudgetStr = prompt('Nuevo presupuesto diario (COP):', currentBudget);
+  if (newBudgetStr === null) return;
+  const newBudget = parseFloat(newBudgetStr);
+  if (isNaN(newBudget) || newBudget <= 0) {
+    showToast('Presupuesto inválido', 'error');
+    return;
+  }
+
+  const newStart = prompt('Fecha de inicio (YYYY-MM-DD):', currentStart);
+  if (newStart === null || !newStart) return;
+
+  const newEnd = prompt('Fecha de fin (YYYY-MM-DD o deja vacío si sigue vigente):', currentEnd || '');
+  if (newEnd === null) return;
+
+  const newNotes = prompt('Notas / Observación:', currentNotes || '');
+  if (newNotes === null) return;
+
+  try {
+    const res = await apiFetch(`/api/ads/budget-history/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        dailyBudget: newBudget,
+        startDate: newStart,
+        endDate: newEnd.trim() || null,
+        notes: newNotes.trim()
+      })
+    });
+
+    if (res && res.success) {
+      showToast('Periodo actualizado con éxito', 'success');
+      await loadAdBudgetHistory();
+      await loadAdGroups();
+      if (typeof loadFinancialSummary === 'function') {
+        loadFinancialSummary();
+      }
+    } else {
+      showToast('Error al actualizar: ' + (res?.error || 'Falló'), 'error');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
