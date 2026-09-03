@@ -2446,7 +2446,10 @@ function calculateMonthlyAdSpend(accountId, month = null, year = null) {
 
   const now = new Date();
   const isCurrentMonth = (now.getFullYear() === targetYear && (now.getMonth() + 1) === targetMonth);
-  const currentDay = isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
+  const isPastMonth = (targetYear < now.getFullYear() || (targetYear === now.getFullYear() && targetMonth < (now.getMonth() + 1)));
+  const currentDay = isCurrentMonth 
+    ? Math.min(now.getDate(), daysInMonth) 
+    : (isPastMonth ? daysInMonth : 0);
 
   let totalSpendMonth = 0;
   let spendUpToToday = 0;
@@ -2463,7 +2466,7 @@ function calculateMonthlyAdSpend(accountId, month = null, year = null) {
     }
 
     totalSpendMonth += dayBudget;
-    if (d <= currentDay) {
+    if (d <= currentDay && currentDay > 0) {
       spendUpToToday += dayBudget;
     }
     dayLogs.push({ date: dayStr, day: d, budget: dayBudget });
@@ -2472,6 +2475,7 @@ function calculateMonthlyAdSpend(accountId, month = null, year = null) {
   const breakdown = [];
   let cur = null;
   dayLogs.forEach(l => {
+    const isElapsed = (l.day <= currentDay && currentDay > 0);
     if (!cur || cur.daily_budget !== l.budget) {
       if (cur) breakdown.push(cur);
       cur = {
@@ -2479,24 +2483,33 @@ function calculateMonthlyAdSpend(accountId, month = null, year = null) {
         start_date: l.date,
         end_date: l.date,
         days: 1,
+        days_elapsed: isElapsed ? 1 : 0,
+        subtotal_month: l.budget,
+        subtotal_elapsed: isElapsed ? l.budget : 0,
         subtotal: l.budget
       };
     } else {
       cur.end_date = l.date;
       cur.days++;
+      cur.subtotal_month += l.budget;
       cur.subtotal += l.budget;
+      if (isElapsed) {
+        cur.days_elapsed++;
+        cur.subtotal_elapsed += l.budget;
+      }
     }
   });
   if (cur) breakdown.push(cur);
 
   return {
     account_id: accId,
-    account_name: account?.name || `Cuenta #${accId}`,
+    account_name: account?.name || (accId === 2 ? 'Tienda Carlos' : 'Tienda Juan'),
     month: targetMonth,
     year: targetYear,
     days_in_month: daysInMonth,
     days_elapsed: currentDay,
     is_current_month: isCurrentMonth,
+    is_past_month: isPastMonth,
     total_spend_month: Math.round(totalSpendMonth),
     spend_up_to_today: Math.round(spendUpToToday),
     breakdown
@@ -2597,57 +2610,86 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   productBreakdown.sort((a, b) => b.net_profit_cop - a.net_profit_cop);
 
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+  const now = new Date();
+  const isCurrentMonth = (now.getFullYear() === targetYear && (now.getMonth() + 1) === targetMonth);
+  const isPastMonth = (targetYear < now.getFullYear() || (targetYear === now.getFullYear() && targetMonth < (now.getMonth() + 1)));
+  const currentDay = isCurrentMonth 
+    ? Math.min(now.getDate(), daysInMonth) 
+    : (isPastMonth ? daysInMonth : 0);
+
   const expenses = getFinancialExpenses(accId || 1, targetMonth, targetYear);
-  
-  let adSpendCop = parseFloat(expenses.ad_spend_cop || 0);
+  const manualExpenseVal = parseFloat(expenses.ad_spend_cop || 0);
+
+  let adSpendProjectedCop = 0;
   let adSpendElapsedCop = 0;
   let adBreakdown = [];
 
   // If ad_spend_cop is not manually entered, compute dynamically from date intervals history
-  if (adSpendCop > 0) {
-    adSpendElapsedCop = adSpendCop;
+  if (manualExpenseVal > 0) {
+    adSpendProjectedCop = manualExpenseVal;
+    adSpendElapsedCop = manualExpenseVal;
     adBreakdown.push({
-      account_name: accId ? (getAccountById(accId)?.name || `Cuenta #${accId}`) : 'Todas las cuentas',
-      daily_budget: Math.round(adSpendCop / daysInMonth),
+      account_id: accId || 1,
+      account_name: accId ? (getAccountById(accId)?.name || `Cuenta #${accId}`) : 'Manual',
+      daily_budget: Math.round(manualExpenseVal / daysInMonth),
       days: daysInMonth,
-      subtotal: adSpendCop,
+      days_elapsed: currentDay,
+      subtotal_month: manualExpenseVal,
+      subtotal_elapsed: manualExpenseVal,
+      subtotal: manualExpenseVal,
       is_manual: true,
       notes: 'Ajuste manual de gastos'
     });
   } else {
     if (accId) {
       const calc = calculateMonthlyAdSpend(accId, targetMonth, targetYear);
-      adSpendCop = calc.total_spend_month;
+      adSpendProjectedCop = calc.total_spend_month;
       adSpendElapsedCop = calc.spend_up_to_today;
-      adBreakdown = calc.breakdown.map(b => ({ account_name: calc.account_name, ...b }));
+      adBreakdown = calc.breakdown.map(b => ({
+        account_id: accId,
+        account_name: calc.account_name,
+        ...b
+      }));
     } else {
       const accounts = getAccounts();
       accounts.forEach(acc => {
         const exp = getFinancialExpenses(acc.id, targetMonth, targetYear);
         if (exp && exp.ad_spend_cop && parseFloat(exp.ad_spend_cop) > 0) {
           const manualVal = parseFloat(exp.ad_spend_cop);
-          adSpendCop += manualVal;
+          adSpendProjectedCop += manualVal;
           adSpendElapsedCop += manualVal;
           adBreakdown.push({
+            account_id: acc.id,
             account_name: acc.name,
             daily_budget: Math.round(manualVal / daysInMonth),
             days: daysInMonth,
+            days_elapsed: currentDay,
+            subtotal_month: manualVal,
+            subtotal_elapsed: manualVal,
             subtotal: manualVal,
             is_manual: true,
             notes: 'Ajuste manual'
           });
         } else {
           const calc = calculateMonthlyAdSpend(acc.id, targetMonth, targetYear);
-          adSpendCop += calc.total_spend_month;
+          adSpendProjectedCop += calc.total_spend_month;
           adSpendElapsedCop += calc.spend_up_to_today;
           calc.breakdown.forEach(b => {
-            adBreakdown.push({ account_name: acc.name, ...b });
+            adBreakdown.push({
+              account_id: acc.id,
+              account_name: acc.name,
+              ...b
+            });
           });
         }
       });
     }
   }
   
+  // Active deduction: in the current month, subtract what has actually been spent so far (elapsed days)
+  // In a past completed month, elapsed equals daysInMonth, so it equals the full monthly spend
+  const activeAdSpendDeduction = isCurrentMonth ? adSpendElapsedCop : adSpendProjectedCop;
+
   let returnsCostCop = parseFloat(expenses.returns_cost_cop || 0);
   if (returnsCostCop === 0) {
     const claimsCountObj = queryOne(
@@ -2659,18 +2701,23 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   }
 
   const extraExpensesCop = parseFloat(expenses.extra_expenses_cop || 0);
-  const totalDeductionsCop = totalCommissionsCop + totalCogsCop + adSpendCop + returnsCostCop + extraExpensesCop;
+  const totalDeductionsCop = totalCommissionsCop + totalCogsCop + activeAdSpendDeduction + returnsCostCop + extraExpensesCop;
   const netProfitCop = grossSalesCop - totalDeductionsCop;
   const netMarginPercent = grossSalesCop > 0 ? (netProfitCop / grossSalesCop) * 100 : 0;
 
   return {
     period: { month: targetMonth, year: targetYear },
+    days_in_month: daysInMonth,
+    days_elapsed: currentDay,
+    is_current_month: isCurrentMonth,
+    is_past_month: isPastMonth,
     gross_sales_cop: Math.round(grossSalesCop),
     total_units_sold: totalUnitsSold,
     cogs_cop: Math.round(totalCogsCop),
     meli_commissions_cop: Math.round(totalCommissionsCop),
-    ad_spend_cop: Math.round(adSpendCop),
+    ad_spend_cop: Math.round(activeAdSpendDeduction),
     ad_spend_elapsed_cop: Math.round(adSpendElapsedCop),
+    ad_spend_projected_cop: Math.round(adSpendProjectedCop),
     ad_breakdown: adBreakdown,
     returns_cost_cop: Math.round(returnsCostCop),
     extra_expenses_cop: Math.round(extraExpensesCop),
