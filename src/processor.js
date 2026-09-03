@@ -422,6 +422,19 @@ async function pollQuestionsForAccount(accountId) {
         await processQuestion(q.id, accountId);
         processed++;
         await new Promise(resolve => setTimeout(resolve, 1000));
+      } else if (existing.status === 'error') {
+        const mode = process.env.AUTO_REPLY_MODE || 'supervised';
+        if (mode === 'automatic' && existing.generated_answer) {
+          console.log(`[Polling] 🔄 Reintentando responder pregunta previa con error ${q.id}...`);
+          try {
+            await questions.answerQuestion(q.id, existing.generated_answer, accountId);
+            db.updateQuestionStatus(existing.id, 'answered', existing.generated_answer);
+            db.updateDailyStats('questions_answered', accountId);
+            console.log(`[Polling] ✅ Pregunta ${q.id} respondida con éxito tras reintento automático`);
+          } catch (retryErr) {
+            console.warn(`[Polling] Reintento fallido para pregunta ${q.id}:`, retryErr.message);
+          }
+        }
       }
     }
     return processed;

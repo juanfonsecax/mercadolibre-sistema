@@ -164,6 +164,20 @@ function initSchema() {
   try { db.run('ALTER TABLE daily_stats ADD COLUMN claims_responded INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE daily_stats ADD COLUMN avg_response_time_seconds REAL DEFAULT 0'); } catch {}
 
+  // Migration for daily_stats to multi-account schema with UNIQUE(date, account_id)
+  try {
+    const tableInfo = queryAll("SELECT sql FROM sqlite_master WHERE type='table' AND name='daily_stats'");
+    if (tableInfo.length > 0 && tableInfo[0].sql && tableInfo[0].sql.includes('date TEXT PRIMARY KEY')) {
+      db.run('CREATE TABLE daily_stats_new (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, account_id INTEGER, questions_received INTEGER DEFAULT 0, questions_answered INTEGER DEFAULT 0, claims_received INTEGER DEFAULT 0, claims_responded INTEGER DEFAULT 0, messages_received INTEGER DEFAULT 0, messages_responded INTEGER DEFAULT 0, avg_response_time_seconds REAL DEFAULT 0, UNIQUE(date, account_id))');
+      db.run('INSERT OR IGNORE INTO daily_stats_new (date, account_id, questions_received, questions_answered, claims_received, claims_responded, messages_received, messages_responded, avg_response_time_seconds) SELECT date, COALESCE(account_id, 1), questions_received, questions_answered, claims_received, claims_responded, COALESCE(messages_received, 0), COALESCE(messages_responded, 0), avg_response_time_seconds FROM daily_stats');
+      db.run('DROP TABLE daily_stats');
+      db.run('ALTER TABLE daily_stats_new RENAME TO daily_stats');
+      console.log('[DB] Migrated daily_stats table to support multi-account stats');
+    }
+  } catch(e) {
+    console.warn('[DB] Migration daily_stats notice:', e.message);
+  }
+
 
   // Default redirect URI for Render or local
   const defaultRedirectUri = process.env.RENDER_EXTERNAL_URL
@@ -334,7 +348,8 @@ function initSchema() {
   // Daily Stats
   db.run(`
     CREATE TABLE IF NOT EXISTS daily_stats (
-      date TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
       account_id INTEGER,
       questions_received INTEGER DEFAULT 0,
       questions_answered INTEGER DEFAULT 0,
@@ -342,7 +357,8 @@ function initSchema() {
       claims_responded INTEGER DEFAULT 0,
       messages_received INTEGER DEFAULT 0,
       messages_responded INTEGER DEFAULT 0,
-      avg_response_time_seconds REAL DEFAULT 0
+      avg_response_time_seconds REAL DEFAULT 0,
+      UNIQUE(date, account_id)
     )
   `);
 
@@ -1041,17 +1057,22 @@ function getActivityLog(limit = 50, accountId = null) {
 // ── Daily Stats ──
 
 function updateDailyStats(field, accountId = null) {
-  const today = new Date().toISOString().split('T')[0];
-  const existing = queryOne('SELECT * FROM daily_stats WHERE date = ? AND (account_id = ? OR (? IS NULL AND account_id IS NULL))', [today, accountId, accountId]);
-  if (existing) {
-    runSql(`UPDATE daily_stats SET ${field} = ${field} + 1 WHERE date = ? AND (account_id = ? OR (? IS NULL AND account_id IS NULL))`, [today, accountId, accountId]);
-  } else {
-    const fields = { questions_received: 0, questions_answered: 0, claims_received: 0, claims_responded: 0, messages_received: 0, messages_responded: 0, avg_response_time_seconds: 0 };
-    fields[field] = 1;
-    runSql(
-      'INSERT INTO daily_stats (date, account_id, questions_received, questions_answered, claims_received, claims_responded, messages_received, messages_responded, avg_response_time_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [today, accountId || null, fields.questions_received, fields.questions_answered, fields.claims_received, fields.claims_responded, fields.messages_received, fields.messages_responded, fields.avg_response_time_seconds]
-    );
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const accId = accountId ? parseInt(accountId) : 1;
+    const existing = queryOne('SELECT id FROM daily_stats WHERE date = ? AND account_id = ?', [today, accId]);
+    if (existing) {
+      runSql(`UPDATE daily_stats SET ${field} = COALESCE(${field}, 0) + 1 WHERE id = ?`, [existing.id]);
+    } else {
+      const fields = { questions_received: 0, questions_answered: 0, claims_received: 0, claims_responded: 0, messages_received: 0, messages_responded: 0, avg_response_time_seconds: 0 };
+      fields[field] = 1;
+      runSql(
+        'INSERT OR IGNORE INTO daily_stats (date, account_id, questions_received, questions_answered, claims_received, claims_responded, messages_received, messages_responded, avg_response_time_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [today, accId, fields.questions_received, fields.questions_answered, fields.claims_received, fields.claims_responded, fields.messages_received, fields.messages_responded, fields.avg_response_time_seconds]
+      );
+    }
+  } catch (e) {
+    console.error('[DB] Error updating daily stats (non-blocking):', e.message);
   }
 }
 
