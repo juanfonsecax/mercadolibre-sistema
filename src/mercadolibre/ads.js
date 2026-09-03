@@ -5,14 +5,8 @@ const db = require('../database');
  * @param {number} accountId - The ML account ID to calculate for (e.g., Juan's account).
  */
 function calculateAdGroups(accountId) {
-  // Fetch all items for this account
-  const sql = `
-    SELECT f.*, m.master_product_title 
-    FROM ml_full_inventory f
-    LEFT JOIN product_mappings m ON f.ml_item_id = m.ml_item_id
-    WHERE f.account_id = ? AND f.status = 'active'
-  `;
-  const items = db.queryAll(sql, [accountId]);
+  // Fetch all items for this account using getMlFullInventory
+  const items = db.getMlFullInventory(accountId);
 
   const group1 = []; // Winners
   const group2 = []; // Medium
