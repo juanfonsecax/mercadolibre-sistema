@@ -124,16 +124,18 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
       return {};
     }
 
-    // Use exact 30 rolling calendar days to match Mercado Libre Panel
-    const date30Ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Use 60 days rolling window to capture current and previous month orders in DB
+    const nowMs = Date.now();
+    const date30AgoMs = nowMs - 30 * 24 * 60 * 60 * 1000;
+    const dateFromIso = new Date(nowMs - 60 * 24 * 60 * 60 * 1000).toISOString();
     const salesMap = {};
     let offset = 0;
     const limit = 50;
     let totalOrders = Infinity;
     let totalRead = 0;
 
-    while (offset < totalOrders && offset < 1000) {
-      const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${date30Ago}&sort=date_desc&limit=${limit}&offset=${offset}`;
+    while (offset < totalOrders && offset < 2000) {
+      const url = `https://api.mercadolibre.com/orders/search?seller=${sId}&order.date_created.from=${encodeURIComponent(dateFromIso)}&sort=date_desc&limit=${limit}&offset=${offset}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
       if (!res.ok) {
@@ -148,8 +150,43 @@ async function fetchRecentOrdersSalesMap(accountId, sellerId) {
       totalRead += orders.length;
 
       orders.forEach(ord => {
-        // Exclude cancelled and invalid orders
-        if (ord.status !== 'cancelled' && ord.status !== 'invalid' && ord.order_items) {
+        // Save order to ml_orders for real-time sales, tax & financial reporting
+        try {
+          const mlOrderId = String(ord.id);
+          const dateCreated = ord.date_created || ord.date_closed || new Date().toISOString();
+          const totalAmount = parseFloat(ord.total_amount || 0);
+          const status = ord.status || 'confirmed';
+          const buyerNickname = (ord.buyer && ord.buyer.nickname) || 'Cliente ML';
+          const currencyId = ord.currency_id || 'COP';
+
+          const items = (ord.order_items || []).map(i => ({
+            item_id: i.item?.id,
+            title: i.item?.title,
+            seller_sku: i.item?.seller_sku || i.item?.seller_custom_field,
+            quantity: i.quantity || 1,
+            unit_price: i.unit_price || (totalAmount / (ord.order_items.length || 1)),
+            full_unit_price: i.full_unit_price || i.unit_price
+          }));
+
+          db.saveMlOrder({
+            account_id: targetAccountId,
+            ml_order_id: mlOrderId,
+            date_created: dateCreated,
+            total_amount: totalAmount,
+            currency_id: currencyId,
+            status: status,
+            buyer_nickname: buyerNickname,
+            items_json: JSON.stringify(items)
+          });
+        } catch (saveErr) {
+          console.error('[ML Orders] Error saving order to DB:', saveErr.message);
+        }
+
+        // Exclude cancelled and invalid orders from salesMap (30-day velocity for stock Full)
+        const orderDateMs = new Date(ord.date_created).getTime();
+        const isWithin30Days = orderDateMs >= date30AgoMs;
+
+        if (isWithin30Days && ord.status !== 'cancelled' && ord.status !== 'invalid' && ord.order_items) {
           ord.order_items.forEach(oi => {
             const itemId = oi.item && oi.item.id;
             if (!itemId) return;

@@ -194,7 +194,24 @@ function onFinancialPeriodChange() {
 
 async function loadFinancialSummary() {
   try {
-    const month = document.getElementById('selectFinMonth')?.value || (new Date().getMonth() + 1);
+    const selMonth = document.getElementById('selectFinMonth');
+    const selYear = document.getElementById('selectFinYear');
+
+    if (selMonth && !selMonth.dataset.initialized) {
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      selMonth.value = String(currentMonth);
+      if (selYear) selYear.value = String(currentYear);
+      selMonth.dataset.initialized = 'true';
+
+      Array.from(selMonth.options).forEach(opt => {
+        const val = parseInt(opt.value);
+        const name = opt.textContent.replace(/\s*\(Actual\)/gi, '').trim();
+        opt.textContent = (val === currentMonth) ? `${name} (Actual)` : name;
+      });
+    }
+
+    const month = selMonth?.value || (new Date().getMonth() + 1);
     const year = document.getElementById('selectFinYear')?.value || new Date().getFullYear();
     const query = `?month=${month}&year=${year}` + (activeAccountId ? `&accountId=${activeAccountId}` : '');
     const fin = await apiFetch(`/api/financials/summary${query}`);
@@ -4000,3 +4017,144 @@ async function loadAdGroups() {
   }
 }
 
+
+
+// ══════════════════════════════════════════
+// ── System Sync & Auto-Update Helpers ──
+// ══════════════════════════════════════════
+
+async function triggerSystemSyncAll() {
+  const btn = document.getElementById('btnSyncAll');
+  const originalHtml = btn ? btn.innerHTML : '⚡ Sincronizar Todo el Sistema';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Sincronizando Sistema...';
+  }
+
+  showToast('Iniciando sincronización completa con Mercado Libre...', 'info');
+
+  try {
+    const body = activeAccountId ? { accountId: activeAccountId } : {};
+    const res = await apiFetch('/api/system/sync-all', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+
+    if (res && res.success) {
+      const ordersCount = res.orders?.totalOrdersProcessed || 0;
+      const invCount = res.inventory?.syncedCount || 0;
+      showToast(`¡Sistema sincronizado! ${ordersCount} órdenes procesadas y ${invCount} items de stock Full actualizados.`, 'success');
+      await refreshOverview();
+      if (typeof loadMlFullInventory === 'function') loadMlFullInventory();
+    } else {
+      showToast('Error sincronizando: ' + (res?.error || 'Respuesta inválida'), 'error');
+    }
+  } catch (err) {
+    showToast('Error durante la sincronización: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function syncOrdersNow() {
+  const btn = document.getElementById('btnSyncOrders');
+  const originalHtml = btn ? btn.innerHTML : '🔄 Actualizar Ventas';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Actualizando ventas...';
+  }
+
+  showToast('Descargando ventas y órdenes recientes de Mercado Libre...', 'info');
+
+  try {
+    const month = document.getElementById('selectFinMonth')?.value || (new Date().getMonth() + 1);
+    const year = document.getElementById('selectFinYear')?.value || new Date().getFullYear();
+    const body = {
+      accountId: activeAccountId || null,
+      month: parseInt(month),
+      year: parseInt(year),
+      daysBack: 60
+    };
+
+    const res = await apiFetch('/api/financials/sync-orders', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+
+    if (res && res.success) {
+      showToast(`Ventas actualizadas: ${res.result?.totalOrdersProcessed || 0} órdenes procesadas (${res.result?.newOrdersCount || 0} nuevas).`, 'success');
+      await loadFinancialSummary();
+    } else {
+      showToast('Error actualizando ventas: ' + (res?.error || 'Falló consulta'), 'error');
+    }
+  } catch (err) {
+    showToast('Error actualizando ventas: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+function showSyncScheduleInfo() {
+  let modal = document.getElementById('modalSyncSchedule');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalSyncSchedule';
+    modal.className = 'modal-backdrop';
+    modal.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);';
+    modal.innerHTML = `
+      <div class="card" style="max-width:560px; width:92%; max-height:90vh; overflow-y:auto; padding:24px; border-radius:12px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.2rem; font-weight:700;">⏱️ Frecuencias de Actualización Automática</h3>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modalSyncSchedule').style.display='none'" style="padding:4px 8px;">✕</button>
+        </div>
+        <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:16px;">
+          El sistema trabaja en segundo plano 24/7 conectándose con las APIs de Mercado Libre para mantener sincronizada toda la operación:
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="background:#1e293b; padding:12px 14px; border-radius:8px; border-left:4px solid #10b981;">
+            <div style="font-weight:600; color:#f8fafc; font-size:0.9rem;">📦 Ventas y Órdenes Reales (ml_orders)</div>
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">
+              Sincronización automática <strong>cada 30 minutos</strong>. Alimenta el dashboard de ingresos, utilidad neta, IVA/UVT y productos más vendidos en tiempo real.
+            </div>
+          </div>
+          <div style="background:#1e293b; padding:12px 14px; border-radius:8px; border-left:4px solid #38bdf8;">
+            <div style="font-weight:600; color:#f8fafc; font-size:0.9rem;">📊 Stock Mercado Libre Full (ml_full_inventory)</div>
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">
+              Actualización <strong>cada 30 minutos</strong> de unidades disponibles en bodega Full y rotación de ventas de los últimos 30 días.
+            </div>
+          </div>
+          <div style="background:#1e293b; padding:12px 14px; border-radius:8px; border-left:4px solid #a855f7;">
+            <div style="font-weight:600; color:#f8fafc; font-size:0.9rem;">💬 Preguntas, Mensajes Post-Venta y Reclamos</div>
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">
+              Monitoreo continuo <strong>cada 30 minutos</strong> y respuesta automática inteligente con IA (o al instante vía Webhooks).
+            </div>
+          </div>
+          <div style="background:#1e293b; padding:12px 14px; border-radius:8px; border-left:4px solid #f59e0b;">
+            <div style="font-weight:600; color:#f8fafc; font-size:0.9rem;">⚡ Campañas y Ofertas Relámpago</div>
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">
+              Escaneo de convocatorias y postulaciones en piloto automático <strong>cada 6 horas</strong>.
+            </div>
+          </div>
+          <div style="background:#1e293b; padding:12px 14px; border-radius:8px; border-left:4px solid #ec4899;">
+            <div style="font-weight:600; color:#f8fafc; font-size:0.9rem;">🌙 Reconciliación Diaria Completa (24 Horas)</div>
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">
+              Todos los días a la <strong>1:00 AM</strong> se ejecuta una auditoría profunda de 90 días para garantizar que ninguna orden o cambio de estado quede por fuera.
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:20px; display:flex; justify-content:flex-end;">
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('modalSyncSchedule').style.display='none'">Entendido</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  } else {
+    modal.style.display = 'flex';
+  }
+}

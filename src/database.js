@@ -2324,8 +2324,8 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   const padM = String(targetMonth).padStart(2, '0');
   const monthPattern = `${targetYear}-${padM}-%`;
 
-  // Query real orders from ml_orders table for this specific month/year
-  let orderSql = `SELECT * FROM ml_orders WHERE date_created LIKE ?`;
+  // Query real orders from ml_orders table for this specific month/year (excluding cancelled/invalid)
+  let orderSql = `SELECT * FROM ml_orders WHERE date_created LIKE ? AND (status IS NULL OR status NOT IN ('cancelled', 'invalid'))`;
   let orderParams = [monthPattern];
   if (accId) {
     orderSql += ` AND account_id = ?`;
@@ -2444,6 +2444,53 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
   };
 }
 
+function saveMlOrder(order) {
+  try {
+    const existing = queryOne('SELECT id FROM ml_orders WHERE ml_order_id = ?', [String(order.ml_order_id)]);
+    if (existing) {
+      runSql(
+        `UPDATE ml_orders 
+         SET date_created = ?, total_amount = ?, status = ?, buyer_nickname = ?, items_json = ? 
+         WHERE id = ?`,
+        [order.date_created, order.total_amount, order.status, order.buyer_nickname, order.items_json, existing.id]
+      );
+      return { isNew: false, id: existing.id };
+    } else {
+      runSql(
+        `INSERT INTO ml_orders 
+         (account_id, ml_order_id, date_created, total_amount, currency_id, status, buyer_nickname, items_json) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          order.account_id,
+          String(order.ml_order_id),
+          order.date_created,
+          order.total_amount,
+          order.currency_id || 'COP',
+          order.status,
+          order.buyer_nickname,
+          order.items_json
+        ]
+      );
+      return { isNew: true };
+    }
+  } catch (e) {
+    console.error(`[DB] Error saving order ${order.ml_order_id}:`, e.message);
+    return null;
+  }
+}
+
+function getLatestOrderDate(accountId = null) {
+  let sql = 'SELECT date_created FROM ml_orders';
+  const params = [];
+  if (accountId) {
+    sql += ' WHERE account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY date_created DESC LIMIT 1';
+  const row = queryOne(sql, params);
+  return row ? row.date_created : null;
+}
+
 function getTaxSummary2026() {
   const accounts = getAccounts();
   const limitIvaCop = 182756000;
@@ -2550,6 +2597,8 @@ module.exports = {
   getProductContexts, getProductContextByItemId, saveProductContext, updateProductContext,
   // Financial Analytics & Profitability Engine
   saveFinancialExpense, getFinancialExpenses, getFinancialSummary,
+  // ML Orders
+  saveMlOrder, getLatestOrderDate,
   // ML API Logs
   logMlApiRequest, getMlApiLogs
 };

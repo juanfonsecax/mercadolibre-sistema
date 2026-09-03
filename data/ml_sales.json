@@ -1,14 +1,14 @@
 {
   "MCO1360887164": {
-    "sales_last_30d": 2,
+    "sales_last_30d": 1,
     "sales_last_7d": 0
   },
   "MCO2953532088": {
-    "sales_last_30d": 56,
-    "sales_last_7d": 13
+    "sales_last_30d": 63,
+    "sales_last_7d": 15
   },
   "MCO1531049217": {
-    "sales_last_30d": 15,
+    "sales_last_30d": 18,
     "sales_last_7d": 4
   },
   "MCO1412283655": {
@@ -16,15 +16,15 @@
     "sales_last_7d": 6
   },
   "MCO1538098653": {
-    "sales_last_30d": 11,
-    "sales_last_7d": 3
+    "sales_last_30d": 15,
+    "sales_last_7d": 4
   },
   "MCO1538015011": {
     "sales_last_30d": 5,
     "sales_last_7d": 1
   },
   "MCO2908323420": {
-    "sales_last_30d": 18,
+    "sales_last_30d": 16,
     "sales_last_7d": 4
   },
   "MCO2627945884": {
@@ -32,15 +32,15 @@
     "sales_last_7d": 2
   },
   "MCO2628604956": {
-    "sales_last_30d": 2,
+    "sales_last_30d": 1,
     "sales_last_7d": 0
   },
   "MCO608309396": {
-    "sales_last_30d": 2,
+    "sales_last_30d": 1,
     "sales_last_7d": 0
   },
   "MCO2875994304": {
-    "sales_last_30d": 7,
+    "sales_last_30d": 9,
     "sales_last_7d": 2
   },
   "MCO1553357964": {
@@ -64,12 +64,12 @@
     "sales_last_7d": 0
   },
   "MCO2628838616": {
-    "sales_last_30d": 30,
-    "sales_last_7d": 7
+    "sales_last_30d": 33,
+    "sales_last_7d": 8
   },
   "MCO2627908158": {
-    "sales_last_30d": 43,
-    "sales_last_7d": 10
+    "sales_last_30d": 25,
+    "sales_last_7d": 6
   },
   "MCO2843711574": {
     "sales_last_30d": 1,
@@ -80,79 +80,79 @@
     "sales_last_7d": 0
   },
   "MCO1538085843": {
-    "sales_last_30d": 16,
-    "sales_last_7d": 4
-  },
-  "MCO3522351110": {
-    "sales_last_30d": 33,
-    "sales_last_7d": 8
-  },
-  "MCO3522390220": {
     "sales_last_30d": 19,
     "sales_last_7d": 4
   },
+  "MCO3522351110": {
+    "sales_last_30d": 24,
+    "sales_last_7d": 6
+  },
+  "MCO3522390220": {
+    "sales_last_30d": 17,
+    "sales_last_7d": 4
+  },
   "MCO3524710818": {
+    "sales_last_30d": 26,
+    "sales_last_7d": 6
+  },
+  "MCO3524993982": {
     "sales_last_30d": 31,
     "sales_last_7d": 7
   },
-  "MCO3524993982": {
-    "sales_last_30d": 33,
-    "sales_last_7d": 8
-  },
   "MCO3524942824": {
-    "sales_last_30d": 3,
-    "sales_last_7d": 1
+    "sales_last_30d": 9,
+    "sales_last_7d": 2
   },
   "MCO3522454588": {
-    "sales_last_30d": 5,
-    "sales_last_7d": 1
+    "sales_last_30d": 7,
+    "sales_last_7d": 2
   },
   "MCO3524994034": {
-    "sales_last_30d": 4,
+    "sales_last_30d": 6,
     "sales_last_7d": 1
   },
   "MCO3524698152": {
-    "sales_last_30d": 34,
+    "sales_last_30d": 33,
     "sales_last_7d": 8
   },
   "MCO3524426682": {
+    "sales_last_30d": 6,
+    "sales_last_7d": 1
+  },
+  "MCO3524517140": {
+    "sales_last_30d": 45,
+    "sales_last_7d": 11
+  },
+  "MCO3524556022": {
     "sales_last_30d": 11,
     "sales_last_7d": 3
   },
-  "MCO3524517140": {
-    "sales_last_30d": 62,
-    "sales_last_7d": 14
-  },
-  "MCO3524556022": {
-    "sales_last_30d": 7,
-    "sales_last_7d": 2
-  },
   "MCO3524439750": {
-    "sales_last_30d": 37,
+    "sales_last_30d": 38,
     "sales_last_7d": 9
   },
   "MCO3524633408": {
-    "sales_last_30d": 7,
-    "sales_last_7d": 2
+    "sales_last_30d": 13,
+    "sales_last_7d": 3
   },
   "MCO3522273602": {
-    "sales_last_30d": 36,
-    "sales_last_7d": 8
+    "sales_last_30d": 23,
+    "sales_last_7d": 5
   },
   "MCO3524685348": {
     "sales_last_30d": 10,
     "sales_last_7d": 2
   },
   "MCO3522325264": {
-    "sales_last_30d": 42,
-    "sales_last_7d": 10
+    "sales_last_30d": 39,
+    "sales_last_7d": 9
   },
   "MCO3524542950": {
-    "sales_last_30d": 19,
-    "sales_last_7d": 4
+    "sales_last_30d": 20,
+    "sales_last_7d": 5
   },
   "MCO3522441776": {
-    "sales_last_30d": 21,
+    "sales_last_30d": 20,
     "sales_last_7d": 5
   }
 }

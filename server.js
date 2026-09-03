@@ -17,6 +17,7 @@ const kb = require('./src/ai/knowledge-base');
 const productContextApi = require('./src/mercadolibre/product-context');
 const promotionsApi = require('./src/mercadolibre/promotions');
 const adsApi = require('./src/mercadolibre/ads');
+const ordersApi = require('./src/mercadolibre/orders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1351,6 +1352,75 @@ app.post('/api/financials/expenses', (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════
+// ── System-Wide Sync & Auto-Update Endpoints ──
+// ══════════════════════════════════════════
+
+app.post('/api/system/sync-all', async (req, res) => {
+  try {
+    const { accountId } = req.body || {};
+    const accId = accountId ? parseInt(accountId) : null;
+    
+    console.log('[System Sync] ⚡ Iniciando sincronización manual completa del sistema...');
+    const ordersResult = await ordersApi.syncMlOrders(accId, 60);
+    const inventoryResult = await inventoryApi.syncMlFullInventory(accId);
+    
+    let promoResults = [];
+    try {
+      const accounts = accId ? [{ id: accId }] : db.getAccounts();
+      for (const acc of accounts) {
+        const cat = await promotionsApi.scanAllPublicationCampaigns(acc.id);
+        promoResults.push({ accountId: acc.id, count: (cat || []).length });
+      }
+    } catch (promoErr) {
+      console.warn('[System Sync] Non-blocking promo sync warning:', promoErr.message);
+    }
+
+    await db.forceSaveDb();
+
+    res.json({
+      success: true,
+      orders: ordersResult,
+      inventory: inventoryResult,
+      promotions: promoResults,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/financials/sync-orders', async (req, res) => {
+  try {
+    const { accountId, daysBack = 60, month, year } = req.body || {};
+    const accId = accountId ? parseInt(accountId) : null;
+    const result = await ordersApi.syncMlOrders(accId, daysBack);
+    await db.forceSaveDb();
+    const summary = db.getFinancialSummary(accId, month, year);
+    res.json({ success: true, result, summary });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/system/sync-status', (req, res) => {
+  try {
+    res.json({
+      schedule: {
+        orders: 'Cada 30 minutos + Reconciliación diaria (01:00 AM)',
+        stock_full: 'Cada 30 minutos + Reconciliación diaria (01:00 AM)',
+        questions_claims: `Cada ${pollingInterval} minutos (Polling 24/7)`,
+        promotions: 'Cada 6 horas (Monitoreo Ofertas Relámpago y Campañas)',
+        daily_reconciliation: 'Cada 24 horas (01:00 AM)',
+        database_backup: 'Cada 10 segundos + en cada sync'
+      },
+      latest_activity: db.getActivityLog(5)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ── SPA Fallback ──
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -1418,6 +1488,28 @@ function startAutoPromotionsScan() {
   console.log('[Cron] ⚡ Monitoreo 24/7 de Ofertas Relámpago y Campañas ML activado (cada 6h)');
 }
 
+function startDailyReconciliationCron() {
+  // Deep sync every 24 hours at 01:00 AM (90 days orders + full stock + cloud backup)
+  cron.schedule('0 1 * * *', async () => {
+    console.log('[Cron] 🌙 [01:00 AM] Ejecutando reconciliación diaria profunda del sistema...');
+    try {
+      await ordersApi.syncMlOrders(null, 90);
+      await inventoryApi.syncMlFullInventory();
+      const accounts = db.getAccounts();
+      for (const acc of accounts) {
+        await promotionsApi.scanAllPublicationCampaigns(acc.id);
+        await promotionsApi.runAutoPilotPromotionsWorker(acc.id);
+      }
+      await db.forceSaveDb();
+      db.logActivity('daily_reconcile', 'Reconciliación profunda de 24h finalizada con éxito (órdenes, stock Full y campañas)');
+      console.log('[Cron] 🌙 Reconciliación diaria completada con éxito.');
+    } catch (err) {
+      console.error('[Cron] ❌ Error en reconciliación diaria:', err.message || err);
+    }
+  });
+  console.log('[Cron] 🌙 Reconciliación profunda diaria programada (cada 24h a la 1:00 AM)');
+}
+
 async function startServer() {
   await db.initDb();
   console.log('[DB] Database initialized');
@@ -1449,6 +1541,7 @@ async function startServer() {
     startPolling();
     startAutoInventorySync();
     startAutoPromotionsScan();
+    startDailyReconciliationCron();
   });
 
   server.on('error', (err) => {

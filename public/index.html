@@ -97,7 +97,9 @@
       <div class="section-header">
         <h1>Panel Principal</h1>
         <div class="header-actions">
-          <button class="btn btn-secondary" id="btnRefreshOverview" onclick="refreshOverview()">🔄 Actualizar</button>
+          <button class="btn btn-outline-info btn-sm" onclick="showSyncScheduleInfo()" title="Ver frecuencias de actualización de todo el sistema">⏱️ Tiempos de Sync</button>
+          <button class="btn btn-primary btn-sm" id="btnSyncAll" onclick="triggerSystemSyncAll()" title="Sincroniza órdenes, stock Full y promociones de Mercado Libre">⚡ Sincronizar Todo el Sistema</button>
+          <button class="btn btn-secondary btn-sm" id="btnRefreshOverview" onclick="refreshOverview()">🔄 Recargar</button>
         </div>
       </div>
 
@@ -122,7 +124,7 @@
               <option value="5">Mayo</option>
               <option value="6">Junio</option>
               <option value="7">Julio</option>
-              <option value="8" selected>Agosto (Actual)</option>
+              <option value="8">Agosto</option>
               <option value="9">Septiembre</option>
               <option value="10">Octubre</option>
               <option value="11">Noviembre</option>
@@ -132,6 +134,7 @@
               <option value="2026" selected>2026</option>
               <option value="2025">2025</option>
             </select>
+            <button class="btn btn-success btn-sm" id="btnSyncOrders" onclick="syncOrdersNow()" title="Sincronizar órdenes y ventas recientes con Mercado Libre">🔄 Actualizar Ventas</button>
             <button class="btn btn-primary btn-sm" onclick="openExpenseModal()">⚙️ Ajustar Gastos / Ads</button>
           </div>
         </div>
@@ -1051,7 +1054,7 @@
               <tr>
                 <th>Fecha y Hora</th>
                 <th>Tipo de Cambio</th>
-                <th>Descripci�n del Cambio</th>
+                <th>Descripci�n del Cambio</th>
                 <th>Detalle</th>
               </tr>
             </thead>
