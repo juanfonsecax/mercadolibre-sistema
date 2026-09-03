@@ -16,6 +16,7 @@ const gemini = require('./src/ai/gemini');
 const kb = require('./src/ai/knowledge-base');
 const productContextApi = require('./src/mercadolibre/product-context');
 const promotionsApi = require('./src/mercadolibre/promotions');
+const adsApi = require('./src/mercadolibre/ads');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -737,6 +738,18 @@ app.delete('/api/inventory/china/:id', (req, res) => {
   }
 });
 
+app.post('/api/inventory/china/receive-to-house', (req, res) => {
+  try {
+    const { shipmentId } = req.body;
+    if (!shipmentId) return res.status(400).json({ error: 'shipmentId es requerido' });
+    db.receiveChinaShipmentToHouse(parseInt(shipmentId));
+    db.logActivity('inventory_transfer', `Embarque de China #${shipmentId} recibido en Bodega Local`, { shipmentId });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Fase 2: Stock Casa / Bodega Local ---
 app.get('/api/inventory/local', (req, res) => {
   try {
@@ -767,18 +780,47 @@ app.post('/api/inventory/local', (req, res) => {
     const { id, account_id, sku, title, category, units_house, unit_cost_cop, min_stock_alert, location } = req.body;
     if (!sku || !title) return res.status(400).json({ error: 'SKU y Título son requeridos' });
 
+    // Capture previous stock for audit log
+    const prevItem = id ? db.getLocalInventoryById(parseInt(id)) : null;
+    const prevUnits = prevItem ? prevItem.units_house : null;
+    const newUnits = parseInt(units_house || 0);
+
     const itemId = db.saveLocalInventoryItem({
       id: id ? parseInt(id) : null,
       account_id: account_id ? parseInt(account_id) : null,
       sku, title, category,
-      units_house: parseInt(units_house || 0),
+      units_house: newUnits,
       unit_cost_cop: parseFloat(unit_cost_cop || 0),
       min_stock_alert: parseInt(min_stock_alert || 10),
       location
     });
 
-    db.logActivity('inventory_local', `Producto "${sku} - ${title}" en Bodega Casa actualizado`, null, account_id);
+    // Log with stock change detail
+    if (prevUnits !== null && prevUnits !== newUnits) {
+      const diff = newUnits - prevUnits;
+      db.logActivity('stock_manual_edit', `Stock manual "${title}" (${sku}): ${prevUnits} → ${newUnits} (${diff > 0 ? '+' : ''}${diff} unds)`, { sku, title, prev: prevUnits, new: newUnits, diff }, account_id);
+    } else if (prevUnits === null) {
+      db.logActivity('stock_manual_edit', `Producto nuevo en Bodega: "${title}" (${sku}) con ${newUnits} unds`, { sku, title, new: newUnits }, account_id);
+    } else {
+      db.logActivity('inventory_local', `Producto "${sku} - ${title}" en Bodega Casa actualizado (sin cambio de stock)`, null, account_id);
+    }
     res.json({ success: true, id: itemId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/inventory/local/adjust', (req, res) => {
+  try {
+    const { id, amount } = req.body;
+    if (!id || amount === undefined || isNaN(amount)) return res.status(400).json({ error: 'id y amount son requeridos y deben ser números' });
+    const item = db.getLocalInventoryById(parseInt(id));
+    const prevUnits = item ? item.units_house : '?';
+    db.adjustLocalInventory(parseInt(id), parseInt(amount));
+    const newUnits = item ? (item.units_house + parseInt(amount)) : '?';
+    const productName = item ? `"${item.title}" (${item.sku})` : `Item #${id}`;
+    db.logActivity('stock_manual_edit', `Ajuste rápido ${productName}: ${prevUnits} → ${typeof newUnits === 'number' ? Math.max(0, newUnits) : newUnits} (${amount > 0 ? '+' : ''}${amount} unds)`, { id, sku: item?.sku, title: item?.title, prev: prevUnits, diff: parseInt(amount) }, item?.account_id);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -819,6 +861,17 @@ app.get('/api/inventory/movements', (req, res) => {
     const { sku, limit = 50 } = req.query;
     const movements = db.getInventoryMovements(sku || null, parseInt(limit));
     res.json({ movements });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Historial de Cambios Manuales de Stock ---
+app.get('/api/inventory/stock-history', (req, res) => {
+  try {
+    const { limit = 100, accountId } = req.query;
+    const history = db.getStockHistory(parseInt(limit), accountId ? parseInt(accountId) : null);
+    res.json({ history });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -995,7 +1048,10 @@ app.get('/api/promotions/lightning-scan', async (req, res) => {
 app.post('/api/promotions/join-lightning', async (req, res) => {
   try {
     const { ml_item_id, promotion_id, promotion_type, deal_price, accountId } = req.body;
-    const accId = accountId ? parseInt(accountId) : 1;
+    let accId = accountId ? parseInt(accountId) : null;
+    if (!accId || isNaN(accId)) {
+      accId = db.getAccountByMlItemId(ml_item_id);
+    }
     const result = await promotionsApi.joinPromotion(ml_item_id, promotion_id, promotion_type || 'LIGHTNING', deal_price, accId);
     res.json({ success: true, result });
   } catch (error) {
@@ -1006,7 +1062,10 @@ app.post('/api/promotions/join-lightning', async (req, res) => {
 app.post('/api/promotions/leave', async (req, res) => {
   try {
     const { ml_item_id, promotion_id, promotion_type, accountId } = req.body;
-    const accId = accountId ? parseInt(accountId) : 1;
+    let accId = accountId ? parseInt(accountId) : null;
+    if (!accId || isNaN(accId)) {
+      accId = db.getAccountByMlItemId(ml_item_id);
+    }
     const result = await promotionsApi.leavePromotion(ml_item_id, promotion_id, promotion_type, accId);
     res.json({ success: true, result });
   } catch (error) {
@@ -1014,11 +1073,90 @@ app.post('/api/promotions/leave', async (req, res) => {
   }
 });
 
+app.post('/api/promotions/target-price', async (req, res) => {
+  try {
+    const { ml_item_id, target_price, title, accountId } = req.body;
+    let accId = accountId ? parseInt(accountId) : null;
+    if (!accId || isNaN(accId)) {
+      accId = db.getAccountByMlItemId(ml_item_id);
+    }
+    db.saveTargetPromoPrice(ml_item_id, target_price, accId, title);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/promotions/bulk-activate', async (req, res) => {
+  try {
+    const accountId = req.body.accountId ? parseInt(req.body.accountId) : null;
+    const accId = isNaN(accountId) ? null : accountId;
+    
+    // Scan all eligible deals
+    const deals = await promotionsApi.scanEligibleLightningDeals(accId);
+    let activatedCount = 0;
+    let skippedCount = 0;
+
+    for (const deal of deals) {
+      const config = db.getAutoPromoConfig(deal.ml_item_id);
+      if (config && config.target_promo_price > 0) {
+        // Only activate if ML max price (or suggested price) is >= our target price
+        // Actually, we can just send our target price. If our target price > ML's max price, ML will reject it anyway.
+        // But to be safe and avoid API errors, we only attempt if target_promo_price <= max_price.
+        const bestPriceToSubmit = config.target_promo_price;
+        
+        if (deal.max_price && bestPriceToSubmit > deal.max_price) {
+          // ML requires a lower price than our ideal price
+          skippedCount++;
+        } else {
+          // Activate the deal!
+          let itemAccId = accId || db.getAccountByMlItemId(deal.ml_item_id);
+          try {
+            await promotionsApi.joinPromotion(deal.ml_item_id, deal.promotion_id || 'lightning', 'LIGHTNING', bestPriceToSubmit, itemAccId);
+            activatedCount++;
+          } catch (e) {
+            console.error(`Error bulk activating ${deal.ml_item_id}: ${e.message}`);
+            skippedCount++;
+          }
+        }
+      } else {
+        // No target price saved
+        skippedCount++;
+      }
+    }
+    
+    res.json({ success: true, activatedCount, skippedCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/promotions/logs', (req, res) => {
+  try {
+    const accId = req.query.accountId === 'all' ? null : parseInt(req.query.accountId || 1);
+    const logs = db.getMlApiLogs(accId, 100);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/promotions/catalog-campaigns', async (req, res) => {
   try {
-    const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
-    const catalog = await promotionsApi.scanAllPublicationCampaigns(accountId);
-    res.json({ success: true, catalog });
+    const isAll = req.query.accountId === 'all';
+    if (isAll) {
+      const accounts = db.getAccounts();
+      let allCatalog = [];
+      for (const acc of accounts) {
+        const catalog = await promotionsApi.scanAllPublicationCampaigns(acc.id);
+        allCatalog = allCatalog.concat(catalog);
+      }
+      res.json({ success: true, catalog: allCatalog });
+    } else {
+      const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
+      const catalog = await promotionsApi.scanAllPublicationCampaigns(accountId);
+      res.json({ success: true, catalog });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1026,9 +1164,20 @@ app.get('/api/promotions/catalog-campaigns', async (req, res) => {
 
 app.get('/api/promotions/auto-pilot', (req, res) => {
   try {
-    const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
-    const configs = db.getAutoPromoConfigs(accountId);
-    res.json({ success: true, configs });
+    const isAll = req.query.accountId === 'all';
+    if (isAll) {
+      const accounts = db.getAccounts();
+      let allConfigs = [];
+      for (const acc of accounts) {
+        const configs = db.getAutoPromoConfigs(acc.id);
+        allConfigs = allConfigs.concat(configs);
+      }
+      res.json({ success: true, configs: allConfigs });
+    } else {
+      const accountId = req.query.accountId ? parseInt(req.query.accountId) : 1;
+      const configs = db.getAutoPromoConfigs(accountId);
+      res.json({ success: true, configs });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1129,6 +1278,22 @@ app.put('/api/product-contexts/:itemId', (req, res) => {
     const success = db.updateProductContext(itemId, { title, description_text, ai_generated_context });
     if (!success) return res.status(404).json({ error: 'Producto no encontrado' });
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ══════════════════════════════════════════
+// ── Publicidad (Mercado Ads) ──
+// ══════════════════════════════════════════
+
+app.get('/api/ads/groups', (req, res) => {
+  try {
+    const { accountId } = req.query;
+    if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+    
+    const data = adsApi.calculateAdGroups(parseInt(accountId));
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

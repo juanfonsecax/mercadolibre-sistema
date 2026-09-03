@@ -66,35 +66,43 @@ let isSaving = false;
 async function saveDbToFile() {
   if (!db || isSaving) return;
   
-  if (pgPool) {
-    isSaving = true;
-    try {
-      const data = db.export();
-      const buffer = Buffer.from(data);
-      await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
-    } catch(e) {
-      console.error('[DB] Error saving DB to Supabase:', e.message);
-    } finally {
-      isSaving = false;
-    }
-  } else {
+  // ALWAYS save locally first
+  try {
     const data = db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_PATH, buffer);
+    
+    if (pgPool) {
+      isSaving = true;
+      try {
+        await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
+      } catch(e) {
+        console.error('[DB] Error saving DB to Supabase:', e.message);
+      } finally {
+        isSaving = false;
+      }
+    }
+  } catch (err) {
+    console.error('[DB] Error exporting or saving local DB:', err.message);
   }
 }
 
 async function forceSaveDb() {
   if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
-  if (pgPool) {
-    try {
-      await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
-    } catch(e) {
-      console.error('[DB] Error force saving DB to Supabase:', e.message);
+  try {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+    
+    if (pgPool) {
+      try {
+        await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
+      } catch(e) {
+        console.error('[DB] Error force saving DB to Supabase:', e.message);
+      }
     }
+  } catch (err) {
+    console.error('[DB] Error exporting or saving local DB:', err.message);
   }
 }
 
@@ -595,6 +603,21 @@ function initSchema() {
       notes TEXT,
       updated_at TEXT DEFAULT (datetime('now')),
       UNIQUE(account_id, period_month, period_year)
+    )
+  `);
+
+  // ── Historial de Peticiones a Mercado Libre (Ofertas) ──
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ml_api_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER,
+      ml_item_id TEXT,
+      promo_id TEXT,
+      endpoint TEXT,
+      payload_json TEXT,
+      response_status INTEGER,
+      response_json TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
@@ -1274,6 +1297,10 @@ function getLocalInventory(accountId = null) {
   return items.filter(i => !isProductDiscontinued(i.title));
 }
 
+function getLocalInventoryById(id) {
+  return queryOne('SELECT * FROM local_inventory WHERE id = ?', [id]);
+}
+
 function saveLocalInventoryItem(item) {
   if (item.id) {
     runSql(
@@ -1307,6 +1334,54 @@ function deleteLocalInventoryItem(id) {
   saveLocalInventoryToJsonFile();
 }
 
+function adjustLocalInventory(id, amount) {
+  if (!amount || isNaN(amount)) return;
+  const item = queryOne('SELECT * FROM local_inventory WHERE id = ?', [id]);
+  if (!item) throw new Error('Local item not found');
+  
+  recordInventoryMovement({
+    account_id: item.account_id,
+    sku: item.sku,
+    movement_type: amount > 0 ? 'ajuste_manual_suma' : 'ajuste_manual_resta',
+    units: Math.abs(amount),
+    description: 'Ajuste rápido manual'
+  });
+}
+
+function receiveChinaShipmentToHouse(shipmentId) {
+  const shipment = queryOne('SELECT * FROM china_shipments WHERE id = ?', [shipmentId]);
+  if (!shipment) throw new Error('Embarque no encontrado');
+  if (shipment.status === 'Recibido en Casa') throw new Error('Este embarque ya fue recibido');
+
+  const titleToSearch = shipment.master_product_title || shipment.product_name;
+  let localItem = queryOne('SELECT * FROM local_inventory WHERE title = ?', [titleToSearch]);
+
+  if (!localItem) {
+     const sku = 'PROD-' + Date.now() + Math.floor(Math.random() * 1000);
+     saveLocalInventoryItem({
+        title: titleToSearch,
+        sku: sku,
+        units_house: 0,
+        unit_cost_cop: shipment.unit_cost_cop || 0,
+        category: 'Importación Automática'
+     });
+     localItem = queryOne('SELECT * FROM local_inventory WHERE sku = ?', [sku]);
+  }
+
+  const qty = shipment.quantity || shipment.active_transit_units || 0;
+  if (qty > 0) {
+    recordInventoryMovement({
+      sku: localItem.sku,
+      movement_type: 'entrada_importacion',
+      units: qty,
+      description: `Recepción de importación de China (Embarque #${shipmentId})`
+    });
+  }
+
+  runSql("UPDATE china_shipments SET status = 'Recibido en Casa', delivery_status = 'RECIBIDO', active_transit_units = 0 WHERE id = ?", [shipmentId]);
+  saveChinaShipmentsToJsonFile();
+}
+
 function recordInventoryMovement(movement) {
   runSql(
     'INSERT INTO inventory_movements (account_id, sku, movement_type, units, description) VALUES (?, ?, ?, ?, ?)',
@@ -1334,6 +1409,23 @@ function getInventoryMovements(sku = null, limit = 50) {
   return queryAll(sql, params);
 }
 
+// Returns stock change history from activity_log (manual edits, transfers, imports)
+function getStockHistory(limit = 100, accountId = null) {
+  let sql = `
+    SELECT id, account_id, type, description, details_json, created_at
+    FROM activity_log
+    WHERE type IN ('stock_manual_edit', 'inventory_adjust', 'inventory_transfer', 'inventory_movement', 'entrada_importacion')
+  `;
+  const params = [];
+  if (accountId) {
+    sql += ' AND account_id = ?';
+    params.push(accountId);
+  }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+  return queryAll(sql, params);
+}
+
 // ── Fase 3: Stock Full ML Operations ──
 
 function getMlFullInventory(accountId = null) {
@@ -1343,7 +1435,8 @@ function getMlFullInventory(accountId = null) {
            COALESCE(l.units_house, lm.units_house, 0) as stock_casa, 
            COALESCE(l.unit_cost_cop, lm.unit_cost_cop, 0) as unit_cost_cop,
            m.master_product_title,
-           COALESCE(l.units_house, lm.units_house, 0) as master_stock_casa
+           COALESCE(l.units_house, lm.units_house, 0) as master_stock_casa,
+           COALESCE(l.sku, lm.sku) as local_inventory_sku
     FROM ml_full_inventory f 
     LEFT JOIN accounts a ON f.account_id = a.id 
     LEFT JOIN local_inventory l ON f.sku = l.sku 
@@ -1993,6 +2086,32 @@ function restoreMlSalesFromJsonFile() {
   }
 }
 
+function deleteAutoPromoConfig(id) {
+  runSql('DELETE FROM auto_promotions_config WHERE id = ?', [id]);
+}
+
+function saveTargetPromoPrice(mlItemId, targetPrice, accountId = 1, title = '') {
+  runSql(
+    `INSERT INTO auto_promotions_config (account_id, ml_item_id, title, target_promo_price, updated_at)
+     VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(ml_item_id) DO UPDATE SET
+       target_promo_price = excluded.target_promo_price,
+       updated_at = datetime('now')`,
+    [accountId, mlItemId, title, targetPrice]
+  );
+}
+
+function getAccountByMlItemId(mlItemId) {
+  // Check product_promotions first
+  let acc = queryOne('SELECT account_id FROM product_promotions WHERE ml_item_id = ?', [mlItemId]);
+  if (acc && acc.account_id) return acc.account_id;
+  // Check ml_full_inventory
+  acc = queryOne('SELECT account_id FROM ml_full_inventory WHERE ml_item_id = ?', [mlItemId]);
+  if (acc && acc.account_id) return acc.account_id;
+  // Default to 1
+  return 1;
+}
+
 function deleteProductPromotion(id) {
   runSql('DELETE FROM product_promotions WHERE id = ?', [id]);
 }
@@ -2363,6 +2482,38 @@ function getTaxSummary2026() {
   return result;
 }
 
+// ── ML API Request Logging ──
+function logMlApiRequest(accountId, mlItemId, promoId, endpoint, payloadJson, responseStatus, responseJson) {
+  try {
+    runSql(`
+      INSERT INTO ml_api_logs (account_id, ml_item_id, promo_id, endpoint, payload_json, response_status, response_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      accountId, 
+      mlItemId, 
+      promoId, 
+      endpoint, 
+      typeof payloadJson === 'string' ? payloadJson : JSON.stringify(payloadJson), 
+      responseStatus, 
+      typeof responseJson === 'string' ? responseJson : JSON.stringify(responseJson)
+    ]);
+  } catch (e) {
+    console.error('[DB] Error guardando log de ML API:', e.message);
+  }
+}
+
+function getMlApiLogs(accountId = null, limit = 50) {
+  try {
+    if (accountId) {
+      return queryAll('SELECT * FROM ml_api_logs WHERE account_id = ? ORDER BY id DESC LIMIT ?', [accountId, limit]);
+    }
+    return queryAll('SELECT * FROM ml_api_logs ORDER BY id DESC LIMIT ?', [limit]);
+  } catch (e) {
+    console.error('[DB] Error obteniendo logs de ML API:', e.message);
+    return [];
+  }
+}
+
 module.exports = {
   initDb, getDb, saveDbToFile, forceSaveDb, reloadDbFromFile, queryOne, queryAll, runSql, getTaxSummary2026,
   // Accounts
@@ -2387,15 +2538,18 @@ module.exports = {
   // China Shipments (Fase 1)
   getChinaShipments, saveChinaShipment, deleteChinaShipment, saveChinaProductMapping,
   // Local Inventory (Fase 2)
-  getLocalInventory, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements,
+  getLocalInventory, getLocalInventoryById, saveLocalInventoryItem, deleteLocalInventoryItem, recordInventoryMovement, getInventoryMovements, getStockHistory, adjustLocalInventory, receiveChinaShipmentToHouse,
   // Stock Full ML (Fase 3) & Planning Intelligence
   getMlFullInventory, saveMlFullInventoryItem, updateMlItemSales30d, saveMlSalesToJsonFile, getReorderAlerts, getInventoryPlanningIntelligence, isProductDiscontinued, seedActiveMlListings,
   saveProductMapping, deleteProductMapping, getProductMappings,
   // Product Promotions & Margin Calculator
   getProductPromotions, saveProductPromotion, deleteProductPromotion,
-  getAutoPromoConfigs, getAutoPromoConfig, saveAutoPromoConfig,
+  getAutoPromoConfigs, getAutoPromoConfig, saveAutoPromoConfig, saveTargetPromoPrice,
+  getAccountByMlItemId, deleteAutoPromoConfig,
   // Product Contexts (Etapa 1)
   getProductContexts, getProductContextByItemId, saveProductContext, updateProductContext,
   // Financial Analytics & Profitability Engine
-  saveFinancialExpense, getFinancialExpenses, getFinancialSummary
+  saveFinancialExpense, getFinancialExpenses, getFinancialSummary,
+  // ML API Logs
+  logMlApiRequest, getMlApiLogs
 };

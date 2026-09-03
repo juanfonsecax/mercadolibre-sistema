@@ -31,12 +31,17 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
     const match = candidateList.find(c => c.id === promotionId || c.type === promotionType);
 
     if (match) {
-      if (match.price && match.price > 0) {
+      if (match.price && match.price > 0 && !match.min_discounted_price) {
+        // Offer is strictly fixed price, user cannot change it
         finalDealPrice = match.price;
-      } else if (match.suggested_discounted_price) {
-        finalDealPrice = match.suggested_discounted_price;
-      } else if (match.max_discounted_price && finalDealPrice > match.max_discounted_price) {
-        finalDealPrice = match.max_discounted_price;
+      } else {
+        // Offer price is editable. Respect user's dealPrice, but clamp it to allowed bounds
+        if (match.min_discounted_price && finalDealPrice < match.min_discounted_price) {
+          finalDealPrice = match.min_discounted_price;
+        }
+        if (match.max_discounted_price && finalDealPrice > match.max_discounted_price) {
+          finalDealPrice = match.max_discounted_price;
+        }
       }
 
       if (match.ref_id && !refId) {
@@ -55,11 +60,29 @@ async function joinPromotion(mlItemId, promotionId, promotionType, dealPrice, ac
     }
 
     const payload = {
-      promotion_id: promotionId,
       promotion_type: promotionType,
-      deal_price: finalDealPrice,
       ...extraPayload
     };
+
+    if (promotionType === 'PRICE_DISCOUNT') {
+      payload.price = finalDealPrice;
+    } else {
+      payload.deal_price = finalDealPrice;
+    }
+
+    if (promotionId && !promotionId.startsWith('promo_')) {
+      payload.promotion_id = promotionId;
+    }
+
+    if (promotionType === 'PRICE_DISCOUNT') {
+      const formatLocal = d => d.toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
+      if (!payload.start_date) payload.start_date = formatLocal(new Date());
+      if (!payload.finish_date) {
+        const end = new Date();
+        end.setDate(end.getDate() + 30);
+        payload.finish_date = formatLocal(end);
+      }
+    }
 
     const resolvedOfferId = extraPayload.offer_id || (match ? (match.offer_id || match.ref_id || match.id) : null);
     if (resolvedOfferId) payload.offer_id = resolvedOfferId;
@@ -152,9 +175,13 @@ async function scanEligibleLightningDeals(accountId) {
 
           const isPriceEditable = !(lightning.price && lightning.price > 0 && !lightning.min_discounted_price);
 
+          const config = db.getAutoPromoConfig(item.ml_item_id);
+          const targetPromoPrice = config ? config.target_promo_price : 0;
+
           eligibleDeals.push({
             ml_item_id: item.ml_item_id,
             sku: item.sku || '',
+            target_promo_price: targetPromoPrice,
             title: item.title,
             current_price: Math.round(currentPrice),
             final_offer_price: Math.round(finalOfferPrice),
@@ -196,64 +223,78 @@ async function scanAllPublicationCampaigns(accountId) {
       .sort((a, b) => (b.units_full || 0) - (a.units_full || 0));
 
     const campaignsResult = [];
+    const concurrencyLimit = 10;
+    
+    for (let i = 0; i < listings.length; i += concurrencyLimit) {
+      const batch = listings.slice(i, i + concurrencyLimit);
+      
+      const batchResults = await Promise.all(batch.map(async (item) => {
+        try {
+          const promos = await getItemPromotions(item.ml_item_id, accountId);
+          const liveStatus = await fetchItemLivePriceAndOfferStatus(item.ml_item_id, accountId);
+          const availableCampaigns = [];
 
-    for (const item of listings) {
-      if (!item.ml_item_id) continue;
-      const promos = await getItemPromotions(item.ml_item_id, accountId);
-      const liveStatus = await fetchItemLivePriceAndOfferStatus(item.ml_item_id, accountId);
-      const availableCampaigns = [];
+          const origPrice = liveStatus?.list_price || liveStatus?.current_ml_price || 50000;
 
-      const origPrice = liveStatus?.list_price || liveStatus?.current_ml_price || 50000;
+          if (Array.isArray(promos) && promos.length > 0) {
+            promos.forEach(p => {
+              const promoType = p.type || p.promotion_type || 'PRICE_DISCOUNT';
+              const pOrigPrice = p.original_price || origPrice;
+              const suggestedPrice = p.price && p.price > 0 
+                ? p.price 
+                : (p.suggested_discounted_price || p.max_discounted_price || p.suggested_price || Math.round(pOrigPrice * 0.85));
+              const discountPct = pOrigPrice > 0 ? Math.round(((pOrigPrice - suggestedPrice) / pOrigPrice) * 100) : 0;
 
-      if (Array.isArray(promos) && promos.length > 0) {
-        promos.forEach(p => {
-          const promoType = p.type || p.promotion_type || 'PRICE_DISCOUNT';
-          const pOrigPrice = p.original_price || origPrice;
-          const suggestedPrice = p.price && p.price > 0 
-            ? p.price 
-            : (p.suggested_discounted_price || p.max_discounted_price || p.suggested_price || Math.round(pOrigPrice * 0.85));
-          const discountPct = pOrigPrice > 0 ? Math.round(((pOrigPrice - suggestedPrice) / pOrigPrice) * 100) : 0;
+              const commission = suggestedPrice * 0.13;
+              const fixedFee = suggestedPrice < 70000 ? 2500 : 0;
+              const shipping = suggestedPrice >= 70000 ? 9500 : 0;
+              const cost = (item.unit_cost_cop && item.unit_cost_cop > 0) ? item.unit_cost_cop : 9829;
+              const netCop = suggestedPrice - commission - fixedFee - shipping - cost;
+              const netPercent = suggestedPrice > 0 ? Math.round((netCop / suggestedPrice) * 100) : 0;
 
-          // Calculate estimated net margin with real COGS
-          const commission = suggestedPrice * 0.13;
-          const fixedFee = suggestedPrice < 70000 ? 2500 : 0;
-          const shipping = suggestedPrice >= 70000 ? 9500 : 0;
-          const cost = (item.unit_cost_cop && item.unit_cost_cop > 0) ? item.unit_cost_cop : 9829;
-          const netCop = suggestedPrice - commission - fixedFee - shipping - cost;
-          const netPercent = suggestedPrice > 0 ? Math.round((netCop / suggestedPrice) * 100) : 0;
+              const isPriceEditable = !(p.price && p.price > 0 && !p.min_discounted_price);
 
-          const isPriceEditable = !(p.price && p.price > 0 && !p.min_discounted_price);
+              availableCampaigns.push({
+                promotion_id: p.id || p.promotion_id || `promo_${item.ml_item_id}`,
+                promotion_type: promoType,
+                name: p.name || (promoType === 'LIGHTNING' ? '⚡ Oferta Relámpago (6-8h)' : (promoType === 'DEAL' ? '☀️ Oferta del Día (24h)' : '🏷️ Campaña Mercado Libre')),
+                current_price: Math.round(pOrigPrice),
+                suggested_price: Math.round(suggestedPrice),
+                min_price: p.min_discounted_price ? Math.round(p.min_discounted_price) : Math.round(pOrigPrice * 0.4),
+                max_price: p.max_discounted_price ? Math.round(p.max_discounted_price) : Math.round(pOrigPrice),
+                is_price_editable: isPriceEditable,
+                unit_cost_cop: Math.round(cost),
+                discount_percent: discountPct,
+                stock_commitment: p.stock?.min || 5,
+                estimated_net_cop: Math.round(netCop),
+                estimated_net_percent: netPercent,
+                start_date: p.start_date || null,
+                finish_date: p.finish_date || null,
+                status: p.status || 'eligible'
+              });
+            });
+          }
 
-          availableCampaigns.push({
-            promotion_id: p.id || p.promotion_id || `promo_${item.ml_item_id}`,
-            promotion_type: promoType,
-            name: p.name || (promoType === 'LIGHTNING' ? '⚡ Oferta Relámpago (6-8h)' : (promoType === 'DEAL' ? '☀️ Oferta del Día (24h)' : '🏷️ Campaña Mercado Libre')),
-            current_price: Math.round(pOrigPrice),
-            suggested_price: Math.round(suggestedPrice),
-            min_price: p.min_discounted_price ? Math.round(p.min_discounted_price) : Math.round(pOrigPrice * 0.4),
-            max_price: p.max_discounted_price ? Math.round(p.max_discounted_price) : Math.round(pOrigPrice),
-            is_price_editable: isPriceEditable,
-            unit_cost_cop: Math.round(cost),
-            discount_percent: discountPct,
-            stock_commitment: p.stock?.min || 5,
-            estimated_net_cop: Math.round(netCop),
-            estimated_net_percent: netPercent,
-            start_date: p.start_date || null,
-            finish_date: p.finish_date || null,
-            status: p.status || 'eligible'
-          });
-        });
-      }
+          if (availableCampaigns.length > 0) {
+            return {
+              account_id: accountId,
+              ml_item_id: item.ml_item_id,
+              sku: item.sku || '',
+              title: item.title,
+              price: origPrice,
+              units_full: item.units_full || 0,
+              sales_30d: item.sales_last_30d || 0,
+              campaigns: availableCampaigns
+            };
+          }
+        } catch (err) {
+          console.error(`[Promotions] Error loading campaigns for ${item.ml_item_id}:`, err.message);
+        }
+        return null;
+      }));
 
-      campaignsResult.push({
-        ml_item_id: item.ml_item_id,
-        sku: item.sku || '',
-        title: item.title,
-        price: origPrice,
-        units_full: item.units_full || 0,
-        sales_30d: item.sales_last_30d || 0,
-        campaigns: availableCampaigns
-      });
+      const validResults = batchResults.filter(Boolean);
+      campaignsResult.push(...validResults);
     }
 
     return campaignsResult;

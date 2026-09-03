@@ -144,6 +144,47 @@ async function mlFetch(endpoint, accountId, options = {}) {
     },
   });
 
+  const isPromoEndpoint = endpoint.includes('/seller-promotions/items/') && (options.method === 'POST' || options.method === 'DELETE');
+
+  if (isPromoEndpoint) {
+    let responseBody = null;
+    try {
+      responseBody = await response.text();
+    } catch (e) {}
+
+    const match = endpoint.match(/\/items\/(MCO\d+)/);
+    const mlItemId = match ? match[1] : null;
+
+    let promoId = null;
+    let payloadStr = options.body;
+    try {
+      if (options.body) {
+        const p = JSON.parse(options.body);
+        promoId = p.promotion_id;
+      }
+    } catch (e) {}
+
+    // Fallback: If it's a DELETE, it might have promotion_id in the query string
+    if (options.method === 'DELETE' && endpoint.includes('promotion_id=')) {
+      const qsMatch = endpoint.match(/promotion_id=([^&]+)/);
+      if (qsMatch) promoId = qsMatch[1];
+    }
+
+    db.logMlApiRequest(accountId, mlItemId, promoId, endpoint, payloadStr, response.status, responseBody);
+
+    if (!response.ok) {
+      let errJson = {};
+      try { errJson = JSON.parse(responseBody); } catch (e) { errJson = responseBody; }
+      throw new Error(`ML API Error [${response.status}] ${endpoint}: ${JSON.stringify(errJson)}`);
+    }
+
+    try {
+      return JSON.parse(responseBody);
+    } catch (e) {
+      return {};
+    }
+  }
+
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(`ML API Error [${response.status}] ${endpoint}: ${JSON.stringify(err)}`);

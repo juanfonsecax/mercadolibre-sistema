@@ -40,6 +40,7 @@ function navigateTo(section) {
     case 'claims': loadClaims(); break;
     case 'inventory': loadInventoryData(); break;
     case 'promotions': loadPromotions(); break;
+    case 'ads': loadAdGroups(); break;
     case 'product-context': loadProductContexts(); break;
     case 'knowledge': loadKnowledge(); break;
     case 'stats': loadStats(); break;
@@ -1662,6 +1663,7 @@ function switchInventoryTab(tabName) {
     case 'local': loadLocalInventory(); break;
     case 'full': loadMlFullInventory(); break;
     case 'alerts': loadReorderAlerts(); break;
+    case 'history': loadStockHistory(); break;
   }
 }
 
@@ -1858,6 +1860,7 @@ function renderChinaShipments() {
         <td>${statusBadge}</td>
         <td>
           <button class="btn btn-sm btn-primary" onclick="openLinkChinaModal(${s.id})" title="Vincular a Producto Maestro (Fase 2/3)">🔗 Vincular</button>
+          <button class="btn btn-sm btn-success" onclick="receiveShipmentToHouse(${s.id})" title="Recibir mercancía en Bodega Local" style="background:#10b981; border-color:#10b981;">📥 Recibir</button>
           <button class="btn btn-sm btn-secondary" onclick="editChinaShipment(${s.id})" title="Editar importación">✏️</button>
           <button class="btn btn-sm btn-danger" onclick="deleteChinaShipment(${s.id})" title="Eliminar">🗑️</button>
         </td>
@@ -2104,11 +2107,31 @@ async function toggleChinaDeliveryStatus(id, currentStatus) {
   }
 }
 
+async function receiveShipmentToHouse(id) {
+  if (!confirm('¿Estás seguro de que esta mercancía ya llegó a la bodega? Se sumará el stock al producto local vinculado y el embarque se marcará como recibido.')) return;
+  try {
+    const res = await apiFetch('/api/inventory/china/receive-to-house', {
+      method: 'POST',
+      body: JSON.stringify({ shipmentId: id })
+    });
+    if (res.success) {
+      showToast('¡Mercancía recibida en Bodega Casa exitosamente!', 'success');
+      loadChinaShipments();
+      loadLocalInventory();
+    }
+  } catch (error) {
+    showToast('Error al recibir mercancía: ' + error.message, 'error');
+  }
+}
+
 // --- Subtab 2: Local Stock Casa/Bodega ---
+let globalLocalInventoryData = [];
+
 async function loadLocalInventory() {
   try {
     const data = await apiFetch(`/api/inventory/local?accountId=${activeAccountId}`);
     const items = data.inventory || [];
+    globalLocalInventoryData = items;
 
     let html = '';
     if (items.length === 0) {
@@ -2147,6 +2170,11 @@ async function loadLocalInventory() {
   }
 }
 
+function editLocalItem(id) {
+  const item = globalLocalInventoryData.find(i => i.id == id);
+  if (item) openLocalItemModal(item);
+}
+
 async function populateAccountSelects() {
   try {
     const data = await apiFetch('/api/accounts');
@@ -2176,6 +2204,8 @@ async function openLocalItemModal(item = null) {
   document.getElementById('localUnitCostCop').value = item ? item.unit_cost_cop : 25000;
   document.getElementById('localMinStock').value = item ? item.min_stock_alert : 15;
   document.getElementById('localLocation').value = item ? item.location : 'Bodega Principal';
+  const adjustEl = document.getElementById('localStockAdjust');
+  if (adjustEl) adjustEl.value = '';
 
   document.getElementById('localItemModalTitle').innerText = item ? 'Editar Producto en Bodega' : 'Agregar Producto a Bodega Casa';
   document.getElementById('localItemModal').style.display = 'flex';
@@ -2208,8 +2238,21 @@ async function saveLocalItemFromModal() {
   };
 
   try {
-    await apiFetch('/api/inventory/local', { method: 'POST', body: JSON.stringify(payload) });
-    showToast('Producto en Bodega guardado', 'success');
+    const res = await apiFetch('/api/inventory/local', { method: 'POST', body: JSON.stringify(payload) });
+    const savedId = id || res.id;
+
+    const adjustEl = document.getElementById('localStockAdjust');
+    const adjustVal = adjustEl ? parseInt(adjustEl.value) : 0;
+    if (savedId && adjustVal && !isNaN(adjustVal)) {
+      await apiFetch('/api/inventory/local/adjust', {
+        method: 'POST',
+        body: JSON.stringify({ id: savedId, amount: adjustVal })
+      });
+      showToast(`Ajuste de stock (${adjustVal > 0 ? '+' : ''}${adjustVal}) aplicado correctamente`, 'success');
+    } else {
+      showToast('Producto en Bodega guardado', 'success');
+    }
+
     closeLocalItemModal();
     loadLocalInventory();
   } catch (error) {
@@ -2397,7 +2440,7 @@ async function loadMlFullInventory() {
             <td>${covStatus}</td>
             <td style="display:flex; gap:4px; flex-wrap:wrap;">
               <button class="btn btn-sm btn-secondary" onclick="openLinkProductModal('${f.ml_item_id}', '${escapeAttr(f.title)}', '${escapeAttr(masterTitle)}')" title="Vincular a producto físico de bodega">🔗 Vincular Físico</button>
-              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.sku || f.ml_item_id)}', '${escapeAttr(f.title)}')">📦 Transferir</button>
+              <button class="btn btn-sm btn-primary" onclick="openTransferFullModal('${escapeAttr(f.local_inventory_sku || f.sku || f.ml_item_id)}', '${escapeAttr(f.title)}')">📦 Transferir</button>
             </td>
           </tr>
         `;
@@ -2526,6 +2569,86 @@ async function submitTransferToFull() {
   } catch (error) {
     showToast('Error registrando transferencia: ' + error.message, 'error');
   }
+}
+
+// --- Subtab 5: Historial de Cambios de Stock ---
+let cachedStockHistory = [];
+
+async function loadStockHistory() {
+  const tbody = document.getElementById('stockHistoryBody');
+  const countBadge = document.getElementById('stockHistoryCount');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" class="empty-cell"><div class="spinner"></div> Cargando historial...</td></tr>';
+
+  try {
+    const data = await apiFetch(`/api/inventory/stock-history?limit=200${activeAccountId ? '&accountId=' + activeAccountId : ''}`);
+    cachedStockHistory = data.history || [];
+
+    if (countBadge) countBadge.textContent = `${cachedStockHistory.length} registros`;
+    renderStockHistory(cachedStockHistory);
+  } catch (error) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-cell" style="color:#ef4444;">Error al cargar historial: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+function filterStockHistory() {
+  const query = (document.getElementById('stockHistorySearch')?.value || '').toLowerCase();
+  const filtered = cachedStockHistory.filter(r => r.description.toLowerCase().includes(query));
+  renderStockHistory(filtered);
+}
+
+function renderStockHistory(items) {
+  const tbody = document.getElementById('stockHistoryBody');
+  if (!tbody) return;
+
+  if (!items || items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">No hay cambios de stock registrados aún. Edita el stock de un producto para verlo aquí.</td></tr>';
+    return;
+  }
+
+  const typeLabels = {
+    'stock_manual_edit': { label: '✏️ Edición Manual', color: '#3b82f6' },
+    'inventory_adjust':  { label: '⚡ Ajuste Rápido',  color: '#f59e0b' },
+    'inventory_transfer':{ label: '📦 Recepción China', color: '#10b981' },
+    'inventory_movement':{ label: '🔄 Movimiento',      color: '#8b5cf6' },
+    'entrada_importacion':{ label: '🚢 Entrada Importación', color: '#06b6d4' },
+  };
+
+  tbody.innerHTML = items.map(r => {
+    const typeInfo = typeLabels[r.type] || { label: r.type, color: '#94a3b8' };
+    let details = '';
+    try {
+      const d = r.details_json ? JSON.parse(r.details_json) : null;
+      if (d) {
+        if (d.prev !== undefined && d.diff !== undefined) {
+          const sign = d.diff > 0 ? '+' : '';
+          details = `<span style="color:${d.diff > 0 ? '#10b981' : '#ef4444'}; font-weight:600;">${sign}${d.diff} unds</span>`;
+          if (d.sku) details += ` <span style="color:#94a3b8; font-size:0.8rem;">(SKU: ${escapeHtml(d.sku)})</span>`;
+        } else if (d.new !== undefined) {
+          details = `<span style="color:#10b981; font-weight:600;">Inicial: ${d.new} unds</span>`;
+        }
+      }
+    } catch {}
+
+    return `
+      <tr>
+        <td style="white-space:nowrap; color:#94a3b8; font-size:0.82rem;">${formatDateTime(r.created_at)}</td>
+        <td><span style="background:${typeInfo.color}22; color:${typeInfo.color}; padding:2px 8px; border-radius:12px; font-size:0.8rem; font-weight:600; white-space:nowrap;">${typeInfo.label}</span></td>
+        <td style="font-size:0.88rem;">${escapeHtml(r.description)}</td>
+        <td style="font-size:0.88rem;">${details || '—'}</td>
+      </tr>`;
+  }).join('');
+}
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr.replace(' ', 'T') + (dateStr.includes('Z') ? '' : 'Z'));
+    // Adjust to Colombia time (UTC-5)
+    const col = new Date(d.getTime() - 5 * 60 * 60 * 1000);
+    return col.toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' +
+           col.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+  } catch { return dateStr; }
 }
 
 // --- Subtab 4: Alertas & Planificación de Compras China ---
@@ -2888,7 +3011,7 @@ async function executeSendPromo() {
         promotion_type: p.promotion_type || 'LIGHTNING',
         deal_price: p.final_offer_price,
         stock: p.stock_commitment,
-        accountId: activeAccountId
+        accountId: p.account_id || activeAccountId
       })
     });
     closeConfirmPromoModal();
@@ -2906,15 +3029,13 @@ async function executeSendPromo() {
             <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; font-size: 0.78rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
               ✅ OFERTA APLICADA Y ACTIVA EN MERCADO LIBRE
             </span>
-            <button class="btn btn-sm" onclick="leaveActivePromotion('${p.ml_item_id}', '${p.promotion_id}', '${p.promotion_type}')" style="padding:6px 10px; font-size: 0.76rem; font-weight:700; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color:#fca5a5; border-radius: 6px;">
+            <button class="btn btn-sm" onclick="leaveActivePromotion('${p.ml_item_id}', '${p.promotion_id}', '${p.promotion_type}', ${p.account_id || activeAccountId})" style="padding:6px 10px; font-size: 0.76rem; font-weight:700; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color:#fca5a5; border-radius: 6px;">
               🔴 Retirar Oferta
             </button>
           </div>`;
       }
     }
 
-    scanLightningDeals(true);
-    loadCatalogCampaigns(true);
   } catch (error) {
     showToast(`Error al activar la oferta: ${error.message}`, 'error');
   } finally {
@@ -2982,6 +3103,20 @@ async function scanLightningDeals(silent = false) {
               <div style="font-size: 0.72rem; color: ${isLoss ? '#f87171' : '#34d399'};">GANANCIA NETA ESTIMADA</div>
               <div style="font-size: 1.05rem; font-weight: 800; color: ${isLoss ? '#ef4444' : '#10b981'};">$${d.estimated_net_cop.toLocaleString('es-CO')} COP (${d.estimated_net_percent}%)</div>
             </div>
+            
+            <div style="background: rgba(56, 189, 248, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3); grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 0.72rem; color: #38bdf8; font-weight: 700;">PRECIO IDEAL (GUARDADO PERMANENTE)</div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                  <span style="color: #38bdf8; font-weight: bold;">$</span>
+                  <input type="number" id="targetPrice_${d.ml_item_id}" class="form-input" value="${d.target_promo_price || ''}" placeholder="Ej: 29900" style="background: rgba(0,0,0,0.3); color: #fff; width: 120px; font-size: 0.95rem; font-weight: bold; padding: 4px 8px;">
+                  <button class="btn btn-sm btn-primary" onclick="saveTargetPrice('${d.ml_item_id}', '${escapeAttr(d.title)}')">💾 Guardar</button>
+                </div>
+              </div>
+              <div style="text-align: right; max-width: 50%;">
+                <small style="color: #94a3b8; font-size: 0.75rem;">Si el precio exigido por ML es mayor o igual al ideal, la activación masiva lo aceptará automáticamente.</small>
+              </div>
+            </div>
           </div>
 
           <button class="btn btn-warning" onclick="handlePromoConfirmClick('${key}')" style="background: #ffab00; color: #12151e; font-weight: 800; font-size: 0.92rem; padding: 12px; border-radius: 8px; width: 100%; border: none; cursor: pointer; margin-top: 4px;">
@@ -2992,6 +3127,40 @@ async function scanLightningDeals(silent = false) {
 
   } catch (error) {
     container.innerHTML = `<p class="text-danger" style="padding: 10px;">Error escaneando Ofertas Relámpago: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function saveTargetPrice(mlItemId, title) {
+  const inputEl = document.getElementById(`targetPrice_${mlItemId}`);
+  if (!inputEl) return;
+  const targetPrice = parseFloat(inputEl.value);
+  if (!targetPrice || targetPrice <= 0) return showToast('Ingresa un precio válido', 'warning');
+  
+  try {
+    await apiFetch('/api/promotions/target-price', {
+      method: 'POST',
+      body: JSON.stringify({ ml_item_id: mlItemId, target_price: targetPrice, title, accountId: activeAccountId })
+    });
+    showToast('Precio Ideal guardado correctamente', 'success');
+  } catch (err) {
+    showToast('Error al guardar el precio ideal: ' + err.message, 'error');
+  }
+}
+
+async function bulkActivatePromotions() {
+  if (!confirm('¿Estás seguro de que deseas activar masivamente todas las ofertas elegibles que cumplan con tu Precio Ideal guardado?')) return;
+  
+  try {
+    showToast('Iniciando activación masiva...', 'info');
+    const res = await apiFetch('/api/promotions/bulk-activate', {
+      method: 'POST',
+      body: JSON.stringify({ accountId: activeAccountId })
+    });
+    showToast(`✅ Activación masiva finalizada. Se activaron ${res.activatedCount} ofertas. Se omitieron ${res.skippedCount} por no tener precio guardado o por exigir precios más bajos al ideal.`, 'success');
+    scanLightningDeals();
+    loadCatalogCampaigns();
+  } catch (err) {
+    showToast('Error en la activación masiva: ' + err.message, 'error');
   }
 }
 
@@ -3016,7 +3185,7 @@ async function joinLightningDeal(itemId, promoId, dealPrice) {
   }
 }
 
-async function leaveActivePromotion(itemId, promoId, promoType) {
+async function leaveActivePromotion(itemId, promoId, promoType, accountId = activeAccountId) {
   if (!confirm(`¿Estás seguro de que deseas retirar la publicación ${itemId} de esta oferta en Mercado Libre?`)) return;
 
   try {
@@ -3027,15 +3196,71 @@ async function leaveActivePromotion(itemId, promoId, promoType) {
         ml_item_id: itemId,
         promotion_id: promoId,
         promotion_type: promoType,
-        accountId: activeAccountId
+        accountId: accountId
       })
     });
     showToast(`🚀 ¡Éxito! Publicación ${itemId} retirada de la oferta en Mercado Libre.`, 'success');
     loadCatalogCampaigns();
     scanLightningDeals();
   } catch (error) {
-    showToast(`Error al retirar oferta: ${error.message}`, 'error');
+    showToast(`Error confirmando oferta: ${error.message}`, 'error');
   }
+}
+
+async function bulkActivateEditableOffers(itemId) {
+  const cards = document.querySelectorAll(`.campaign-card-${itemId}`);
+  const keysToActivate = [];
+  cards.forEach(card => {
+    const isEditable = card.getAttribute('data-editable') === 'true';
+    if (isEditable && !card.querySelector('button').disabled) {
+      const key = card.getAttribute('data-key');
+      if (key && window.pendingPromosCache[key]) {
+        keysToActivate.push(key);
+      }
+    }
+  });
+
+  if (keysToActivate.length === 0) {
+    showToast('No hay ofertas editables para activar.', 'warning');
+    return;
+  }
+
+  if (!confirm(`¿Estás seguro de que deseas activar ${keysToActivate.length} ofertas editables para este producto con el Precio Objetivo configurado?`)) {
+    return;
+  }
+
+  let successCount = 0;
+  for (const key of keysToActivate) {
+    const btn = document.querySelector(`[data-key="${key}"] button`);
+    if (btn) btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;"></span>';
+    
+    try {
+      const p = window.pendingPromosCache[key];
+      const res = await apiFetch('/api/promotions/join-lightning', {
+        method: 'POST',
+        body: JSON.stringify({
+          ml_item_id: p.ml_item_id,
+          promotion_id: p.promotion_id,
+          promotion_type: p.promotion_type || 'LIGHTNING',
+          deal_price: p.final_offer_price,
+          stock: p.stock_commitment,
+          accountId: p.account_id || activeAccountId
+        })
+      });
+      if (res.success) successCount++;
+    } catch (e) {
+      console.warn('Error activating bulk offer', key, e);
+    }
+  }
+
+  if (successCount > 0) {
+    showToast(`¡Se activaron ${successCount} ofertas masivamente!`, 'success');
+  } else {
+    showToast('Hubo un error o no se pudo activar ninguna oferta.', 'error');
+  }
+  
+  // Reload after 1.5 seconds to see UI updates
+  setTimeout(() => loadCatalogCampaigns(true), 1500);
 }
 
 async function triggerAutoPilotWorker() {
@@ -3052,7 +3277,7 @@ async function triggerAutoPilotWorker() {
   }
 }
 
-async function saveItemAutoPilotConfig(itemId, title) {
+async function saveItemAutoPilotConfig(itemId, title, accountId) {
   const targetInput = document.getElementById(`target_price_${itemId}`);
   const autoPilotToggle = document.getElementById(`autopilot_${itemId}`);
   if (!targetInput) return;
@@ -3064,7 +3289,7 @@ async function saveItemAutoPilotConfig(itemId, title) {
     await apiFetch('/api/promotions/auto-pilot', {
       method: 'POST',
       body: JSON.stringify({
-        accountId: activeAccountId,
+        accountId: accountId || activeAccountId,
         ml_item_id: itemId,
         title: title,
         target_promo_price: targetPrice,
@@ -3076,14 +3301,14 @@ async function saveItemAutoPilotConfig(itemId, title) {
   }
 }
 
-function updateProductTargetPromoPrice(itemId, title) {
+function updateProductTargetPromoPrice(itemId, title, accountId) {
   const targetInput = document.getElementById(`target_price_${itemId}`);
   if (!targetInput) return;
 
   const targetPrice = parseFloat(targetInput.value || 0);
   if (targetPrice <= 0) return;
 
-  saveItemAutoPilotConfig(itemId, title);
+  saveItemAutoPilotConfig(itemId, title, accountId);
 
   const campaignCards = document.querySelectorAll(`.campaign-card-${itemId}`);
   campaignCards.forEach(card => {
@@ -3139,8 +3364,8 @@ async function loadCatalogCampaigns(silent = false) {
   }
 
   try {
-    const res = await apiFetch(`/api/promotions/catalog-campaigns?accountId=${activeAccountId}`);
-    const configRes = await apiFetch(`/api/promotions/auto-pilot?accountId=${activeAccountId}`);
+    const res = await apiFetch(`/api/promotions/catalog-campaigns?accountId=all`);
+    const configRes = await apiFetch(`/api/promotions/auto-pilot?accountId=all`);
     const catalog = res.catalog || [];
     const configs = configRes.configs || [];
 
@@ -3212,7 +3437,7 @@ async function loadCatalogCampaigns(silent = false) {
             <span style="background: ${isPending ? 'rgba(56, 189, 248, 0.15)' : 'rgba(16, 185, 129, 0.15)'}; border: 1px solid ${isPending ? '#38bdf8' : '#10b981'}; color: ${isPending ? '#38bdf8' : '#34d399'}; font-size: 0.78rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
               ${badgeText}
             </span>
-            <button class="btn btn-sm" onclick="leaveActivePromotion('${item.ml_item_id}', '${c.promotion_id}', '${c.promotion_type}')" style="padding:6px 10px; font-size: 0.76rem; font-weight:700; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color:#fca5a5; border-radius: 6px;">
+            <button class="btn btn-sm" onclick="leaveActivePromotion('${item.ml_item_id}', '${c.promotion_id}', '${c.promotion_type}', ${item.account_id})" style="padding:6px 10px; font-size: 0.76rem; font-weight:700; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color:#fca5a5; border-radius: 6px;">
               🔴 Retirar Oferta
             </button>
           </div>
@@ -3252,14 +3477,20 @@ async function loadCatalogCampaigns(silent = false) {
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="font-size: 0.82rem; font-weight: 700; color: #00e676;">🤖 PILOTO AUTOMÁTICO 24/7</span>
                 <label class="switch" style="transform: scale(0.85);">
-                  <input type="checkbox" id="autopilot_${item.ml_item_id}" ${isAutoPilotOn ? 'checked' : ''} onchange="saveItemAutoPilotConfig('${item.ml_item_id}', '${escapeHtml(item.title)}')">
+                  <input type="checkbox" id="autopilot_${item.ml_item_id}" ${isAutoPilotOn ? 'checked' : ''} onchange="saveItemAutoPilotConfig('${item.ml_item_id}', '${escapeHtml(item.title)}', ${item.account_id || 1})">
                   <span class="slider round"></span>
                 </label>
               </div>
-              <div style="display: flex; gap: 8px; align-items: center;">
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <label style="font-size: 0.8rem; white-space: nowrap;">Precio Objetivo Oferta ($ COP):</label>
-                <input type="number" id="target_price_${item.ml_item_id}" class="form-input" value="${targetPrice}" style="padding: 4px 8px; font-size: 0.85rem; font-weight: 700; width: 110px;" onchange="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}')" onkeyup="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}')">
+                <div style="display: flex; gap: 6px;">
+                  <input type="number" id="target_price_${item.ml_item_id}" class="form-input" value="${targetPrice}" style="padding: 4px 8px; font-size: 0.85rem; font-weight: 700; width: 110px;" onchange="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}', ${item.account_id || 1})" onkeyup="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}', ${item.account_id || 1})">
+                  <button class="btn btn-sm btn-primary" onclick="updateProductTargetPromoPrice('${item.ml_item_id}', '${escapeHtml(item.title)}', ${item.account_id || 1})" style="padding: 4px 10px; font-size: 0.75rem;">Guardar Precio</button>
+                </div>
               </div>
+              <button class="btn btn-sm" onclick="bulkActivateEditableOffers('${item.ml_item_id}')" style="margin-top: 10px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid #38bdf8; border-radius: 6px; width: 100%; font-weight: bold; padding: 6px; transition: all 0.2s;">
+                🚀 Activar Todas (Editables) a este Precio
+              </button>
             </div>
           </div>
 
@@ -3659,4 +3890,113 @@ async function saveProductContextModal() {
   }
 }
 
+
+
+async function openMlApiLogsModal() {
+  const modal = document.getElementById('mlApiLogsModal');
+  const content = document.getElementById('mlApiLogsContent');
+  if (!modal || !content) return;
+
+  modal.style.display = 'flex';
+  content.innerHTML = '<div class="spinner"></div><p style="text-align:center; margin-top:10px;">Cargando historial...</p>';
+
+  try {
+    const logs = await apiFetch(`/api/promotions/logs?accountId=${activeAccountId}`);
+    
+    if (!logs || logs.length === 0) {
+      content.innerHTML = '<div style="text-align:center; color:#94a3b8; padding: 20px;">No hay registros recientes de peticiones a ML.</div>';
+      return;
+    }
+
+    content.innerHTML = logs.map(log => {
+      const isError = log.response_status >= 400;
+      const statusColor = isError ? '#ef4444' : '#10b981';
+      let payloadObj = log.payload_json;
+      let responseObj = log.response_json;
+      try { if (typeof payloadObj === 'string') payloadObj = JSON.parse(payloadObj); } catch(e){}
+      try { if (typeof responseObj === 'string') responseObj = JSON.parse(responseObj); } catch(e){}
+
+      return `
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid ${isError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}; border-radius: 8px; margin-bottom: 12px; padding: 12px; font-size: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; color: #cbd5e1;">
+            <strong>${escapeHtml(log.ml_item_id)} ${log.promo_id ? `(${escapeHtml(log.promo_id)})` : ''}</strong>
+            <span>${new Date(log.created_at).toLocaleString('es-CO')}</span>
+          </div>
+          <div style="margin-bottom: 6px;">
+            <span style="color: ${statusColor}; font-weight: bold;">[${log.response_status}]</span>
+            <code style="color: #94a3b8; font-size: 0.8rem; margin-left: 6px;">${escapeHtml(log.endpoint)}</code>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+            <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
+              <strong style="color: #38bdf8; font-size: 0.75rem;">PAYLOAD ENVIADO:</strong>
+              <pre style="margin: 4px 0 0 0; color: #f8fafc; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all;">${escapeHtml(JSON.stringify(payloadObj, null, 2))}</pre>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; border-left: 3px solid ${statusColor};">
+              <strong style="color: ${statusColor}; font-size: 0.75rem;">RESPUESTA ML:</strong>
+              <pre style="margin: 4px 0 0 0; color: #f8fafc; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all;">${escapeHtml(JSON.stringify(responseObj, null, 2))}</pre>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (error) {
+    content.innerHTML = `<div style="color: #ef4444;">Error al cargar el historial: ${error.message}</div>`;
+  }
+}
+
+function closeMlApiLogsModal() {
+  const modal = document.getElementById('mlApiLogsModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+// ── Publicidad Inteligente (Ads) ──
+// ══════════════════════════════════════════
+
+async function loadAdGroups() {
+  const container = document.getElementById('adsGroupsContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div style="color:#94a3b8;">Calculando estrategia y agrupando productos...</div>';
+  const accountId = activeAccountId === 'all' ? 1 : activeAccountId; // Default to Juan (1) if all
+
+  try {
+    const data = await apiFetch(`/api/ads/groups?accountId=${accountId}`);
+    if (!data.groups) throw new Error('No se pudo cargar la información de grupos.');
+
+    let html = '';
+    data.groups.forEach(g => {
+      // Build top 5 items preview
+      const topItems = g.items.slice(0, 5).map(i => `
+        <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:4px 0;">
+          <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70%; font-size:0.8rem; color:#cbd5e1;">${escapeHtml(i.title)}</span>
+          <span style="font-size:0.8rem; color:#38bdf8; font-weight:bold;">${i.sales_last_30d} ventas</span>
+        </div>
+      `).join('');
+
+      html += `
+        <div class="card" style="border-top: 4px solid #38bdf8;">
+          <h3 style="margin-top:0; color:#f8fafc;">${escapeHtml(g.name)}</h3>
+          <p style="font-size:0.85rem; color:#94a3b8;">${escapeHtml(g.description)}</p>
+          <div style="background: rgba(56, 189, 248, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+            <div style="font-size: 0.75rem; color: #38bdf8; text-transform: uppercase;">Presupuesto Diario Sugerido</div>
+            <div style="font-size: 1.5rem; font-weight: bold; color: #f8fafc;">$${g.budget_allocated.toLocaleString('es-CO')} COP</div>
+          </div>
+          <div>
+            <strong style="color:#cbd5e1; font-size:0.85rem;">Total Productos: ${g.items.length}</strong>
+            <div style="margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px; min-height: 100px;">
+              ${topItems || '<div style="font-size:0.8rem; color:#64748b; font-style:italic;">No hay productos en este grupo</div>'}
+              ${g.items.length > 5 ? `<div style="font-size:0.75rem; color:#64748b; text-align:center; margin-top:8px;">+ ${g.items.length - 5} productos más...</div>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+  } catch (error) {
+    container.innerHTML = `<div style="color:#ef4444;">Error: ${error.message}</div>`;
+  }
+}
 
