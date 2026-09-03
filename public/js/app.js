@@ -3976,11 +3976,25 @@ async function loadAdGroups() {
   if (!container) return;
 
   container.innerHTML = '<div style="color:#94a3b8;">Calculando estrategia y agrupando productos...</div>';
-  const accountId = activeAccountId === 'all' ? 1 : activeAccountId; // Default to Juan (1) if all
+  const accountId = (!activeAccountId || activeAccountId === 'all') ? 1 : parseInt(activeAccountId);
 
   try {
     const data = await apiFetch(`/api/ads/groups?accountId=${accountId}`);
     if (!data.groups) throw new Error('No se pudo cargar la información de grupos.');
+
+    // Update banner with current account name and budget
+    const elTitle = document.getElementById('adsAccountTitle');
+    const elDaily = document.getElementById('adsDailyBudgetLabel');
+    const elMonthly = document.getElementById('adsMonthlyBudgetLabel');
+    const elInput = document.getElementById('inputCustomAdBudget');
+
+    if (elTitle) elTitle.textContent = `Presupuesto Mercado Ads — ${data.accountName || 'Cuenta ' + accountId}`;
+    if (elDaily) elDaily.textContent = `$${(data.total_budget || 0).toLocaleString('es-CO')} COP / día`;
+    if (elMonthly) elMonthly.textContent = `$${((data.total_budget || 0) * 30).toLocaleString('es-CO')} COP / mes`;
+    if (elInput && (!elInput.value || elInput.dataset.accountId !== String(accountId))) {
+      elInput.value = data.total_budget || '';
+      elInput.dataset.accountId = String(accountId);
+    }
 
     let html = '';
     data.groups.forEach(g => {
@@ -4017,10 +4031,49 @@ async function loadAdGroups() {
   }
 }
 
+async function saveAdBudget() {
+  const accountId = (!activeAccountId || activeAccountId === 'all') ? 1 : parseInt(activeAccountId);
+  const input = document.getElementById('inputCustomAdBudget');
+  const budget = parseFloat(input?.value || 0);
+
+  if (!budget || budget <= 0) {
+    showToast('Ingresa un presupuesto diario válido mayor a 0', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnSaveAdBudget');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Guardando...';
+  }
+
+  try {
+    const res = await apiFetch('/api/ads/budget', {
+      method: 'POST',
+      body: JSON.stringify({ accountId, dailyBudget: budget })
+    });
+
+    if (res && res.success) {
+      showToast(`Presupuesto diario actualizado a $${budget.toLocaleString('es-CO')} COP/día`, 'success');
+      await loadAdGroups();
+      if (typeof loadFinancialSummary === 'function') {
+        loadFinancialSummary();
+      }
+    } else {
+      showToast('Error guardando presupuesto: ' + (res?.error || 'Falló actualización'), 'error');
+    }
+  } catch (err) {
+    showToast('Error guardando presupuesto: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '💾 Guardar Presupuesto';
+    }
+  }
+}
 
 
-// ══════════════════════════════════════════
-// ── System Sync & Auto-Update Helpers ──
+
 // ══════════════════════════════════════════
 
 async function triggerSystemSyncAll() {

@@ -2,11 +2,19 @@ const db = require('../database');
 
 /**
  * Calculates the Ad Groups (Winners, Medium, Low/New) based on sales performance.
- * @param {number} accountId - The ML account ID to calculate for (e.g., Juan's account).
+ * @param {number} accountId - The ML account ID to calculate for (e.g., Juan's account or Carlos).
+ * @param {number|null} customBudget - Optional override for daily budget.
  */
-function calculateAdGroups(accountId) {
+function calculateAdGroups(accountId, customBudget = null) {
+  const targetAccountId = accountId ? parseInt(accountId) : 1;
+  const account = db.getAccountById(targetAccountId);
+
+  // Daily budget: custom, or from account settings, or default (Carlos: 9524, Juan: 20000)
+  const defaultBudget = targetAccountId === 2 ? 9524 : 20000;
+  const TOTAL_BUDGET_COP = customBudget ? parseFloat(customBudget) : (account?.daily_ad_budget_cop || defaultBudget);
+
   // Fetch all items for this account using getMlFullInventory
-  const items = db.getMlFullInventory(accountId);
+  const items = db.getMlFullInventory(targetAccountId);
 
   const group1 = []; // Winners
   const group2 = []; // Medium
@@ -20,7 +28,6 @@ function calculateAdGroups(accountId) {
     // >= 15 sales in 30 days -> Winner (Group 1)
     // >= 5 and < 15 sales -> Medium (Group 2)
     // < 5 sales -> Low/New (Group 3)
-    
     if (sales30 >= 15) {
       group1.push(item);
     } else if (sales30 >= 5) {
@@ -30,8 +37,7 @@ function calculateAdGroups(accountId) {
     }
   });
 
-  // Calculate budgets proportionally to 7-9-14
-  const TOTAL_BUDGET_COP = 20000;
+  // Calculate budgets proportionally to 7-9-14 (Total weight = 30)
   const TOTAL_WEIGHT = 7 + 9 + 14; // 30
   
   const budget1 = Math.round((7 / TOTAL_WEIGHT) * TOTAL_BUDGET_COP);
@@ -39,8 +45,10 @@ function calculateAdGroups(accountId) {
   const budget3 = TOTAL_BUDGET_COP - budget1 - budget2; // Remainder to group 3
 
   return {
-    accountId,
-    total_budget: TOTAL_BUDGET_COP,
+    accountId: targetAccountId,
+    accountName: account?.name || `Cuenta #${targetAccountId}`,
+    total_budget: Math.round(TOTAL_BUDGET_COP),
+    monthly_estimated_cop: Math.round(TOTAL_BUDGET_COP * 30),
     groups: [
       {
         id: 1,

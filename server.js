@@ -1300,6 +1300,18 @@ app.get('/api/ads/groups', (req, res) => {
   }
 });
 
+app.post('/api/ads/budget', (req, res) => {
+  try {
+    const { accountId, dailyBudget } = req.body;
+    if (!accountId || dailyBudget === undefined) return res.status(400).json({ error: 'accountId y dailyBudget son requeridos' });
+    db.updateAccountAdBudget(parseInt(accountId), parseFloat(dailyBudget));
+    const data = adsApi.calculateAdGroups(parseInt(accountId));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ══════════════════════════════════════════
 // ── Financial Analytics & Profitability Routes ──
 // ══════════════════════════════════════════

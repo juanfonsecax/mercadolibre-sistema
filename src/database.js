@@ -163,6 +163,8 @@ function initSchema() {
   try { db.run('ALTER TABLE daily_stats ADD COLUMN claims_received INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE daily_stats ADD COLUMN claims_responded INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE daily_stats ADD COLUMN avg_response_time_seconds REAL DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE accounts ADD COLUMN daily_ad_budget_cop REAL DEFAULT 20000'); } catch {}
+  try { db.run('UPDATE accounts SET daily_ad_budget_cop = 9524 WHERE id = 2 AND (daily_ad_budget_cop IS NULL OR daily_ad_budget_cop = 20000)'); } catch {}
 
   // Migration for daily_stats to multi-account schema with UNIQUE(date, account_id)
   try {
@@ -726,6 +728,10 @@ function updateAccountSellerInfo(id, sellerId, userId) {
 
 function deleteAccount(id) {
   runSql('DELETE FROM accounts WHERE id = ?', [id]);
+}
+
+function updateAccountAdBudget(id, dailyBudget) {
+  runSql('UPDATE accounts SET daily_ad_budget_cop = ? WHERE id = ?', [parseFloat(dailyBudget), id]);
 }
 
 // ── Token Operations ──
@@ -2430,8 +2436,28 @@ function getFinancialSummary(accountId = null, month = null, year = null) {
 
   productBreakdown.sort((a, b) => b.net_profit_cop - a.net_profit_cop);
 
+  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
   const expenses = getFinancialExpenses(accId || 1, targetMonth, targetYear);
-  const adSpendCop = parseFloat(expenses.ad_spend_cop || 0);
+  
+  let adSpendCop = parseFloat(expenses.ad_spend_cop || 0);
+  // If ad_spend_cop is not manually entered, compute from account's daily_ad_budget_cop
+  if (adSpendCop === 0) {
+    if (accId) {
+      const acc = getAccountById(accId);
+      const dailyBudget = acc?.daily_ad_budget_cop || (accId === 2 ? 9524 : 20000);
+      adSpendCop = Math.round(dailyBudget * daysInMonth);
+    } else {
+      const accounts = getAccounts();
+      adSpendCop = accounts.reduce((sum, acc) => {
+        const exp = getFinancialExpenses(acc.id, targetMonth, targetYear);
+        if (exp && exp.ad_spend_cop && parseFloat(exp.ad_spend_cop) > 0) {
+          return sum + parseFloat(exp.ad_spend_cop);
+        }
+        const dailyBudget = acc.daily_ad_budget_cop || (acc.id === 2 ? 9524 : 20000);
+        return sum + Math.round(dailyBudget * daysInMonth);
+      }, 0);
+    }
+  }
   
   let returnsCostCop = parseFloat(expenses.returns_cost_cop || 0);
   if (returnsCostCop === 0) {
@@ -2585,7 +2611,7 @@ function getMlApiLogs(accountId = null, limit = 50) {
 module.exports = {
   initDb, getDb, saveDbToFile, forceSaveDb, reloadDbFromFile, queryOne, queryAll, runSql, getTaxSummary2026,
   // Accounts
-  saveAccount, getAccounts, getAccountById, getAccountByName, updateAccountSellerInfo, deleteAccount,
+  saveAccount, getAccounts, getAccountById, getAccountByName, updateAccountSellerInfo, deleteAccount, updateAccountAdBudget,
   // Tokens
   saveToken, getToken,
   // Questions

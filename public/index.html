@@ -1020,51 +1020,41 @@
     <!-- Módulo de Ofertas & Márgenes con IA -->
     <!-- ══════════════════════════════════════ -->
     <!-- Ads Section -->
+        <!-- ══════════════════════════════════════ -->
+    <!-- Ads Section -->
     <section class="content-section" id="section-ads">
       <div class="section-header">
         <h1>📢 Publicidad Inteligente (Estrategia de 3 Grupos)</h1>
         <div class="header-actions">
           <button class="btn btn-secondary" onclick="loadAdGroups()">🔄 Recalcular / Actualizar</button>
-          <button class="btn btn-primary" onclick="alert('API de ML Publicidad (PADS) restringida. Se requiere Scope Advertising.')">⚡ Aplicar Presupuestos a Mercado Libre (Simulación)</button>
         </div>
       </div>
       
-      <div class="info-alert" style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 12px; margin-bottom: 20px;">
-        <strong>Estrategia Activa (Presupuesto Diario Total: $20,000 COP)</strong> - Distribución 7-9-14 basada en ventas de últimos 30 días. <br>
-        <small><em>Nota: La sincronización real con las campañas de ML requiere permisos en la aplicación (API de Mercado Ads está en estado Forbidden).</em></small>
+      <!-- Custom Ad Budget Config Banner -->
+      <div class="card" style="margin-bottom: 20px; padding: 16px 20px; border-left: 4px solid #38bdf8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.2rem;">🎯</span>
+            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #f8fafc;" id="adsAccountTitle">Presupuesto Mercado Ads</h3>
+          </div>
+          <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #94a3b8;">
+            Presupuesto diario configurado: <strong style="color: #38bdf8;" id="adsDailyBudgetLabel">$20.000 COP / día</strong> (~<span id="adsMonthlyBudgetLabel">$600.000 COP / mes</span>).
+            <br><small style="color: #64748b;">La estrategia 7-9-14 se recalcula automáticamente y alimenta el gasto de publicidad en el Dashboard Financiero.</small>
+          </p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <label style="font-size: 0.85rem; color: #cbd5e1; font-weight: 600;">Presupuesto Diario:</label>
+          <div style="display: flex; align-items: center;">
+            <span style="background: rgba(255,255,255,0.08); padding: 6px 10px; border-radius: 6px 0 0 6px; font-weight:600; color:#94a3b8; border: 1px solid var(--border-color); border-right:none;">$</span>
+            <input type="number" id="inputCustomAdBudget" class="form-input" style="width: 130px; padding: 6px 10px; font-weight: 600; border-radius: 0 6px 6px 0;" placeholder="9524">
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnSaveAdBudget" onclick="saveAdBudget()">💾 Guardar Presupuesto</button>
+        </div>
       </div>
 
       <div class="ads-grid" id="adsGroupsContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
         <!-- Filled by JS -->
-      <!-- Sub-Tab Content 5: Historial de Cambios de Stock -->
-      <div class="inventory-subcontent" id="subtab-history">
-        <div class="section-header" style="margin-bottom: 16px;">
-          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">&#x1F4CB; Historial de Cambios Manuales de Stock</h3>
-            <span id="stockHistoryCount" class="badge-primary">&#8212; registros</span>
-          </div>
-          <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center;">
-            <input type="text" id="stockHistorySearch" class="form-input" placeholder="&#x1F50D; Buscar producto, SKU..." oninput="filterStockHistory()" style="max-width: 280px; padding: 6px 10px; font-size: 0.88rem;">
-            <button class="btn btn-secondary" onclick="loadStockHistory()" style="padding: 6px 14px;">&#x1F504; Actualizar</button>
-          </div>
-        </div>
-        <div class="table-container card">
-          <table class="data-table" id="stockHistoryTable">
-            <thead>
-              <tr>
-                <th>Fecha y Hora</th>
-                <th>Tipo de Cambio</th>
-                <th>Descripci�n del Cambio</th>
-                <th>Detalle</th>
-              </tr>
-            </thead>
-            <tbody id="stockHistoryBody">
-              <tr><td colspan="4" class="empty-cell">Cargando historial...</td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
-
     </section>
 
     <section class="content-section" id="section-promotions">
