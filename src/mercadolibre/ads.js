@@ -9,9 +9,9 @@ function calculateAdGroups(accountId, customBudget = null) {
   const targetAccountId = accountId ? parseInt(accountId) : 1;
   const account = db.getAccountById(targetAccountId);
 
-  // Daily budget: custom, or from account settings, or default (Carlos: 9524, Juan: 20000)
-  const defaultBudget = targetAccountId === 2 ? 9524 : 20000;
-  const TOTAL_BUDGET_COP = customBudget ? parseFloat(customBudget) : (account?.daily_ad_budget_cop || defaultBudget);
+  // Daily budget: custom, or from account settings, or default (Carlos: 9524, Juan: 0)
+  const defaultBudget = targetAccountId === 2 ? 9524 : 0;
+  const TOTAL_BUDGET_COP = customBudget ? parseFloat(customBudget) : (account?.daily_ad_budget_cop != null ? account.daily_ad_budget_cop : defaultBudget);
 
   // Fetch all items for this account using getMlFullInventory
   const items = db.getMlFullInventory(targetAccountId);
@@ -23,7 +23,7 @@ function calculateAdGroups(accountId, customBudget = null) {
   // Categorize based on sales_last_30d
   items.forEach(item => {
     const sales30 = item.sales_last_30d || 0;
-    
+
     // Thresholds:
     // >= 15 sales in 30 days -> Winner (Group 1)
     // >= 5 and < 15 sales -> Medium (Group 2)
@@ -39,7 +39,7 @@ function calculateAdGroups(accountId, customBudget = null) {
 
   // Calculate budgets proportionally to 7-9-14 (Total weight = 30)
   const TOTAL_WEIGHT = 7 + 9 + 14; // 30
-  
+
   const budget1 = Math.round((7 / TOTAL_WEIGHT) * TOTAL_BUDGET_COP);
   const budget2 = Math.round((9 / TOTAL_WEIGHT) * TOTAL_BUDGET_COP);
   const budget3 = TOTAL_BUDGET_COP - budget1 - budget2; // Remainder to group 3

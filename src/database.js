@@ -638,12 +638,33 @@ function initSchema() {
   `);
 
   try {
-    const countBudgets = queryOne('SELECT COUNT(*) as count FROM ad_budgets_history');
-    if (!countBudgets || countBudgets.count === 0) {
-      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (1, 20000, '2026-08-01', NULL, 'Presupuesto inicial Tienda Juan')");
-      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (2, 9524, '2026-08-01', NULL, 'Presupuesto inicial Tienda Carlos')");
+    const juanBudget = queryOne('SELECT id FROM ad_budgets_history WHERE account_id = 1 AND daily_budget_cop = 0 LIMIT 1');
+    if (!juanBudget) {
+      db.run("DELETE FROM ad_budgets_history WHERE account_id = 1");
+      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (1, 0, '2026-07-01', NULL, 'Sin campañas de publicidad lanzadas')");
     }
-  } catch {}
+    const carlosBudget = queryOne("SELECT id FROM ad_budgets_history WHERE account_id = 2 AND notes LIKE '%Julio%' LIMIT 1");
+    if (!carlosBudget) {
+      db.run("DELETE FROM ad_budgets_history WHERE account_id = 2");
+      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (2, 11490.29, '2026-07-01', '2026-07-31', 'Inversión real Mercado Ads Julio ($356.199 COP - 15 ventas)')");
+      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (2, 48383.74, '2026-08-01', '2026-08-31', 'Inversión real Mercado Ads Agosto ($1.499.896 COP - 97 ventas)')");
+      db.run("INSERT INTO ad_budgets_history (account_id, daily_budget_cop, start_date, end_date, notes) VALUES (2, 9524, '2026-09-01', NULL, 'Campaña activa actual Carlos ($9.524 COP/día)')");
+    }
+    // Also seed financial_expenses for July & August exact totals
+    const julioExp = queryOne('SELECT id FROM financial_expenses WHERE account_id = 2 AND period_month = 7 AND period_year = 2026');
+    if (!julioExp) {
+      db.run("INSERT OR REPLACE INTO financial_expenses (account_id, period_month, period_year, ad_spend_cop, returns_cost_cop, extra_expenses_cop, notes) VALUES (2, 7, 2026, 356199, 0, 0, 'Mercado Ads Julio: $356.199 COP (15 ventas, $1.722.400 ingresos)')");
+    }
+    const agostoExp = queryOne('SELECT id FROM financial_expenses WHERE account_id = 2 AND period_month = 8 AND period_year = 2026');
+    if (!agostoExp) {
+      db.run("INSERT OR REPLACE INTO financial_expenses (account_id, period_month, period_year, ad_spend_cop, returns_cost_cop, extra_expenses_cop, notes) VALUES (2, 8, 2026, 1499896, 0, 0, 'Mercado Ads Agosto: $1.499.896 COP (97 ventas, $8.123.666 ingresos)')");
+    }
+    // Ensure account daily budgets are accurately aligned
+    db.run("UPDATE accounts SET daily_ad_budget_cop = 0 WHERE id = 1");
+    db.run("UPDATE accounts SET daily_ad_budget_cop = 9524 WHERE id = 2");
+  } catch (e) {
+    console.error('[DB] Error initializing real ad budgets:', e.message);
+  }
 
   // ── Historial de Peticiones a Mercado Libre (Ofertas) ──
   db.run(`
@@ -2442,7 +2463,7 @@ function calculateMonthlyAdSpend(accountId, month = null, year = null) {
   );
 
   const account = getAccountById(accId);
-  const defaultBudget = account?.daily_ad_budget_cop || (accId === 2 ? 9524 : 20000);
+  const defaultBudget = (account && account.daily_ad_budget_cop != null) ? account.daily_ad_budget_cop : (accId === 2 ? 9524 : 0);
 
   const now = new Date();
   const isCurrentMonth = (now.getFullYear() === targetYear && (now.getMonth() + 1) === targetMonth);
