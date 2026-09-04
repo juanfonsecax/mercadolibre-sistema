@@ -4125,6 +4125,8 @@ function showSyncScheduleInfo() {
 // ══════════════════════════════════════════
 
 let adsSelectedAccountId = 2; // Default to Tienda Carlos
+let currentAdGroupsData = null;
+let currentAdGroupModalItems = [];
 
 function switchAdsAccount(accId) {
   adsSelectedAccountId = parseInt(accId);
@@ -4165,7 +4167,7 @@ async function loadAdGroups() {
   updateAdsAccountTabsUI();
 
   const accountId = adsSelectedAccountId || 2;
-  container.innerHTML = '<div style="color:#94a3b8;">Calculando estrategia y agrupando productos...</div>';
+  container.innerHTML = '<div style="color:#94a3b8; padding: 20px; text-align: center;">🔄 Cargando productos con Stock en Bodega Full y calculando estrategia 7-9-14...</div>';
 
   try {
     const [data, calc] = await Promise.all([
@@ -4174,14 +4176,17 @@ async function loadAdGroups() {
     ]);
 
     if (!data.groups) throw new Error('No se pudo cargar la información de grupos.');
+    currentAdGroupsData = data;
 
-    // Update banner with current account name and budget
+    // Update banner with current account name, budget and Full stock counters
     const elTitle = document.getElementById('adsAccountTitle');
     const elTableTitle = document.getElementById('adsTableAccountName');
     const elDaily = document.getElementById('adsDailyBudgetLabel');
     const elMonthly = document.getElementById('adsMonthlyBudgetLabel');
     const elElapsedSpend = document.getElementById('adsMonthElapsedSpend');
     const elElapsedDays = document.getElementById('adsMonthElapsedDays');
+    const elFullStock = document.getElementById('adsTotalFullStockLabel');
+    const elFullUnits = document.getElementById('adsTotalFullUnitsLabel');
     const elInput = document.getElementById('inputCustomAdBudget');
     const badgeCarlos = document.getElementById('badgeTabBudgetCarlos');
     const badgeJuan = document.getElementById('badgeTabBudgetJuan');
@@ -4190,6 +4195,9 @@ async function loadAdGroups() {
     if (elTitle) elTitle.textContent = `Presupuesto Mercado Ads — ${accName}`;
     if (elTableTitle) elTableTitle.textContent = accName;
     if (elDaily) elDaily.textContent = `$${(data.total_budget || 0).toLocaleString('es-CO')} COP / día`;
+
+    if (elFullStock) elFullStock.textContent = `${data.total_items_full_stock || 0} productos`;
+    if (elFullUnits) elFullUnits.textContent = `${(data.total_units_full_stock || 0).toLocaleString('es-CO')} unidades físicas`;
 
     if (calc) {
       if (elMonthly) elMonthly.textContent = `$${(calc.total_spend_month || 0).toLocaleString('es-CO')} COP`;
@@ -4210,28 +4218,52 @@ async function loadAdGroups() {
 
     let html = '';
     data.groups.forEach(g => {
-      // Build top 5 items preview
+      // Build top items preview with clear Full stock tags
       const topItems = g.items.slice(0, 5).map(i => `
-        <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:4px 0;">
-          <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70%; font-size:0.8rem; color:#cbd5e1;">${escapeHtml(i.title)}</span>
-          <span style="font-size:0.8rem; color:#38bdf8; font-weight:bold;">${i.sales_last_30d} ventas</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:6px 0; gap:8px;">
+          <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%; font-size:0.8rem; color:#cbd5e1;" title="${escapeHtml(i.title)}">${escapeHtml(i.title)}</span>
+          <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+            <span style="font-size:0.75rem; color:#38bdf8; font-weight:bold;">${i.sales_last_30d || 0} vtas</span>
+            <span style="font-size:0.72rem; background:rgba(16,185,129,0.18); color:#34d399; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3);" title="Stock físico en bodega Full">📦 ${i.units_full || 0} Full</span>
+          </div>
         </div>
       `).join('');
 
       html += `
-        <div class="card" style="border-top: 4px solid #38bdf8;">
-          <h3 style="margin-top:0; color:#f8fafc;">${escapeHtml(g.name)}</h3>
-          <p style="font-size:0.85rem; color:#94a3b8;">${escapeHtml(g.description)}</p>
-          <div style="background: rgba(56, 189, 248, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 15px;">
-            <div style="font-size: 0.75rem; color: #38bdf8; text-transform: uppercase;">Presupuesto Diario Sugerido</div>
-            <div style="font-size: 1.5rem; font-weight: bold; color: #f8fafc;">$${g.budget_allocated.toLocaleString('es-CO')} COP</div>
-          </div>
+        <div class="card" style="border-top: 4px solid #38bdf8; display: flex; flex-direction: column; justify-content: space-between;">
           <div>
-            <strong style="color:#cbd5e1; font-size:0.85rem;">Total Productos: ${g.items.length}</strong>
-            <div style="margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px; min-height: 100px;">
-              ${topItems || '<div style="font-size:0.8rem; color:#64748b; font-style:italic;">No hay productos en este grupo</div>'}
-              ${g.items.length > 5 ? `<div style="font-size:0.75rem; color:#64748b; text-align:center; margin-top:8px;">+ ${g.items.length - 5} productos más...</div>` : ''}
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+              <h3 style="margin-top:0; color:#f8fafc; font-size: 1.05rem;">${escapeHtml(g.name)}</h3>
+              <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
+                📦 Stock Full
+              </span>
             </div>
+            <p style="font-size:0.84rem; color:#94a3b8; margin: 4px 0 12px 0;">${escapeHtml(g.description)}</p>
+            <div style="background: rgba(56, 189, 248, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 14px;">
+              <div style="font-size: 0.72rem; color: #38bdf8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Presupuesto Diario Sugerido</div>
+              <div style="font-size: 1.4rem; font-weight: 800; color: #f8fafc; margin-top: 2px;">$${g.budget_allocated.toLocaleString('es-CO')} COP</div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color:#cbd5e1; font-size:0.83rem;">Productos con Stock Full: ${g.items.length}</strong>
+                <span style="font-size: 0.74rem; color: #64748b;">Top 5 preview</span>
+              </div>
+              <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; min-height: 100px; border: 1px solid rgba(255,255,255,0.04);">
+                ${topItems || '<div style="font-size:0.8rem; color:#64748b; font-style:italic; text-align:center; padding: 20px 0;">No hay productos con stock en bodega Full para este rango de ventas.</div>'}
+                ${g.items.length > 5 ? `<div style="font-size:0.75rem; color:#94a3b8; text-align:center; margin-top:8px;">+ ${g.items.length - 5} productos más en este grupo</div>` : ''}
+              </div>
+            </div>
+          </div>
+          <div style="margin-top: 14px;">
+            ${g.items.length > 0 ? `
+              <button class="btn btn-secondary btn-sm" onclick="openAdGroupProductsModal(${g.id})" style="width: 100%; justify-content: center; font-size: 0.8rem; font-weight: 600; padding: 7px 10px;">
+                📋 Ver lista de ${g.items.length} productos (${g.items.reduce((s, x) => s + (x.units_full || 0), 0)} un. Full)
+              </button>
+            ` : `
+              <button class="btn btn-secondary btn-sm" disabled style="width: 100%; justify-content: center; font-size: 0.8rem; opacity: 0.4;">
+                Sin productos en este grupo
+              </button>
+            `}
           </div>
         </div>
       `;
@@ -4243,8 +4275,81 @@ async function loadAdGroups() {
     loadPageAdHistoryTable(accountId, calc);
 
   } catch (error) {
-    container.innerHTML = `<div style="color:#ef4444;">Error: ${error.message}</div>`;
+    container.innerHTML = `<div style="color:#ef4444; padding: 20px;">Error: ${error.message}</div>`;
   }
+}
+
+// Modal helper functions for viewing full list of products in an Ad Group
+function openAdGroupProductsModal(groupId) {
+  if (!currentAdGroupsData || !currentAdGroupsData.groups) return;
+  const group = currentAdGroupsData.groups.find(g => g.id === groupId);
+  if (!group) return;
+
+  currentAdGroupModalItems = group.items || [];
+
+  const modal = document.getElementById('modalAdGroupProducts');
+  const title = document.getElementById('adGroupModalTitle');
+  const subtitle = document.getElementById('adGroupModalSubtitle');
+  const search = document.getElementById('adGroupModalSearch');
+
+  if (search) search.value = '';
+  if (title) title.textContent = `${group.name} — ${currentAdGroupModalItems.length} productos`;
+  if (subtitle) {
+    const totalUnits = currentAdGroupModalItems.reduce((s, x) => s + (x.units_full || 0), 0);
+    subtitle.innerHTML = `Mostrando productos de <strong>${escapeHtml(currentAdGroupsData.accountName)}</strong> con stock físico en la bodega Full (${totalUnits} unidades en total).`;
+  }
+
+  renderAdGroupModalTable(currentAdGroupModalItems);
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeAdGroupProductsModal() {
+  const modal = document.getElementById('modalAdGroupProducts');
+  if (modal) modal.style.display = 'none';
+}
+
+function filterAdGroupModalProducts() {
+  const query = (document.getElementById('adGroupModalSearch')?.value || '').toLowerCase().trim();
+  if (!query) {
+    renderAdGroupModalTable(currentAdGroupModalItems);
+    return;
+  }
+  const filtered = currentAdGroupModalItems.filter(item => 
+    (item.title && item.title.toLowerCase().includes(query)) ||
+    (item.sku && item.sku.toLowerCase().includes(query)) ||
+    (item.ml_item_id && item.ml_item_id.toLowerCase().includes(query))
+  );
+  renderAdGroupModalTable(filtered);
+}
+
+function renderAdGroupModalTable(items) {
+  const tbody = document.getElementById('adGroupModalTableBody');
+  if (!tbody) return;
+
+  if (!items || items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">No se encontraron productos coincidentes.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = items.map(item => `
+    <tr>
+      <td>
+        <strong style="color: #f8fafc; font-size: 0.85rem; display: block;">${escapeHtml(item.title)}</strong>
+        <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;">
+          ID: <a href="https://articulo.mercadolibre.com.co/${item.ml_item_id}" target="_blank" style="color: #38bdf8; text-decoration: underline;">${escapeHtml(item.ml_item_id)}</a>
+        </div>
+      </td>
+      <td style="color: #94a3b8; font-family: monospace; font-size: 0.82rem;">${escapeHtml(item.sku || 'N/A')}</td>
+      <td style="text-align: center;">
+        <span style="font-size: 0.82rem; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 800; padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.35);">
+          📦 ${item.units_full || 0} un.
+        </span>
+      </td>
+      <td style="text-align: center; font-weight: 700; color: #38bdf8;">${item.sales_last_30d || 0}</td>
+      <td style="text-align: center; color: #cbd5e1;">${item.sales_last_7d || 0}</td>
+      <td style="text-align: center; color: #94a3b8;">${item.coverage_days ? `${Math.round(item.coverage_days)} días` : 'N/A'}</td>
+    </tr>
+  `).join('');
 }
 
 async function loadPageAdHistoryTable(accountId, calc = null) {

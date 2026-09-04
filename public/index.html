@@ -1029,6 +1029,10 @@
           <p style="color: #94a3b8; font-size: 0.88rem; margin: 4px 0 0 0;">
             Gestión 100% independiente por cuenta. Tienda Carlos y Tienda Juan operan con presupuestos, cronogramas y métricas separadas que alimentan el Dashboard Financiero.
           </p>
+          <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 20px; padding: 4px 14px; margin-top: 8px;">
+            <span style="font-size: 0.95rem;">📦</span>
+            <span style="font-size: 0.8rem; color: #34d399; font-weight: 700;">Filtro Estricto: Únicamente productos con Stock Físico en Bodega Full (Fase 3: units_full > 0)</span>
+          </div>
         </div>
         <div class="header-actions">
           <button class="btn btn-secondary" onclick="loadAdGroups()">🔄 Recalcular / Actualizar</button>
@@ -1072,7 +1076,7 @@
               </span>
             </div>
             
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 16px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 16px;">
               <div style="background: rgba(255,255,255,0.04); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
                 <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Presupuesto Diario Vigente</div>
                 <div style="font-size: 1.35rem; font-weight: 800; color: #38bdf8; margin-top: 2px;" id="adsDailyBudgetLabel">$9.524 COP / día</div>
@@ -1087,6 +1091,11 @@
                 <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Proyección Fin de Mes</div>
                 <div style="font-size: 1.35rem; font-weight: 800; color: #f59e0b; margin-top: 2px;" id="adsMonthlyBudgetLabel">$285.720 COP</div>
                 <small style="color: #94a3b8; font-size: 0.78rem;">Estimado a 30 días</small>
+              </div>
+              <div style="background: rgba(255,255,255,0.04); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">En Bodega Full (Fase 3)</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: #10b981; margin-top: 2px;" id="adsTotalFullStockLabel">18 productos</div>
+                <small style="color: #34d399; font-size: 0.78rem;" id="adsTotalFullUnitsLabel">720 unidades físicas</small>
               </div>
             </div>
 
@@ -1897,6 +1906,47 @@
               <tr><td colspan="6" class="empty-cell">Cargando historial...</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para ver todos los productos de un Grupo de Ads con Stock en Full -->
+  <div class="modal-backdrop" id="modalAdGroupProducts" style="display:none">
+    <div class="modal-dialog" style="max-width: 860px; width: 95%;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span id="adGroupModalIcon">📦</span> <span id="adGroupModalTitle">Productos en Grupo Ads</span>
+        </h3>
+        <button class="modal-close" onclick="closeAdGroupProductsModal()">×</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+          <div style="font-size: 0.85rem; color: #94a3b8;" id="adGroupModalSubtitle">
+            Mostrando únicamente productos con inventario físico en la bodega de Mercado Libre Full (Fase 3).
+          </div>
+          <input type="text" id="adGroupModalSearch" class="form-input" style="max-width: 260px; padding: 7px 12px; font-size: 0.85rem;" placeholder="🔍 Buscar producto o SKU..." oninput="filterAdGroupModalProducts()">
+        </div>
+        <div class="table-container" style="max-height: 420px; overflow-y: auto;">
+          <table class="data-table" style="font-size: 0.85rem; width: 100%;">
+            <thead>
+              <tr>
+                <th>Producto / Publicación</th>
+                <th>SKU</th>
+                <th style="text-align: center;">Stock Bodega Full</th>
+                <th style="text-align: center;">Ventas 30d</th>
+                <th style="text-align: center;">Ventas 7d</th>
+                <th style="text-align: center;">Cobertura</th>
+              </tr>
+            </thead>
+            <tbody id="adGroupModalTableBody">
+              <tr><td colspan="6" class="empty-cell">Cargando productos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <small style="color: #10b981; font-weight: 600;">✅ 100% de los productos cuentan con unidades disponibles en bodega Full.</small>
+          <button class="btn btn-secondary btn-sm" onclick="closeAdGroupProductsModal()">Cerrar</button>
         </div>
       </div>
     </div>

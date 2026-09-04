@@ -2,7 +2,10 @@ const db = require('../database');
 
 /**
  * Calculates the Ad Groups (Winners, Medium, Low/New) based on sales performance.
- * @param {number} accountId - The ML account ID to calculate for (e.g., Juan's account or Carlos).
+ * STRICT REQUIREMENT: Only products physically in stock in Mercado Envíos Full warehouse (Fase 3: ml_full_inventory, units_full > 0).
+ * Any product with units_full <= 0 or not present in Full is completely excluded from Ads.
+ * 
+ * @param {number} accountId - The ML account ID to calculate for (1: Juan, 2: Carlos).
  * @param {number|null} customBudget - Optional override for daily budget.
  */
 function calculateAdGroups(accountId, customBudget = null) {
@@ -13,12 +16,15 @@ function calculateAdGroups(accountId, customBudget = null) {
   const defaultBudget = targetAccountId === 2 ? 9524 : 0;
   const TOTAL_BUDGET_COP = customBudget ? parseFloat(customBudget) : (account?.daily_ad_budget_cop != null ? account.daily_ad_budget_cop : defaultBudget);
 
-  // Fetch all items for this account using getMlFullInventory
-  const items = db.getMlFullInventory(targetAccountId);
+  // Fetch all items for this account from Fase 3 (ml_full_inventory)
+  const allFullItems = db.getMlFullInventory(targetAccountId);
 
-  const group1 = []; // Winners
-  const group2 = []; // Medium
-  const group3 = []; // Low/New
+  // STRICT FILTER: Only products with physical stock in Mercado Libre Full warehouse (units_full > 0)
+  const items = allFullItems.filter(item => (item.units_full || 0) > 0);
+
+  const group1 = []; // Winners (>= 15 sales)
+  const group2 = []; // Medium (5 - 14 sales)
+  const group3 = []; // Low / New (< 5 sales)
 
   // Categorize based on sales_last_30d
   items.forEach(item => {
@@ -37,41 +43,76 @@ function calculateAdGroups(accountId, customBudget = null) {
     }
   });
 
-  // Calculate budgets proportionally to 7-9-14 (Total weight = 30)
-  const TOTAL_WEIGHT = 7 + 9 + 14; // 30
+  // Calculate budgets proportionally using 7-9-14 weights, but only for active groups that have products
+  // Base weights: Group 1 = 7, Group 2 = 9, Group 3 = 14
+  const w1 = group1.length > 0 ? 7 : 0;
+  const w2 = group2.length > 0 ? 9 : 0;
+  const w3 = group3.length > 0 ? 14 : 0;
+  const totalActiveWeight = w1 + w2 + w3;
 
-  const budget1 = Math.round((7 / TOTAL_WEIGHT) * TOTAL_BUDGET_COP);
-  const budget2 = Math.round((9 / TOTAL_WEIGHT) * TOTAL_BUDGET_COP);
-  const budget3 = TOTAL_BUDGET_COP - budget1 - budget2; // Remainder to group 3
+  let budget1 = 0;
+  let budget2 = 0;
+  let budget3 = 0;
+
+  if (totalActiveWeight > 0 && TOTAL_BUDGET_COP > 0) {
+    if (w1 > 0 && w2 > 0 && w3 > 0) {
+      budget1 = Math.round((7 / 30) * TOTAL_BUDGET_COP);
+      budget2 = Math.round((9 / 30) * TOTAL_BUDGET_COP);
+      budget3 = TOTAL_BUDGET_COP - budget1 - budget2;
+    } else if (w1 > 0 && w2 > 0 && w3 === 0) {
+      // Carlos scenario: only G1 and G2 have Full stock (ratio 7 to 9)
+      budget1 = Math.round((7 / 16) * TOTAL_BUDGET_COP);
+      budget2 = TOTAL_BUDGET_COP - budget1;
+      budget3 = 0;
+    } else if (w1 > 0 && w2 === 0 && w3 > 0) {
+      budget1 = Math.round((7 / 21) * TOTAL_BUDGET_COP);
+      budget3 = TOTAL_BUDGET_COP - budget1;
+      budget2 = 0;
+    } else if (w1 === 0 && w2 > 0 && w3 > 0) {
+      budget2 = Math.round((9 / 23) * TOTAL_BUDGET_COP);
+      budget3 = TOTAL_BUDGET_COP - budget2;
+      budget1 = 0;
+    } else if (w1 > 0) {
+      budget1 = TOTAL_BUDGET_COP;
+    } else if (w2 > 0) {
+      budget2 = TOTAL_BUDGET_COP;
+    } else if (w3 > 0) {
+      budget3 = TOTAL_BUDGET_COP;
+    }
+  }
+
+  const totalFullUnits = items.reduce((acc, curr) => acc + (curr.units_full || 0), 0);
 
   return {
     accountId: targetAccountId,
     accountName: account?.name || `Cuenta #${targetAccountId}`,
     total_budget: Math.round(TOTAL_BUDGET_COP),
     monthly_estimated_cop: Math.round(TOTAL_BUDGET_COP * 30),
+    total_items_full_stock: items.length,
+    total_units_full_stock: totalFullUnits,
     groups: [
       {
         id: 1,
         name: '🏆 Grupo 1 (Winners / Alta Rotación)',
-        description: 'Productos top. Si las ventas orgánicas suben, se puede bajar la publicidad.',
+        description: 'Productos top con stock en Full. Si las ventas orgánicas suben, se puede calibrar la publicidad.',
         budget_allocated: budget1,
-        weight: 7,
+        weight: w1,
         items: group1
       },
       {
         id: 2,
         name: '📈 Grupo 2 (Ventas Medias)',
-        description: 'Ventas esporádicas. Publicidad constante para mantener rotación.',
+        description: 'Ventas constantes en Full. Publicidad balanceada para acelerar rotación.',
         budget_allocated: budget2,
-        weight: 9,
+        weight: w2,
         items: group2
       },
       {
         id: 3,
         name: '🚀 Grupo 3 (Nuevos / Estancados)',
-        description: 'Pocas o nulas ventas. Inyección de presupuesto para ganar visibilidad.',
+        description: 'Pocas ventas pero disponibles en bodega Full. Impulso publicitario para ganar posicionamiento.',
         budget_allocated: budget3,
-        weight: 14,
+        weight: w3,
         items: group3
       }
     ]
