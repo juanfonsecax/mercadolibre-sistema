@@ -2482,12 +2482,16 @@ function calculateMonthlyAdSpend(accountId, month = null, year = null) {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dayStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    let dayBudget = defaultBudget;
+    let dayBudget = 0;
 
     const matching = history.filter(h => h.start_date <= dayStr && (!h.end_date || h.end_date >= dayStr));
     if (matching.length > 0) {
       matching.sort((a, b) => b.start_date.localeCompare(a.start_date) || (b.id - a.id));
       dayBudget = parseFloat(matching[0].daily_budget_cop);
+    } else if (dayStr >= '2026-07-01') {
+      dayBudget = defaultBudget;
+    } else {
+      dayBudget = 0;
     }
 
     totalSpendMonth += dayBudget;
