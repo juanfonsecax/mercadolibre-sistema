@@ -77,7 +77,9 @@ async function saveDbToFile() {
       try {
         await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
       } catch(e) {
-        console.error('[DB] Error saving DB to Supabase:', e.message);
+        if (!e.message.includes('ECIRCUITBREAKER')) {
+          console.error('[DB] Error saving DB to Supabase:', e.message);
+        }
       } finally {
         isSaving = false;
       }
@@ -98,7 +100,9 @@ async function forceSaveDb() {
       try {
         await pgPool.query('INSERT INTO sqlite_backup (id, db_data, updated_at) VALUES (1, $1, NOW()) ON CONFLICT (id) DO UPDATE SET db_data = EXCLUDED.db_data, updated_at = NOW()', [buffer]);
       } catch(e) {
-        console.error('[DB] Error force saving DB to Supabase:', e.message);
+        if (!e.message.includes('ECIRCUITBREAKER')) {
+          console.error('[DB] Error force saving DB to Supabase:', e.message);
+        }
       }
     }
   } catch (err) {

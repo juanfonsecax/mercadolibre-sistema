@@ -1374,7 +1374,8 @@ app.get('/api/ads/monthly-calculation', (req, res) => {
 
 app.get('/api/financials/summary', (req, res) => {
   try {
-    const { accountId, month, year } = req.query;
+    const accountId = req.query.accountId || req.query.account_id;
+    const { month, year } = req.query;
     const summary = db.getFinancialSummary(accountId, month, year);
     res.json(summary);
   } catch (error) {
@@ -1393,8 +1394,9 @@ app.get('/api/financials/tax-summary', (req, res) => {
 
 app.get('/api/financials/expenses', (req, res) => {
   try {
-    const { accountId, month, year } = req.query;
-    const expenses = db.getFinancialExpenses(accountId || 1, month, year);
+    const accountId = req.query.accountId || req.query.account_id || 1;
+    const { month, year } = req.query;
+    const expenses = db.getFinancialExpenses(accountId, month, year);
     res.json(expenses);
   } catch (error) {
     res.status(500).json({ error: error.message });
